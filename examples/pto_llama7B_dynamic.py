@@ -1264,6 +1264,7 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
         # PHASE 1: Pre-Attention (ALL tiles run in PARALLEL)
         # ================================================================
         # Each tile computes Q/K/V independently - no cross-tile dependencies
+        # OFFSET: ("tensor", "tile_i", 0) - each tile processes different rows
         .for_loop("tile_i", 0, "num_tiles", 1)
             # ============================================================
             # Phase 1: Pre-Attention for tile_i (independent of other tiles)
@@ -1271,40 +1272,40 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
             
             # RMSNorm on input[tile_i]
             .call("rmsnorm_tile", {
-                "input": "input",               # input[tile_i]
-                "weights": "attn_norm_weights",
-                "output": "temp_norm"
+                "input": ("input", "tile_i", 0),           # input[tile_i]
+                "weights": "attn_norm_weights",            # Shared weights
+                "output": ("temp_norm", "tile_i", 0)       # temp_norm[tile_i]
             })
             
             # Q, K, V projections (3 matmuls, all independent)
             .call("tile_matmul", {
-                "input_a": "temp_norm",
-                "input_b": "wq",
-                "output": "all_q_tiles"         # Q[tile_i]
+                "input_a": ("temp_norm", "tile_i", 0),
+                "input_b": "wq",                           # Shared weights
+                "output": ("all_q_tiles", "tile_i", 0)     # Q[tile_i]
             })
             .call("tile_matmul", {
-                "input_a": "temp_norm",
+                "input_a": ("temp_norm", "tile_i", 0),
                 "input_b": "wk",
-                "output": "all_k_tiles"         # K[tile_i]
+                "output": ("all_k_tiles", "tile_i", 0)     # K[tile_i]
             })
             .call("tile_matmul", {
-                "input_a": "temp_norm",
+                "input_a": ("temp_norm", "tile_i", 0),
                 "input_b": "wv",
-                "output": "all_v_tiles"         # V[tile_i]
+                "output": ("all_v_tiles", "tile_i", 0)     # V[tile_i]
             })
             
             # RoPE on Q and K (independent)
             .call("rope_tile", {
-                "input": "all_q_tiles",         # Q[tile_i]
+                "input": ("all_q_tiles", "tile_i", 0),     # Q[tile_i]
                 "cos_cache": "cos_cache",
                 "sin_cache": "sin_cache",
-                "output": "all_q_rope"          # Q_rope[tile_i]
+                "output": ("all_q_rope", "tile_i", 0)      # Q_rope[tile_i]
             })
             .call("rope_tile", {
-                "input": "all_k_tiles",         # K[tile_i]
+                "input": ("all_k_tiles", "tile_i", 0),     # K[tile_i]
                 "cos_cache": "cos_cache",
                 "sin_cache": "sin_cache",
-                "output": "all_k_rope"          # K_rope[tile_i]
+                "output": ("all_k_rope", "tile_i", 0)      # K_rope[tile_i]
             })
         .end_for()  # End Phase 1
         
@@ -1313,15 +1314,16 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
         # ================================================================
         # For each Q tile, we must attend to ALL K,V tiles
         # This creates the "fan-in" dependency: Q[i] depends on all K[j], V[j]
+        # OFFSET: Q uses "q_tile", K/V uses "kv_tile" - creates N*N cross-tile deps
         .for_loop("q_tile", 0, "num_tiles", 1)
             # Initialize attention state for this Q tile
             .call("flash_attn_init_state", {
                 "input_zeros_large": "const_zeros_large",
                 "input_zeros_small": "const_zeros_small",
                 "input_neg_inf": "const_neg_inf",
-                "output_o": "all_attn_out",     # O[q_tile]
-                "output_l": "all_l_vec",        # L[q_tile]
-                "output_m": "all_m_vec"         # M[q_tile]
+                "output_o": ("all_attn_out", "q_tile", 0),   # O[q_tile]
+                "output_l": ("all_l_vec", "q_tile", 0),      # L[q_tile]
+                "output_m": ("all_m_vec", "q_tile", 0)       # M[q_tile]
             })
             
             # ============================================================
@@ -1331,37 +1333,37 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
             .for_loop("kv_tile", 0, "num_tiles", 1)
                 # Compute S[q_tile, kv_tile] = Q_rope[q_tile] @ K_rope[kv_tile].T
                 .call("flash_attn_score_block", {
-                    "input_q": "all_q_rope",    # Q_rope[q_tile]
-                    "input_k": "all_k_rope",    # K_rope[kv_tile] ← CROSS-TILE!
-                    "output_s": "temp_scores"
+                    "input_q": ("all_q_rope", "q_tile", 0),  # Q_rope[q_tile]
+                    "input_k": ("all_k_rope", "kv_tile", 0), # K_rope[kv_tile] ← CROSS-TILE!
+                    "output_s": ("temp_scores", "q_tile", 0)
                 })
                 
                 # Online softmax update
                 .call("flash_attn_softmax_update", {
-                    "input_s": "temp_scores",
-                    "input_m_prev": "all_m_vec",
-                    "input_l_prev": "all_l_vec",
-                    "output_m_new": "all_m_vec",
-                    "output_l_new": "all_l_vec",
-                    "output_p": "temp_attn_weights",
-                    "output_scale_old": "temp_scale"
+                    "input_s": ("temp_scores", "q_tile", 0),
+                    "input_m_prev": ("all_m_vec", "q_tile", 0),
+                    "input_l_prev": ("all_l_vec", "q_tile", 0),
+                    "output_m_new": ("all_m_vec", "q_tile", 0),
+                    "output_l_new": ("all_l_vec", "q_tile", 0),
+                    "output_p": ("temp_attn_weights", "q_tile", 0),
+                    "output_scale_old": ("temp_scale", "q_tile", 0)
                 })
                 
                 # Accumulate: O[q_tile] += scale * P @ V[kv_tile]
                 .call("flash_attn_output_update", {
-                    "input_o_prev": "all_attn_out",
-                    "input_p": "temp_attn_weights",
-                    "input_v": "all_v_tiles",  # V[kv_tile] ← CROSS-TILE!
-                    "input_scale": "temp_scale",
-                    "output_o": "all_attn_out"
+                    "input_o_prev": ("all_attn_out", "q_tile", 0),
+                    "input_p": ("temp_attn_weights", "q_tile", 0),
+                    "input_v": ("all_v_tiles", "kv_tile", 0),  # V[kv_tile] ← CROSS-TILE!
+                    "input_scale": ("temp_scale", "q_tile", 0),
+                    "output_o": ("all_attn_out", "q_tile", 0)
                 })
             .end_for()  # End kv_tile loop
             
             # Normalize: O[q_tile] = O[q_tile] / L[q_tile]
             .call("flash_attn_normalize", {
-                "input_o": "all_attn_out",
-                "input_l": "all_l_vec",
-                "output": "all_attn_out"
+                "input_o": ("all_attn_out", "q_tile", 0),
+                "input_l": ("all_l_vec", "q_tile", 0),
+                "output": ("all_attn_out", "q_tile", 0)
             })
         .end_for()  # End q_tile loop (Phase 2)
         
@@ -1370,19 +1372,20 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
         # ================================================================
         # Each tile can now process independently, but only after
         # attention for that tile is complete
+        # OFFSET: ("tensor", "tile_i", 0) - each tile processes different rows
         .for_loop("tile_i", 0, "num_tiles", 1)
             # Output projection (aggregates multi-head outputs)
             .call("tile_matmul", {
-                "input_a": "all_attn_out",      # attn_out[tile_i]
-                "input_b": "wo",
-                "output": "temp_norm"           # temp for O_proj
+                "input_a": ("all_attn_out", "tile_i", 0),   # attn_out[tile_i]
+                "input_b": "wo",                            # Shared weights
+                "output": ("temp_norm", "tile_i", 0)        # temp for O_proj
             })
             
             # Residual connection: hidden = O_proj + input
             .call("residual_add_tile", {
-                "input": "temp_norm",
-                "input_residual": "input",
-                "output": "all_hidden"          # hidden[tile_i]
+                "input": ("temp_norm", "tile_i", 0),
+                "input_residual": ("input", "tile_i", 0),
+                "output": ("all_hidden", "tile_i", 0)       # hidden[tile_i]
             })
             
             # ============================================================
@@ -1391,42 +1394,42 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
             
             # Pre-MLP RMSNorm
             .call("rmsnorm_tile", {
-                "input": "all_hidden",          # hidden[tile_i]
-                "weights": "mlp_norm_weights",
-                "output": "temp_norm"
+                "input": ("all_hidden", "tile_i", 0),       # hidden[tile_i]
+                "weights": "mlp_norm_weights",              # Shared weights
+                "output": ("temp_norm", "tile_i", 0)
             })
             
             # Gate and Up projections (independent matmuls)
             .call("tile_matmul", {
-                "input_a": "temp_norm",
+                "input_a": ("temp_norm", "tile_i", 0),
                 "input_b": "w_gate",
-                "output": "temp_gate"
+                "output": ("temp_gate", "tile_i", 0)
             })
             .call("tile_matmul", {
-                "input_a": "temp_norm",
+                "input_a": ("temp_norm", "tile_i", 0),
                 "input_b": "w_up",
-                "output": "temp_up"
+                "output": ("temp_up", "tile_i", 0)
             })
             
             # SwiGLU activation
             .call("swiglu_tile", {
-                "input_gate": "temp_gate",
-                "input_up": "temp_up",
-                "output": "temp_swiglu"
+                "input_gate": ("temp_gate", "tile_i", 0),
+                "input_up": ("temp_up", "tile_i", 0),
+                "output": ("temp_swiglu", "tile_i", 0)
             })
             
             # Down projection
             .call("tile_matmul", {
-                "input_a": "temp_swiglu",
+                "input_a": ("temp_swiglu", "tile_i", 0),
                 "input_b": "w_down",
-                "output": "temp_mlp_out"
+                "output": ("temp_mlp_out", "tile_i", 0)
             })
             
             # Final residual: output = MLP_out + hidden
             .call("residual_add_tile", {
-                "input": "temp_mlp_out",
-                "input_residual": "all_hidden",
-                "output": "output"              # output[tile_i]
+                "input": ("temp_mlp_out", "tile_i", 0),
+                "input_residual": ("all_hidden", "tile_i", 0),
+                "output": ("output", "tile_i", 0)           # output[tile_i]
             })
         .end_for()  # End Phase 3
         
@@ -1592,8 +1595,13 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
     #   - pto_task_alloc, pto_task_add_input, pto_task_add_output, pto_task_submit
     # 这些接口是平台无关的纯 C 代码
     # ARM64, CUDA, Ascend 后端共享同一份 orchestration 代码
-    orch_gen = CustomOrchestrationGenerator(module, num_full_tiles, tail_rows)
-    dump_file = orch_gen.compile_and_run(module.entry_function, ascend_dir, seq_len)
+    #
+    # 使用 CALL 指令自动生成 task scheduling 代码
+    # 偏移信息已经在 .call() 中传递: ("tensor", "tile_i", 0)
+    dump_file = gen.compile_and_run_orchestration(
+        module.get_function(module.entry_function),
+        ascend_dir
+    )
     
     # Generate visualization for Ascend (PRIMARY)
     if dump_file and os.path.exists(dump_file):
@@ -1699,383 +1707,6 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
 # The same orchestration .c file is used for ALL backends.
 # Only the InCore functions differ per backend.
 # =============================================================================
-
-
-class CustomOrchestrationGenerator:
-    """
-    Custom orchestration code generator that uses specific tile counts.
-    
-    Key insight: Different tiles process DIFFERENT regions of data, so they
-    should be independent and can run in parallel. We use row_offset to 
-    distinguish different tile regions, enabling true parallelism detection.
-    
-    Buffer sizes are obtained from the compiler's TileBufferAnalyzer results
-    stored in the module, NOT hardcoded.
-    """
-    
-    def __init__(self, module, num_full_tiles: int, tail_rows: int):
-        self.module = module
-        self.num_full_tiles = num_full_tiles
-        self.tail_rows = tail_rows
-        self.has_tail = tail_rows > 0
-    
-    def get_buffer_size(self, func_name: str) -> Tuple[int, int]:
-        """
-        Get buffer size from compiler's analysis stored in module.
-        Returns (total_bytes_without_reuse, total_bytes_with_reuse).
-        Falls back to 0 if not available.
-        """
-        return self.module.get_buffer_size(func_name)
-    
-    def compile_and_run(self, entry_func: str, output_dir: str, seq_len: int):
-        """Generate, compile, execute orchestration code."""
-        import subprocess
-        
-        prog = self.module.functions.get(entry_func)
-        if not prog or prog.is_in_core:
-            return None
-        
-        os.makedirs(output_dir, exist_ok=True)
-        runtime_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
-        # Generate C code
-        c_code = self._generate_orchestration_code(prog, seq_len)
-        
-        c_file = os.path.join(output_dir, f"{entry_func}_orchestration.c")
-        with open(c_file, 'w') as f:
-            f.write(c_code)
-        
-        # Compile
-        exe_file = os.path.join(output_dir, f"{entry_func}_orchestration")
-        compile_cmd = ["gcc", "-I", runtime_dir, "-o", exe_file, c_file]
-        
-        result = subprocess.run(compile_cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"  Compilation failed: {result.stderr}")
-            return None
-        
-        # Execute
-        result = subprocess.run([exe_file], capture_output=True, text=True, cwd=output_dir)
-        if result.returncode != 0:
-            print(f"  Execution failed: {result.stderr}")
-            return None
-        
-        if result.stdout:
-            # Print summary only
-            lines = result.stdout.split('\n')
-            for line in lines:
-                if 'Total tasks' in line or 'Ready queue' in line:
-                    print(f"    {line.strip()}")
-        
-        dump_file = os.path.join(output_dir, f"{entry_func}_task_graph.txt")
-        if os.path.exists(dump_file):
-            try:
-                os.remove(exe_file)
-            except:
-                pass
-            return dump_file
-        
-        return None
-    
-    def _generate_orchestration_code(self, prog, seq_len: int) -> str:
-        """Generate C code that builds task graph with CORRECT 3-PHASE structure.
-        
-        Phase 1: Pre-Attention (ALL tiles parallel)
-        Phase 2: Flash Attention (Q[i] depends on ALL K[j], V[j])
-        Phase 3: Post-Attention (depends on attention completion)
-        """
-        lines = []
-        lines.append("/**")
-        lines.append(f" * LLaMA 7B Layer Orchestration - seq_len={seq_len}")
-        lines.append(f" * num_tiles: {self.num_full_tiles}")
-        lines.append(" *")
-        lines.append(" * THREE-PHASE Task Graph with Cross-Tile Dependencies:")
-        lines.append(" *")
-        lines.append(" * Phase 1: Pre-Attention (ALL tiles run in PARALLEL)")
-        lines.append(" *   - RMSNorm, Q/K/V MatMuls, RoPE for each tile")
-        lines.append(" *   - No cross-tile dependencies -> massive parallelism")
-        lines.append(" *")
-        lines.append(" * Phase 2: Flash Attention (CROSS-TILE dependencies)")
-        lines.append(" *   - Q[i] attends to ALL K[j], V[j] tiles")
-        lines.append(f" *   - Creates {self.num_full_tiles}x{self.num_full_tiles} attention blocks")
-        lines.append(" *   - Fan-in pattern: attention output depends on all K,V")
-        lines.append(" *")
-        lines.append(" * Phase 3: Post-Attention (after attention completes)")
-        lines.append(" *   - Output projection, Residual, MLP for each tile")
-        lines.append(" *   - Parallel across tiles (no cross-tile deps)")
-        lines.append(" */")
-        lines.append("")
-        lines.append('#include "pto_runtime.h"')
-        lines.append('#include "pto_runtime.c"')
-        lines.append("")
-        
-        # Build task graph function
-        lines.append(f"void build_task_graph(PTORuntime* rt) {{")
-        
-        # Declare buffers
-        lines.append("    // Declare per-tile buffers")
-        lines.append(f"    // Total tiles: {self.num_full_tiles}")
-        total_size = self.num_full_tiles * 64
-        
-        # Core buffers
-        buffers = [
-            "input", "output", "attn_norm_weights", "wq", "wk", "wv", "wo",
-            "cos_cache", "sin_cache", "mlp_norm_weights", "w_gate", "w_up", "w_down",
-            "all_q_tiles", "all_k_tiles", "all_v_tiles", "all_q_rope", "all_k_rope",
-            "all_attn_out", "all_m_vec", "all_l_vec", "all_hidden",
-            "temp_norm", "temp_scores", "temp_attn_weights", "temp_scale",
-            "temp_gate", "temp_up", "temp_swiglu", "temp_mlp_out",
-            "const_zeros_large", "const_zeros_small", "const_neg_inf"
-        ]
-        for name in buffers:
-            lines.append(f"    float {name}[{total_size}];")
-        lines.append("")
-        
-        task_idx = 0
-        num_tiles = self.num_full_tiles
-        
-        # ================================================================
-        # PHASE 1: Pre-Attention (ALL tiles parallel)
-        # ================================================================
-        lines.append("    // ================================================================")
-        lines.append("    // PHASE 1: Pre-Attention (ALL tiles run in PARALLEL)")
-        lines.append("    // ================================================================")
-        
-        for tile_i in range(num_tiles):
-            row_offset = tile_i * TILE_ROWS
-            lines.append(f"    // --- Tile {tile_i} Pre-Attention ---")
-            
-            # RMSNorm
-            task_idx = self._emit_task(lines, task_idx, "rmsnorm_tile", tile_i, row_offset, {
-                "input": ("input", False),
-                "weights": ("attn_norm_weights", False),
-                "output": ("temp_norm", True)
-            })
-            
-            # Q, K, V matmuls (all independent)
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("temp_norm", False),
-                "input_b": ("wq", False),
-                "output": ("all_q_tiles", True)
-            })
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("temp_norm", False),
-                "input_b": ("wk", False),
-                "output": ("all_k_tiles", True)
-            })
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("temp_norm", False),
-                "input_b": ("wv", False),
-                "output": ("all_v_tiles", True)
-            })
-            
-            # RoPE
-            task_idx = self._emit_task(lines, task_idx, "rope_tile", tile_i, row_offset, {
-                "input": ("all_q_tiles", False),
-                "output": ("all_q_rope", True)
-            })
-            task_idx = self._emit_task(lines, task_idx, "rope_tile", tile_i, row_offset, {
-                "input": ("all_k_tiles", False),
-                "output": ("all_k_rope", True)
-            })
-        
-        # ================================================================
-        # PHASE 2: Flash Attention (CROSS-TILE dependencies)
-        # ================================================================
-        lines.append("")
-        lines.append("    // ================================================================")
-        lines.append("    // PHASE 2: Flash Attention (CROSS-TILE dependencies)")
-        lines.append(f"    // Each Q tile attends to ALL {num_tiles} K,V tiles")
-        lines.append("    // ================================================================")
-        
-        for q_tile in range(num_tiles):
-            q_offset = q_tile * TILE_ROWS
-            lines.append(f"    // --- Q tile {q_tile} attending to all K,V tiles ---")
-            
-            # Initialize attention state
-            task_idx = self._emit_task(lines, task_idx, "flash_attn_init_state", q_tile, q_offset, {
-                "output_o": ("all_attn_out", True),
-                "output_l": ("all_l_vec", True),
-                "output_m": ("all_m_vec", True)
-            })
-            
-            # Inner loop: Q[q_tile] attends to ALL K,V tiles
-            for kv_tile in range(num_tiles):
-                kv_offset = kv_tile * TILE_ROWS
-                
-                # Score: S = Q[q] @ K[kv].T  (CROSS-TILE dependency!)
-                task_idx = self._emit_task_cross_tile(lines, task_idx, "flash_attn_score_block", 
-                                                      q_tile, q_offset, kv_tile, kv_offset, {
-                    "input_q": ("all_q_rope", q_offset, False),   # Q from q_tile
-                    "input_k": ("all_k_rope", kv_offset, False),  # K from kv_tile (CROSS!)
-                    "output_s": ("temp_scores", q_offset, True)
-                })
-                
-                # Softmax update
-                task_idx = self._emit_task(lines, task_idx, "flash_attn_softmax_update", q_tile, q_offset, {
-                    "input_s": ("temp_scores", False),
-                    "input_m_prev": ("all_m_vec", False),
-                    "input_l_prev": ("all_l_vec", False),
-                    "output_m_new": ("all_m_vec", True),
-                    "output_l_new": ("all_l_vec", True),
-                    "output_p": ("temp_attn_weights", True),
-                    "output_scale_old": ("temp_scale", True)
-                })
-                
-                # Output update: O += P @ V[kv]  (CROSS-TILE dependency!)
-                task_idx = self._emit_task_cross_tile(lines, task_idx, "flash_attn_output_update",
-                                                      q_tile, q_offset, kv_tile, kv_offset, {
-                    "input_o_prev": ("all_attn_out", q_offset, False),
-                    "input_p": ("temp_attn_weights", q_offset, False),
-                    "input_v": ("all_v_tiles", kv_offset, False),  # V from kv_tile (CROSS!)
-                    "input_scale": ("temp_scale", q_offset, False),
-                    "output_o": ("all_attn_out", q_offset, True)
-                })
-            
-            # Normalize
-            task_idx = self._emit_task(lines, task_idx, "flash_attn_normalize", q_tile, q_offset, {
-                "input_o": ("all_attn_out", False),
-                "input_l": ("all_l_vec", False),
-                "output": ("all_attn_out", True)
-            })
-        
-        # ================================================================
-        # PHASE 3: Post-Attention (after attention completes)
-        # ================================================================
-        lines.append("")
-        lines.append("    // ================================================================")
-        lines.append("    // PHASE 3: Post-Attention (depends on Phase 2 completion)")
-        lines.append("    // ================================================================")
-        
-        for tile_i in range(num_tiles):
-            row_offset = tile_i * TILE_ROWS
-            lines.append(f"    // --- Tile {tile_i} Post-Attention & MLP ---")
-            
-            # Output projection
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("all_attn_out", False),
-                "input_b": ("wo", False),
-                "output": ("temp_norm", True)
-            })
-            
-            # Residual
-            task_idx = self._emit_task(lines, task_idx, "residual_add_tile", tile_i, row_offset, {
-                "input": ("temp_norm", False),
-                "input_residual": ("input", False),
-                "output": ("all_hidden", True)
-            })
-            
-            # MLP: RMSNorm
-            task_idx = self._emit_task(lines, task_idx, "rmsnorm_tile", tile_i, row_offset, {
-                "input": ("all_hidden", False),
-                "weights": ("mlp_norm_weights", False),
-                "output": ("temp_norm", True)
-            })
-            
-            # MLP: Gate and Up (parallel)
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("temp_norm", False),
-                "input_b": ("w_gate", False),
-                "output": ("temp_gate", True)
-            })
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("temp_norm", False),
-                "input_b": ("w_up", False),
-                "output": ("temp_up", True)
-            })
-            
-            # SwiGLU
-            task_idx = self._emit_task(lines, task_idx, "swiglu_tile", tile_i, row_offset, {
-                "input_gate": ("temp_gate", False),
-                "input_up": ("temp_up", False),
-                "output": ("temp_swiglu", True)
-            })
-            
-            # Down projection
-            task_idx = self._emit_task(lines, task_idx, "tile_matmul", tile_i, row_offset, {
-                "input_a": ("temp_swiglu", False),
-                "input_b": ("w_down", False),
-                "output": ("temp_mlp_out", True)
-            })
-            
-            # Final residual
-            task_idx = self._emit_task(lines, task_idx, "residual_add_tile", tile_i, row_offset, {
-                "input": ("temp_mlp_out", False),
-                "input_residual": ("all_hidden", False),
-                "output": ("output", True)
-            })
-        
-        lines.append("}")
-        lines.append("")
-        
-        # Main function
-        lines.append("int main(int argc, char** argv) {")
-        lines.append("    PTORuntime rt;")
-        lines.append("    pto_runtime_init(&rt);")
-        lines.append("")
-        lines.append("    build_task_graph(&rt);")
-        lines.append("")
-        lines.append("    printf(\"\\n\");")
-        lines.append("    pto_runtime_dump_stdout(&rt);")
-        lines.append(f'    pto_runtime_dump(&rt, "{prog.name}_task_graph.txt");')
-        lines.append("")
-        lines.append("    pto_runtime_shutdown(&rt);")
-        lines.append("    return 0;")
-        lines.append("}")
-        
-        return "\n".join(lines)
-    
-    def _emit_task(self, lines, task_idx, func_name, tile_num, row_offset, args):
-        """Emit a single task with all args at the same tile offset."""
-        buf_size, buf_reuse = self.get_buffer_size(func_name)
-        
-        lines.append(f"    int32_t t{task_idx} = pto_task_alloc(rt, \"{func_name}\", NULL, {buf_size}, {buf_reuse});")
-        
-        for param_name, (arg_name, is_output) in args.items():
-            rows, cols = self._infer_shape(param_name, func_name, is_output)
-            if is_output:
-                lines.append(f"    pto_task_add_output(rt, t{task_idx}, {arg_name}, {row_offset}, 0, {rows}, {cols});")
-            else:
-                lines.append(f"    pto_task_add_input(rt, t{task_idx}, {arg_name}, {row_offset}, 0, {rows}, {cols});")
-        
-        lines.append(f"    pto_task_submit(rt, t{task_idx});")
-        lines.append("")
-        return task_idx + 1
-    
-    def _emit_task_cross_tile(self, lines, task_idx, func_name, q_tile, q_offset, kv_tile, kv_offset, args):
-        """Emit a task with CROSS-TILE dependencies (args from different tiles)."""
-        buf_size, buf_reuse = self.get_buffer_size(func_name)
-        
-        lines.append(f"    // Cross-tile: Q[{q_tile}] x K/V[{kv_tile}]")
-        lines.append(f"    int32_t t{task_idx} = pto_task_alloc(rt, \"{func_name}\", NULL, {buf_size}, {buf_reuse});")
-        
-        for param_name, (arg_name, offset, is_output) in args.items():
-            rows, cols = self._infer_shape(param_name, func_name, is_output)
-            if is_output:
-                lines.append(f"    pto_task_add_output(rt, t{task_idx}, {arg_name}, {offset}, 0, {rows}, {cols});")
-            else:
-                lines.append(f"    pto_task_add_input(rt, t{task_idx}, {arg_name}, {offset}, 0, {rows}, {cols});")
-        
-        lines.append(f"    pto_task_submit(rt, t{task_idx});")
-        lines.append("")
-        return task_idx + 1
-    
-    def _generate_tile_tasks(self, lines, prog, task_idx: int, tile_num: int) -> int:
-        """Legacy method - kept for compatibility."""
-        return task_idx
-    
-    def _infer_shape(self, param_name: str, callee_name: str, is_output: bool):
-        """Infer tensor shape based on dynamic tile configuration."""
-        # Reduction outputs have shape (TILE_ROWS, 1)
-        if callee_name in ['tile_rowmax', 'tile_rowsum'] and is_output:
-            return (TILE_ROWS, 1)
-        if 'rowmax' in callee_name or 'rowsum' in callee_name:
-            if is_output:
-                return (TILE_ROWS, 1)
-        if any(kw in param_name.lower() for kw in ['row_max', 'row_sum', 'rowmax', 'rowsum']):
-            return (TILE_ROWS, 1)
-        # Default: full tile shape
-        return (TILE_ROWS, TILE_COLS)
 
 
 # =============================================================================

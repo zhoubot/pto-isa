@@ -952,13 +952,22 @@ class PTOFunctionBuilder:
         
         Args:
             callee: Name of the function to call
-            args: Dictionary mapping parameter names to argument names.
+            args: Dictionary mapping parameter names to argument values.
                   Parameter names are from the callee function.
-                  Argument names are memrefs/tiles in the current function.
+                  Values can be:
+                    - Simple: "tensor_name" (no offset, uses current loop context)
+                    - With offset: ("tensor_name", row_offset, col_offset)
+                      - row_offset/col_offset: scalar var name (str) or int constant
         
-        Example:
-            # Call sigmoid function with input -> x, output -> y
+        Examples:
+            # Simple call (offset = 0)
             .call("sigmoid", {"input": "x", "output": "y"})
+            
+            # Call with explicit offsets (for dynamic tiling)
+            .call("matmul", {
+                "input": ("x", "tile_idx", 0),    # x[tile_idx * rows : (tile_idx+1) * rows]
+                "output": ("y", "tile_idx", 0)
+            })
         
         Notes on InCore functions:
             - If this function is InCore, the callee must also be InCore
@@ -987,11 +996,30 @@ class PTOFunctionBuilder:
         
         # Validate arguments are declared
         if args:
-            for arg_name in args.values():
-                if (arg_name not in self.program.memref_declarations and
-                    arg_name not in self.program.tile_declarations):
+            for arg_val in args.values():
+                # Extract tensor name from simple or tuple format
+                if isinstance(arg_val, tuple):
+                    tensor_name = arg_val[0]
+                    row_off = arg_val[1] if len(arg_val) > 1 else 0
+                    col_off = arg_val[2] if len(arg_val) > 2 else 0
+                    # Validate offset expressions (if scalar variable names)
+                    if isinstance(row_off, str) and row_off not in self.program.scalar_declarations:
+                        if not row_off.isdigit():  # Allow integer literals
+                            raise ValidationError(
+                                f"Row offset '{row_off}' is not a declared scalar"
+                            )
+                    if isinstance(col_off, str) and col_off not in self.program.scalar_declarations:
+                        if not col_off.isdigit():  # Allow integer literals
+                            raise ValidationError(
+                                f"Column offset '{col_off}' is not a declared scalar"
+                            )
+                else:
+                    tensor_name = arg_val
+                
+                if (tensor_name not in self.program.memref_declarations and
+                    tensor_name not in self.program.tile_declarations):
                     raise ValidationError(
-                        f"Argument '{arg_name}' not declared as memref or tile"
+                        f"Argument '{tensor_name}' not declared as memref or tile"
                     )
         
         self._add_instr(CALL(
@@ -2596,14 +2624,12 @@ def convert_program_to_mock_instructions(program):
         # =========== Function Call Instructions ===========
         elif opcode == "CALL":
             # CALL instruction: callee name in 'callee', args in 'args' dict
-            args_list = []
-            if hasattr(instr, 'args') and instr.args:
-                # Format: "param_name -> arg_value" to preserve parameter info
-                for param, arg in instr.args.items():
-                    args_list.append(f"{param} -> {arg}")
+            # Pass args dict directly to preserve tuple format for offsets
+            # E.g., {"input": ("tensor", "tile_idx", 0)} stays as-is
+            args_dict = instr.args if hasattr(instr, 'args') else {}
             mock_instructions.append(MockInstruction(
                 opcode="CALL", dst=instr.callee,
-                operands=args_list
+                operands=args_dict  # Pass dict directly, not converted to strings
             ))
         elif opcode == "RETURN":
             mock_instructions.append(MockInstruction(
@@ -2812,7 +2838,7 @@ def _gen_arm64_barrier_op(instr, rows, cols, dtype, tile_info, orch_ctx: Optiona
     # =========== Function Call Instructions ===========
     elif instr.opcode == "CALL":
         callee = instr.dst  # Function name is stored in dst
-        args = instr.operands  # List of argument mappings
+        args = instr.operands  # Dict or list of argument mappings
         
         # For orchestration functions, generate task scheduling code
         if orch_ctx is not None:
@@ -2820,7 +2846,17 @@ def _gen_arm64_barrier_op(instr, rows, cols, dtype, tile_info, orch_ctx: Optiona
         else:
             # For InCore functions, generate direct function call
             if args:
-                args_str = ", ".join(str(arg) for arg in args)
+                # Handle dict format: {"param": "arg"} or {"param": ("arg", off1, off2)}
+                if isinstance(args, dict):
+                    arg_names = []
+                    for param, arg_val in args.items():
+                        if isinstance(arg_val, tuple):
+                            arg_names.append(arg_val[0])  # Just tensor name for InCore call
+                        else:
+                            arg_names.append(str(arg_val))
+                    args_str = ", ".join(arg_names)
+                else:
+                    args_str = ", ".join(str(arg) for arg in args)
                 lines.append(f"{callee}({args_str});")
             else:
                 lines.append(f"{callee}();")
@@ -2834,16 +2870,21 @@ def _gen_arm64_barrier_op(instr, rows, cols, dtype, tile_info, orch_ctx: Optiona
     return lines
 
 
-def _gen_task_scheduling_code(callee: str, args: List, orch_ctx: OrchestrationContext, 
+def _gen_task_scheduling_code(callee: str, args: Union[List, Dict], orch_ctx: OrchestrationContext, 
                                tile_info: Dict, rows: int, cols: int) -> List[str]:
     """Generate task scheduling code for an InCore function call.
     
     This is called when generating code for an orchestration function that
     calls an InCore function.
     
-    Args format from CALL instruction: ["param_name -> arg_value", ...]
-    where param_name is the parameter name in the called function,
-    and arg_value is the actual argument passed.
+    Args format from CALL instruction can be:
+      - Old format: ["param_name -> arg_value", ...]
+      - New format: Dict[str, Union[str, Tuple[str, str/int, str/int]]]
+        - Simple: {"param": "tensor_name"} 
+        - With offset: {"param": ("tensor", "row_off", "col_off")}
+    
+    When offset is a string like "tile_idx", it's a scalar variable name
+    that will be used in the generated C code as: tile_idx * rows
     """
     lines = []
     task_id = orch_ctx.alloc_task()
@@ -2857,26 +2898,26 @@ def _gen_task_scheduling_code(callee: str, args: List, orch_ctx: OrchestrationCo
     lines.append(f"int32_t t{task_id} = pto_task_alloc(rt, \"{callee}\", NULL, {buf_bytes}, {reuse_bytes});")
     
     # Parse arguments: determine inputs vs outputs
-    # Args format: ["param_name -> arg_value", ...] (from CALL instruction)
     input_args = []
     output_args = []
     
-    for arg in args:
-        arg_str = str(arg)
-        
-        # Parse "param_name -> arg_value" format (from CALL instruction)
-        if " -> " in arg_str:
-            param_name, value = arg_str.split(" -> ", 1)
-        elif "=" in arg_str:
-            # Alternative format: "param_name=arg_value"
-            param_name, value = arg_str.split("=", 1)
-        else:
-            param_name = arg_str
-            value = arg_str
-        
-        param_name = param_name.strip()
-        value = value.strip()
-        
+    # Handle both old string format and new dict/tuple format
+    if isinstance(args, dict):
+        # New format: dict with possibly tuple values
+        arg_items = args.items()
+    else:
+        # Old format: list of "param -> value" strings
+        arg_items = []
+        for arg in args:
+            arg_str = str(arg)
+            if " -> " in arg_str:
+                param_name, value = arg_str.split(" -> ", 1)
+                arg_items.append((param_name.strip(), value.strip()))
+            elif "=" in arg_str:
+                param_name, value = arg_str.split("=", 1)
+                arg_items.append((param_name.strip(), value.strip()))
+    
+    for param_name, arg_value in arg_items:
         # Determine if output based on parameter name
         is_output = any(kw in param_name.lower() for kw in ['output', 'result', 'dst', 'out'])
         
@@ -2888,14 +2929,25 @@ def _gen_task_scheduling_code(callee: str, args: List, orch_ctx: OrchestrationCo
         if callee in ['rowmax', 'rowsum', 'tile_rowmax', 'tile_rowsum'] and is_output:
             t_cols = 1
         
-        # Extract row_offset if present in value (e.g., "input, tile_idx, 0")
-        if "," in value:
-            parts = [p.strip() for p in value.split(",")]
-            tensor_name = parts[0]
-            row_off = parts[1] if len(parts) > 1 else "0"
-            col_off = parts[2] if len(parts) > 2 else "0"
+        # Parse argument value: can be string or tuple
+        if isinstance(arg_value, tuple):
+            # New format: (tensor_name, row_offset, col_offset)
+            tensor_name = arg_value[0]
+            row_off = arg_value[1] if len(arg_value) > 1 else 0
+            col_off = arg_value[2] if len(arg_value) > 2 else 0
+        elif isinstance(arg_value, str):
+            # Could be "tensor" or "tensor, row_off, col_off" format
+            if "," in arg_value:
+                parts = [p.strip() for p in arg_value.split(",")]
+                tensor_name = parts[0]
+                row_off = parts[1] if len(parts) > 1 else "0"
+                col_off = parts[2] if len(parts) > 2 else "0"
+            else:
+                tensor_name = arg_value
+                row_off = "0"
+                col_off = "0"
         else:
-            tensor_name = value
+            tensor_name = str(arg_value)
             row_off = "0"
             col_off = "0"
         

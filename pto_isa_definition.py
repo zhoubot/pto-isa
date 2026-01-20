@@ -3471,11 +3471,18 @@ class CALL(ControlFlowInstruction):
     Arguments are passed as a mapping from parameter names to actual arguments.
     The callee function name is used to resolve the function at link time.
     
-    Example:
+    Arguments can be:
+    - Simple: "tensor_name" (no offset)
+    - With offset: ("tensor_name", "row_offset_expr", "col_offset_expr")
+      - Offset expressions can be scalar variable names or integer constants
+      - E.g., ("input", "tile_idx", 0) means input[tile_idx * tile_rows + 0]
+    
+    Examples:
         CALL @sigmoid(%input -> %x, %output -> %y)
+        CALL @matmul(%input -> (%x, tile_i, 0), %output -> (%y, tile_i, 0))
     """
     callee: str  # Function name to call
-    args: Dict[str, str] = field(default_factory=dict)  # param_name -> actual_arg_name
+    args: Dict[str, Any] = field(default_factory=dict)  # param -> arg (str or tuple)
     
     @property
     def opcode(self) -> str:
@@ -3483,8 +3490,15 @@ class CALL(ControlFlowInstruction):
     
     def to_pto_as(self) -> str:
         if self.args:
-            args_str = ", ".join(f"%{param} -> %{arg}" for param, arg in self.args.items())
-            return f"CALL @{self.callee}({args_str})"
+            arg_strs = []
+            for param, arg in self.args.items():
+                if isinstance(arg, tuple):
+                    # Format: (tensor, row_off, col_off)
+                    tensor, row_off, col_off = arg
+                    arg_strs.append(f"%{param} -> (%{tensor}, {row_off}, {col_off})")
+                else:
+                    arg_strs.append(f"%{param} -> %{arg}")
+            return f"CALL @{self.callee}({', '.join(arg_strs)})"
         return f"CALL @{self.callee}()"
 
 
