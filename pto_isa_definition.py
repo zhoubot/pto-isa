@@ -3289,18 +3289,46 @@ class FOR(ControlFlowInstruction):
     Begin a structured for-loop.
     
     Iteration count can be derived from tile shape dimensions.
+    
+    When max_range is specified, the dynamic loop is converted to binary expansion:
+    - The loop limit is quantized into sum of power-of-2 series
+    - Each binary bit serves as a predicate to select loop body of that power-of-2
+    - Example: n=45 (binary: 101101) -> 32+8+4+1 iterations
     """
     iv: IndexOperand      # Induction variable
     lb: Union[IndexOperand, ImmediateOperand]  # Lower bound
     ub: Union[IndexOperand, ImmediateOperand]  # Upper bound
     step: Union[IndexOperand, ImmediateOperand] = field(default_factory=lambda: ImmediateOperand(1))
+    max_range: Optional[int] = None  # Max range for binary expansion (must be power of 2)
+    min_range: Optional[int] = None  # Min range for binary expansion (smallest power of 2 block)
+    tile_levels: Optional[Dict[int, int]] = None  # Mapping: block_size -> tile_rows for function variant selection
     
     @property
     def opcode(self) -> str:
         return "FOR"
     
     def to_pto_as(self) -> str:
-        return f"FOR {self.iv}:idx, {self.lb}:idx, {self.ub}:idx, {self.step}:idx"
+        base = f"FOR {self.iv}:idx, {self.lb}:idx, {self.ub}:idx, {self.step}:idx"
+        if self.max_range is not None:
+            base = f"{base} max_range={self.max_range}"
+        if self.min_range is not None:
+            base = f"{base} min_range={self.min_range}"
+        if self.tile_levels is not None:
+            # Format: tile_levels={4096:64,2048:64,1024:32,...}
+            levels_str = ",".join(f"{k}:{v}" for k, v in sorted(self.tile_levels.items(), reverse=True))
+            base = f"{base} tile_levels={{{levels_str}}}"
+        return base
+    
+    def get_binary_bits(self) -> List[int]:
+        """Return list of power-of-2 values for binary expansion."""
+        if self.max_range is None:
+            return []
+        bits = []
+        n = self.max_range
+        while n > 0:
+            bits.append(n)
+            n //= 2
+        return bits  # e.g., [64, 32, 16, 8, 4, 2, 1] for max_range=64
     
     @classmethod
     def from_tile_rows(cls, iv_name: str, tile_type: TileType, step: int = 1) -> "FOR":

@@ -740,7 +740,10 @@ class PTOFunctionBuilder:
     # Loop constructs
     def for_loop(self, iv_name: str, 
                  lb: Union[int, str], ub: Union[int, str], 
-                 step: Union[int, str] = 1) -> "PTOFunctionBuilder":
+                 step: Union[int, str] = 1,
+                 max_range: Optional[int] = None,
+                 min_range: Optional[int] = None,
+                 tile_levels: Optional[Dict[int, int]] = None) -> "PTOFunctionBuilder":
         """Begin a FOR loop.
         
         Args:
@@ -748,7 +751,33 @@ class PTOFunctionBuilder:
             lb: Lower bound (int for immediate, str for scalar variable)
             ub: Upper bound (int for immediate, str for scalar variable)
             step: Step (int for immediate, str for scalar variable)
+            max_range: Maximum possible range for dynamic upper bound (enables binary expansion).
+                       When specified, the dynamic loop limit is converted to binary:
+                       - Quantizes loop limit into sum of power-of-2 series
+                       - Each binary bit serves as predicate for that power-of-2 iteration block
+                       - Example: n=45 (binary: 101101) -> 32+8+4+1 iterations
+            min_range: Minimum power-of-2 block size for binary expansion.
+                       Iterations below this threshold are handled by a single residual loop.
+                       - Example: min_range=256 with n=300 -> 256 + residual(44)
+            tile_levels: Mapping of block_size -> tile_rows for function variant selection.
+                        When processing block_size iterations, use tile_rows size.
+                        - Example: {4096: 64, 2048: 64, 1024: 32, 512: 32, 256: 32}
+                        - InCore functions called will have _N suffix for tile_rows=N
         """
+        # Validate max_range
+        if max_range is not None:
+            if max_range <= 0 or (max_range & (max_range - 1)) != 0:
+                # Round up to power of 2
+                import math
+                max_range = 2 ** math.ceil(math.log2(max_range)) if max_range > 0 else 1
+        
+        # Validate min_range
+        if min_range is not None:
+            if min_range <= 0 or (min_range & (min_range - 1)) != 0:
+                # Round up to power of 2
+                import math
+                min_range = 2 ** math.ceil(math.log2(min_range)) if min_range > 0 else 1
+        
         self.symbol_table.push_scope()
         self.symbol_table.define(iv_name, Symbol(iv_name, "index", ElementType.INDEX))
         
@@ -760,7 +789,10 @@ class PTOFunctionBuilder:
             iv=IndexOperand(iv_name),
             lb=lb_op,
             ub=ub_op,
-            step=step_op
+            step=step_op,
+            max_range=max_range,
+            min_range=min_range,
+            tile_levels=tile_levels
         ))
         self._loop_stack.append([])
         return self
@@ -2494,6 +2526,9 @@ class MockInstruction:
     dst: str
     operands: list
     raw_line: str = ""
+    max_range: Optional[int] = None  # For binary-expanded FOR loops
+    min_range: Optional[int] = None  # Minimum power-of-2 block for binary expansion
+    tile_levels: Optional[Dict[int, int]] = None  # Mapping: block_size -> tile_rows for variant selection
 
 
 def _get_operand_str(operand):
@@ -2585,7 +2620,10 @@ def convert_program_to_mock_instructions(program):
                     _get_operand_str(instr.lb),
                     _get_operand_str(instr.ub),
                     _get_operand_str(instr.step)
-                ]
+                ],
+                max_range=getattr(instr, 'max_range', None),
+                min_range=getattr(instr, 'min_range', None),
+                tile_levels=getattr(instr, 'tile_levels', None)
             ))
         elif opcode == "ENDFOR":
             mock_instructions.append(MockInstruction(
@@ -2645,6 +2683,247 @@ def convert_program_to_mock_instructions(program):
             ))
     
     return tile_info, mock_instructions
+
+
+def apply_binary_expansion(code: str) -> str:
+    """
+    Apply binary expansion transformation to loops marked with @BINARY_EXPAND.
+    
+    Transforms:
+        // @BINARY_EXPAND: max_range=4096, min_range=256, bits=[4096,2048,1024,512,256]
+        for (int i = 0; i < n; i += 1) {
+            BODY
+        }
+    
+    Into:
+        {
+            int _i_base = 0;
+            int _i_limit = n;
+            int _i_residual = n & (min_range - 1);  // e.g., n & 255 for min_range=256
+            int _i_quantized = n - _i_residual;     // Quantized to min_range boundary
+            
+            // Binary-expanded loops for quantized portion
+            if (_i_quantized & 4096) { for (int i = _i_base; i < _i_base + 4096; i += 1) { BODY } _i_base += 4096; }
+            if (_i_quantized & 2048) { for (int i = _i_base; i < _i_base + 2048; i += 1) { BODY } _i_base += 2048; }
+            ...
+            if (_i_quantized & 256) { for (int i = _i_base; i < _i_base + 256; i += 1) { BODY } _i_base += 256; }
+            
+            // Residual loop for remaining iterations (< min_range)
+            for (int i = _i_base; i < _i_base + _i_residual; i += 1) { BODY }
+        }
+    
+    This quantizes the dynamic loop limit into sum of power-of-2 series.
+    Each binary bit serves as a predicate to select the loop body for that power-of-2.
+    Iterations below min_range are handled by a single residual loop.
+    
+    When tile_levels is specified (e.g., tile_levels={4096:64,2048:64,1024:32,...}),
+    the iteration count is REDUCED when using larger tiles:
+    - 4096-block with 64-row tiles: iterations = 4096 * 32 / 64 = 2048 (halved!)
+    - 256-block with 32-row tiles: iterations = 256 * 32 / 32 = 256 (unchanged)
+    
+    This dramatically reduces the task graph size for large sequences:
+    - 16K seq with fixed 32-row tiles: 16*512 + 3*512^2 = 794,624 tasks
+    - 16K seq with adaptive tiles: 16*256 + 3*256^2 = 200,704 tasks (75% reduction!)
+    """
+    import re
+    
+    # Default tile size (no suffix)
+    DEFAULT_TILE_ROWS = 32
+    
+    def transform_func_names(body_lines: list, tile_rows: int) -> list:
+        """Transform function names in body to use tile_rows variant."""
+        if tile_rows == DEFAULT_TILE_ROWS:
+            return body_lines  # No transformation needed for standard size
+        
+        # Pattern to match function calls: pto_task_alloc(rt, "func_name", ...)
+        # We need to replace "func_name" with "func_name_N"
+        result = []
+        func_pattern = re.compile(r'pto_task_alloc\(rt, "([^"]+)"')
+        
+        for line in body_lines:
+            # Replace function names in pto_task_alloc calls
+            def replace_func(m):
+                func_name = m.group(1)
+                # Don't add suffix if it already has one
+                if re.search(r'_\d+$', func_name):
+                    return m.group(0)
+                # Don't add suffix for special functions (flash_attn_*, llama_*)
+                if func_name.startswith('flash_attn_') or func_name.startswith('llama_'):
+                    return m.group(0)
+                return f'pto_task_alloc(rt, "{func_name}_{tile_rows}"'
+            
+            new_line = func_pattern.sub(replace_func, line)
+            result.append(new_line)
+        
+        return result
+    
+    def transform_offsets(body_lines: list, tile_rows: int, iv: str) -> list:
+        """
+        Transform offset calculations when using larger tiles.
+        When tile_rows > DEFAULT_TILE_ROWS, each iteration covers more rows,
+        so the offset multiplier needs to be adjusted.
+        
+        For example, with 64-row tiles (vs 32-row default):
+        - row_offset = tile_i * 2 (each tile_i covers 2x rows in base units)
+        """
+        if tile_rows == DEFAULT_TILE_ROWS:
+            return body_lines
+        
+        scale_factor = tile_rows // DEFAULT_TILE_ROWS
+        result = []
+        
+        # Pattern to match: pto_task_add_input/output(rt, ..., tile_i, ...)
+        # We need to multiply the offset by scale_factor
+        offset_pattern = re.compile(rf'(pto_task_add_(?:input|output)\(rt,\s*\w+,\s*\w+,\s*)({iv})(\s*,)')
+        
+        for line in body_lines:
+            # Replace tile_i with (tile_i * scale_factor) for row offsets
+            new_line = offset_pattern.sub(rf'\1(\2 * {scale_factor})\3', line)
+            result.append(new_line)
+        
+        return result
+    
+    lines = code.split('\n')
+    result = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i]
+        
+        # Check for binary expansion marker (with optional tile_levels)
+        # Pattern: // @BINARY_EXPAND: max_range=N, min_range=M, bits=[...] tile_levels={...}
+        match = re.match(r'\s*// @BINARY_EXPAND: max_range=(\d+), min_range=(\d+), bits=\[([\d,]+)\](?:\s+tile_levels=\{([^}]+)\})?', line)
+        if match:
+            max_range = int(match.group(1))
+            min_range = int(match.group(2))
+            bits = [int(b) for b in match.group(3).split(',')]
+            tile_levels_str = match.group(4)
+            
+            # Parse tile_levels if present: "4096:64,2048:64,1024:32,..."
+            tile_levels = {}
+            if tile_levels_str:
+                for pair in tile_levels_str.split(','):
+                    k, v = pair.split(':')
+                    tile_levels[int(k)] = int(v)
+            
+            indent = len(line) - len(line.lstrip())
+            ind = ' ' * indent
+            
+            # Get the for loop line
+            i += 1
+            if i >= len(lines):
+                result.append(line)
+                continue
+                
+            for_line = lines[i]
+            for_match = re.match(r'\s*for \(int (\w+) = (\w+); \1 < (\w+); \1 \+= (\w+)\) \{', for_line)
+            if not for_match:
+                result.append(line)
+                result.append(for_line)
+                i += 1
+                continue
+            
+            iv = for_match.group(1)
+            lb = for_match.group(2)
+            ub = for_match.group(3)
+            step = for_match.group(4)
+            
+            # Collect the loop body until closing brace
+            i += 1
+            body_lines = []
+            brace_count = 1
+            while i < len(lines) and brace_count > 0:
+                body_line = lines[i]
+                brace_count += body_line.count('{') - body_line.count('}')
+                if brace_count > 0:
+                    body_lines.append(body_line)
+                i += 1
+            
+            # Generate binary-expanded code with ADAPTIVE ITERATION COUNTS
+            tile_info = f" (tile_levels: {tile_levels})" if tile_levels else ""
+            result.append(f"{ind}// Binary-expanded loop with ADAPTIVE tile sizes: {ub}{tile_info}")
+            result.append(f"{ind}// Larger tiles → fewer iterations → smaller task graph!")
+            result.append(f"{ind}{{")
+            result.append(f"{ind}    int _{iv}_base = {lb};")
+            result.append(f"{ind}    int _{iv}_limit = {ub};")
+            
+            # For adaptive tiles, we need to track how many "base-sized" tiles we've processed
+            # When using 64-row tiles instead of 32-row, each iteration covers 2 base tiles
+            result.append(f"{ind}    int _{iv}_base_rows = 0;  // Track rows processed in base tile units")
+            result.append(f"")
+            
+            # Calculate residual and quantized portions (in base tile units)
+            result.append(f"{ind}    int _{iv}_residual = _{iv}_limit & {min_range - 1};  // Residual base-tiles < {min_range}")
+            result.append(f"{ind}    int _{iv}_quantized = _{iv}_limit - _{iv}_residual;  // Quantized to {min_range} boundary")
+            result.append(f"")
+            
+            # Generate binary-expanded loops for quantized portion
+            result.append(f"{ind}    // Power-of-2 blocks with adaptive iteration counts:")
+            for p2 in bits:
+                # Get tile size for this block
+                tile_rows = tile_levels.get(p2, DEFAULT_TILE_ROWS) if tile_levels else DEFAULT_TILE_ROWS
+                scale = tile_rows // DEFAULT_TILE_ROWS
+                
+                # Actual iterations = block_size / scale (e.g., 4096/2 = 2048 for 64-row tiles)
+                actual_iters = p2 // scale
+                
+                result.append(f"{ind}    // Block {p2}: tile_rows={tile_rows}, scale={scale}x, actual_iters={actual_iters}")
+                result.append(f"{ind}    if (_{iv}_quantized & {p2}) {{")
+                result.append(f"{ind}        for (int {iv} = 0; {iv} < {actual_iters}; {iv} += {step}) {{")
+                result.append(f"{ind}            int _{iv}_row_offset = _{iv}_base_rows + ({iv} * {scale});  // Offset in base-tile units")
+                
+                # Transform function names based on tile size
+                transformed_body = transform_func_names(body_lines, tile_rows)
+                
+                # Replace the original iv with the scaled offset in task calls
+                processed_body = []
+                for body_line in transformed_body:
+                    # Replace direct uses of tile_i in offsets with _tile_i_row_offset
+                    modified_line = body_line.replace(f', {iv},', f', _{iv}_row_offset,')
+                    processed_body.append(f"    {modified_line}")
+                
+                # RECURSIVELY apply binary expansion to nested loops in the body!
+                body_code = '\n'.join(processed_body)
+                expanded_body = apply_binary_expansion(body_code)
+                for body_line in expanded_body.split('\n'):
+                    result.append(body_line)
+                
+                result.append(f"{ind}        }}")
+                result.append(f"{ind}        _{iv}_base_rows += {p2};  // Advance by {p2} base-tiles")
+                result.append(f"{ind}    }}")
+            
+            # Generate residual loop (uses default/smallest tile size)
+            residual_tile_rows = min(tile_levels.values()) if tile_levels else DEFAULT_TILE_ROWS
+            result.append(f"")
+            result.append(f"{ind}    // Residual loop for remaining iterations < {min_range} (tile_rows={residual_tile_rows})")
+            result.append(f"{ind}    if (_{iv}_residual > 0) {{")
+            result.append(f"{ind}        for (int {iv} = 0; {iv} < _{iv}_residual; {iv} += {step}) {{")
+            result.append(f"{ind}            int _{iv}_row_offset = _{iv}_base_rows + {iv};  // Offset in base-tile units")
+            
+            # Transform function names for residual
+            transformed_body = transform_func_names(body_lines, residual_tile_rows)
+            processed_body = []
+            for body_line in transformed_body:
+                # Replace direct uses of tile_i in offsets with _tile_i_row_offset
+                modified_line = body_line.replace(f', {iv},', f', _{iv}_row_offset,')
+                processed_body.append(f"    {modified_line}")
+            
+            # RECURSIVELY apply binary expansion to nested loops in the body!
+            body_code = '\n'.join(processed_body)
+            expanded_body = apply_binary_expansion(body_code)
+            for body_line in expanded_body.split('\n'):
+                result.append(body_line)
+            
+            result.append(f"{ind}        }}")
+            result.append(f"{ind}    }}")
+            
+            result.append(f"{ind}}}")
+            continue
+        
+        result.append(line)
+        i += 1
+    
+    return '\n'.join(result)
 
 
 @dataclass
@@ -2788,6 +3067,24 @@ def _gen_arm64_barrier_op(instr, rows, cols, dtype, tile_info, orch_ctx: Optiona
         lb = instr.operands[0]  # Lower bound
         ub = instr.operands[1]  # Upper bound
         step = instr.operands[2] if len(instr.operands) > 2 else "1"
+        max_range = getattr(instr, 'max_range', None)
+        min_range = getattr(instr, 'min_range', None) or 1  # Default min_range is 1
+        tile_levels = getattr(instr, 'tile_levels', None)
+        
+        if max_range is not None:
+            # Binary expansion hint for dynamic upper bound
+            bits = []
+            p = max_range
+            while p >= min_range:
+                bits.append(p)
+                p //= 2
+            marker = f"// @BINARY_EXPAND: max_range={max_range}, min_range={min_range}, bits=[{','.join(str(b) for b in bits)}]"
+            tile_levels_data = getattr(instr, 'tile_levels', None)
+            if tile_levels_data:
+                # Format: tile_levels={4096:64,2048:64,...}
+                levels_str = ",".join(f"{k}:{v}" for k, v in sorted(tile_levels_data.items(), reverse=True))
+                marker += f" tile_levels={{{levels_str}}}"
+            lines.append(marker)
         lines.append(f"for (int {iv} = {lb}; {iv} < {ub}; {iv} += {step}) {{")
         
     elif instr.opcode == "ENDFOR":
@@ -3683,7 +3980,12 @@ class MultiBackendCodeGenerator:
                     lines.append("")
         
         lines.append("}")
-        return "\n".join(lines)
+        
+        code = "\n".join(lines)
+        # Apply binary expansion if any loops have @BINARY_EXPAND markers
+        if "@BINARY_EXPAND" in code:
+            code = apply_binary_expansion(code)
+        return code
     
     def generate_cuda(self, program) -> str:
         """Generate NVIDIA CUDA code from a PTO program."""
@@ -4656,7 +4958,8 @@ def compile_module_with_task_graph(module: 'PTOModule', output_base_dir: str,
 # Example Usage
 # =============================================================================
 
-if __name__ == "__main__":
+def run_demo():
+    """Run demo examples."""
     # Example 1: Simple matrix multiply
     print("=" * 60)
     print("Example 1: Simple Matrix Multiply")
@@ -4754,3 +5057,92 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("Compilation completed successfully!")
     print("=" * 60)
+
+
+# =============================================================================
+# Command-line Interface
+# =============================================================================
+
+def parse_pto_directory(input_dir: str, output_dir: Optional[str] = None):
+    """
+    Parse .pto files and generate equivalent PTOFunctionBuilder Python code.
+    
+    Args:
+        input_dir: Directory containing .pto files
+        output_dir: Output directory for generated Python files (default: same as input)
+    """
+    # Import the parser module
+    try:
+        from pto_parser import process_pto_directory
+        process_pto_directory(input_dir, output_dir)
+    except ImportError as e:
+        print(f"Error: Could not import pto_parser module: {e}")
+        print("Make sure pto_parser.py is in the same directory as pto_compile.py")
+
+
+def main_cli():
+    """Command-line interface for PTO compiler."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description='PTO ISA Compiler - Compile PTO programs to backend code',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Parse .pto files and generate PTOFunctionBuilder Python code
+  python pto_compile.py parse examples/output_pto/llama7b/
+  
+  # Specify output directory
+  python pto_compile.py parse examples/output_pto/llama7b/ -o ./generated/
+  
+  # Run demo
+  python pto_compile.py demo
+"""
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Parse command
+    parse_parser = subparsers.add_parser(
+        'parse',
+        help='Parse .pto files and generate PTOFunctionBuilder Python code'
+    )
+    parse_parser.add_argument(
+        'input_dir',
+        help='Directory containing .pto files'
+    )
+    parse_parser.add_argument(
+        '--output-dir', '-o',
+        help='Output directory for generated Python files (default: same as input)'
+    )
+    
+    # Demo command
+    demo_parser = subparsers.add_parser(
+        'demo',
+        help='Run demo examples'
+    )
+    
+    args = parser.parse_args()
+    
+    if args.command == 'parse':
+        if not os.path.isdir(args.input_dir):
+            print(f"Error: {args.input_dir} is not a directory")
+            return 1
+        parse_pto_directory(args.input_dir, args.output_dir)
+        return 0
+    elif args.command == 'demo':
+        run_demo()
+        return 0
+    else:
+        parser.print_help()
+        return 0
+
+
+if __name__ == "__main__":
+    import sys
+    # Check if running with command-line arguments
+    if len(sys.argv) > 1:
+        sys.exit(main_cli())
+    else:
+        # Default behavior: show help
+        main_cli()

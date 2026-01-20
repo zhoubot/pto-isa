@@ -259,6 +259,135 @@ void dynamic_softmax(PTORuntime* rt, float* input, float* output,
 | **函数调用** | `.call()` → 内联展开 | `.call()` → 生成任务调度代码 |
 | **偏移参数** | ❌ 不需要 | ✅ 支持 `("tensor", "offset", 0)` |
 | **内存访问** | `.load()`, `.store()` | ❌ 不支持 |
+| **二进制展开** | ❌ 不支持 | ✅ `max_range`, `min_range` 参数 |
+
+### 2.5 动态循环的二进制展开 (Binary Expansion)
+
+对于动态上限的循环，可以指定 `max_range` 和 `min_range` 参数启用二进制展开优化：
+
+```python
+# 动态循环，上限 n 最大为 4096，最小量化块为 256
+.for_loop("i", 0, "n", 1, max_range=4096, min_range=256)
+    .call("process_tile", {...})
+.end_for()
+```
+
+**参数说明：**
+| 参数 | 说明 |
+|------|------|
+| `max_range` | 动态上限的最大可能值（必须是 2 的幂次） |
+| `min_range` | 最小量化块大小（小于此值的剩余迭代由单独的残差循环处理） |
+
+**原理：** 将动态循环上限转换为二进制表示，每个二进制位控制一个固定大小的循环块。`min_range` 设置最小块大小，低于此阈值的迭代由一个残差循环统一处理。
+
+**示例：** `max_range=4096`, `min_range=256`, 实际 `n=300`
+- 量化部分：`300 & ~255 = 256` → 一个 256-块
+- 残差部分：`300 & 255 = 44` → 残差循环 44 次
+
+**生成的代码：**
+
+```c
+// Binary-expanded loop: n quantized into [4096,2048,1024,512,256] + residual
+{
+    int _i_base = 0;
+    int _i_limit = n;
+    int _i_residual = _i_limit & 255;     // 残差迭代 < 256
+    int _i_quantized = _i_limit - _i_residual;  // 量化到 256 边界
+
+    // 2的幂次块: [4096, 2048, 1024, 512, 256]
+    if (_i_quantized & 4096) {
+        for (int i = _i_base; i < _i_base + 4096; i += 1) { BODY }
+        _i_base += 4096;
+    }
+    if (_i_quantized & 2048) { /* ... */ }
+    if (_i_quantized & 1024) { /* ... */ }
+    if (_i_quantized & 512)  { /* ... */ }
+    if (_i_quantized & 256)  { /* ... */ }
+
+    // 残差循环：处理 < min_range 的剩余迭代
+    if (_i_residual > 0) {
+        for (int i = _i_base; i < _i_base + _i_residual; i += 1) { BODY }
+    }
+}
+```
+
+**优势：**
+| 特性 | 说明 |
+|------|------|
+| **固定大小块** | 每个 2^k 块迭代次数固定，便于硬件流水线优化 |
+| **分支预测** | 每个 `if` 只检查一位，预测准确率高 |
+| **循环展开** | 固定大小循环更容易展开优化 |
+| **减少代码膨胀** | `min_range` 限制生成的块数量，避免过多 if 分支 |
+| **残差处理** | 小于 `min_range` 的迭代由单循环处理，简化控制流 |
+
+### 2.6 自适应 Tile 大小 (Adaptive Tile Sizing)
+
+二进制展开可以结合自适应 Tile 大小，通过 `tile_levels` 参数为不同块大小选择不同的 Tile 尺寸：
+
+```python
+# 定义每个块大小对应的 Tile 行数
+TILE_ROWS_BY_LEVEL = {
+    4096: 64,   # 大块: 64 行 Tile
+    2048: 64,   # 大块: 64 行 Tile
+    1024: 64,   # 中块: 64 行 Tile
+    512:  64,   # 小块: 64 行 Tile
+    256:  64,   # 最小块: 64 行 Tile
+}
+
+.for_loop("tile_i", 0, "num_tiles", 1, 
+          max_range=4096, min_range=256,
+          tile_levels=TILE_ROWS_BY_LEVEL)  # 自适应 Tile 大小
+    .call("rmsnorm_tile", {...})
+.end_for()
+```
+
+**工作原理：**
+
+1. **迭代次数缩减**: 当使用更大的 Tile（如 64 行 vs 32 行），每次迭代处理更多数据，所以迭代次数减少。
+   - `scale = tile_rows / base_tile_rows`
+   - `actual_iters = block_size / scale`
+   - 例：4096 块使用 64 行 Tile → `4096 / 2 = 2048` 次迭代（减少 50%！）
+
+2. **函数变体选择**: 编译器自动将函数名替换为对应的变体（如 `rmsnorm_tile_64`）
+
+3. **偏移缩放**: 生成 `_tile_i_row_offset = _tile_i_base_rows + (tile_i * scale)` 确保正确的内存访问
+
+**递归嵌套循环支持：**
+
+二进制展开会**递归应用**到循环体内的嵌套循环，实现 **N² → (N/2)²** 的优化！
+
+```python
+# Flash Attention 嵌套循环
+.for_loop("q_tile", 0, "num_tiles", 1, 
+          max_range=4096, min_range=256, tile_levels=TILE_ROWS_BY_LEVEL)
+    .for_loop("kv_tile", 0, "num_tiles", 1,  # 内层循环也会被展开!
+              max_range=4096, min_range=256, tile_levels=TILE_ROWS_BY_LEVEL)
+        .call("flash_attn_score_block", {...})
+    .end_for()
+.end_for()
+```
+
+**LLaMA 7B 优化效果（256 tiles = 8K 序列长度）：**
+
+| 配置 | 外层迭代 | 内层迭代 | Flash Attention 任务 | 总任务 | 缩减 |
+|------|---------|---------|---------------------|--------|------|
+| 无优化 | 256 | 256 | 256² × 3 = **196,608** | ~200K | - |
+| **有优化** | 128 | 128 | 128² × 3 = **49,152** | 51,200 | **75%** |
+
+**PTO Assembly 格式：**
+```
+FOR %i:idx, 0:idx, %n:idx, 1:idx max_range=4096 min_range=256 tile_levels={4096:64,2048:64,1024:64,512:64,256:64}
+```
+
+**LLaMA 示例：** 序列长度上限 128K (4096 tiles)，最小块 256 tiles (8K 序列)
+```python
+MAX_NUM_TILES = 4096   # 128K / 32 = 4096 tiles
+MIN_NUM_TILES = 256    # 最小量化块
+
+.for_loop("tile_i", 0, "num_tiles", 1, 
+          max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES,
+          tile_levels=TILE_ROWS_BY_LEVEL)  # 自适应 Tile 大小
+```
 
 ---
 
@@ -308,20 +437,58 @@ func @dynamic_softmax(%input: !pto.memref, %output: !pto.memref) {
 
 ```
 ┌─────────────────┐      pto_compile.py      ┌─────────────────┐
-│ PTOFunctionBuilder │ ─────────────────────► │   .pto Assembly │
-│   (Python DSL)   │      compiler.compile()  │   (Text File)   │
+│ PTOFunctionBuilder │ ◄────────────────────► │   .pto Assembly │
+│   (Python DSL)   │                          │   (Text File)   │
 └─────────────────┘                          └─────────────────┘
-                            │
-                            │  (计划实现)
-                            ▼
-                   ┌─────────────────┐
-                   │ PTOFunctionBuilder │
-                   │   (重建 Python)   │
-                   └─────────────────┘
+          │                                           │
+          │  compiler.compile()                       │  pto_parser.py
+          ▼                                           ▼
+    生成 .pto Assembly                         生成 *_builder.py
 ```
 
-**当前实现：** Function Builder → .pto Assembly ✅  
-**计划实现：** .pto Assembly → Function Builder (用于编辑器支持、程序变换等)
+**双向转换已实现：**
+- ✅ **Function Builder → .pto Assembly**: `PTOCompiler.compile()`
+- ✅ **.pto Assembly → Function Builder**: `pto_parser.py` 或 `pto_compile.py parse`
+
+### 3.3 从 .pto 生成 Python 代码
+
+使用命令行工具可以从 `.pto` 文件生成等价的 PTOFunctionBuilder Python 代码：
+
+```bash
+# 方式 1: 使用 pto_compile.py
+python pto_compile.py parse examples/output_pto/llama7b/
+
+# 方式 2: 使用 pto_parser.py
+python pto_parser.py examples/output_pto/llama7b/
+
+# 指定输出目录
+python pto_compile.py parse examples/output_pto/llama7b/ -o ./generated/
+```
+
+**输出示例：**
+
+```
+Found 1 .pto file(s) in examples/output_pto/llama7b/
+
+Processing: llama7b_layer.pto
+  Module: llama7b_flash
+  Functions: 26
+    InCore: 25
+    Orchestration: 1
+  Generated: examples/output_pto/llama7b/llama7b_layer_builder.py
+```
+
+**生成的 Python 文件可以直接运行，重建相同的 PTOModule：**
+
+```bash
+# 运行生成的代码，验证正确性
+python examples/output_pto/llama7b/llama7b_layer_builder.py
+```
+
+**用途：**
+- 将现有 `.pto` 程序转换为 Python 代码，便于修改和扩展
+- 实现程序变换和优化工具
+- 编辑器支持和代码生成
 
 ---
 

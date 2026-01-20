@@ -59,7 +59,7 @@ HIDDEN_DIM = 4096       # Model dimension
 NUM_HEADS = 32          # Number of attention heads
 HEAD_DIM = 128          # HIDDEN_DIM / NUM_HEADS
 INTERMEDIATE_DIM = 11008  # MLP intermediate dimension
-MAX_SEQ_LEN = 2048      # Maximum sequence length
+MAX_SEQ_LEN = 131072    # Maximum sequence length (128K)
 
 # =============================================================================
 # Hardware Constraints for Ascend 910B
@@ -112,6 +112,57 @@ FLASH_BLOCK_SIZE = 64   # Br = Bc = 64 (conservative for safety margin)
 TILE_ROWS, TILE_COLS = compute_tile_shape(DTYPE, TARGET_ISA)
 TILE_INFO = get_tile_info(DTYPE, TARGET_ISA)
 
+# =============================================================================
+# Power-of-2 Tile Size Configuration for Binary Expansion
+# =============================================================================
+# Different binary expansion levels use different tile sizes:
+# - Larger power-of-2 blocks → larger tiles (better throughput)
+# - Smaller power-of-2 blocks → smaller tiles (better flexibility)
+#
+# This allows optimal tile size selection based on workload size.
+# Each level N means "when processing 2^N iterations at once"
+
+# Tile rows for each power-of-2 level (must be multiples of PHYSICAL_ROW_SIZE=32)
+# Key: power of 2 block size in terms of base tile count
+# Value: tile_rows to use for that block
+#
+# STRATEGY: Use 64-row tiles for ALL quantized blocks to HALVE iteration count!
+# - 16K sequence: 512 tiles → 256 iterations (50% reduction)
+# - 32K sequence: 1024 tiles → 512 iterations (50% reduction)
+# - 128K sequence: 4096 tiles → 2048 iterations (50% reduction)
+#
+# Only the residual loop (< min_range=256) uses 32-row tiles for fine-grained handling.
+TILE_ROWS_BY_LEVEL = {
+    4096: 64,   # 128K seq: 4096 → 2048 iterations
+    2048: 64,   # 64K seq: 2048 → 1024 iterations
+    1024: 64,   # 32K seq: 1024 → 512 iterations  ← NOW USES 64-ROW!
+    512:  64,   # 16K seq: 512 → 256 iterations   ← NOW USES 64-ROW!
+    256:  64,   # 8K seq: 256 → 128 iterations    ← NOW USES 64-ROW!
+}
+TILE_ROWS_RESIDUAL = 32  # Residual iterations (< 256 tiles): smaller tiles for flexibility
+
+# All tile variants we need to generate InCore functions for
+# Include both TILE_ROWS_BY_LEVEL values (64) and TILE_ROWS_RESIDUAL (32)
+TILE_SIZE_VARIANTS = sorted(set(TILE_ROWS_BY_LEVEL.values()) | {TILE_ROWS_RESIDUAL}, reverse=True)  # [64, 32]
+
+# Maximum number of tiles for binary-expanded loops
+# Use smallest tile size for counting (most tiles)
+MIN_TILE_ROWS = min(TILE_ROWS_BY_LEVEL.values())
+MAX_NUM_TILES = MAX_SEQ_LEN // MIN_TILE_ROWS  # 131072 / 32 = 4096
+
+# Minimum block size for binary expansion (256 tiles = 8K sequence elements with 32-row tiles)
+# Residual iterations below this threshold handled by single loop
+MIN_NUM_TILES = 256
+
+def get_tile_rows_for_level(block_size: int) -> int:
+    """Get tile rows for a specific power-of-2 block size."""
+    return TILE_ROWS_BY_LEVEL.get(block_size, TILE_ROWS_RESIDUAL)
+
+def get_func_suffix_for_level(block_size: int) -> str:
+    """Get function name suffix for a specific power-of-2 block size."""
+    rows = get_tile_rows_for_level(block_size)
+    return f"_{rows}" if rows != TILE_ROWS else ""
+
 # Verify Flash Attention memory usage
 def verify_flash_attention_memory():
     """Verify Flash Attention tiles fit in SRAM."""
@@ -151,9 +202,16 @@ def verify_flash_attention_memory():
 # Level 1: Basic InCore Functions (Tile Operations)
 # =============================================================================
 
+def get_func_name_with_size(base_name: str, rows: int) -> str:
+    """Get function name with tile size suffix if not standard."""
+    if rows != TILE_ROWS:
+        return f"{base_name}_{rows}"
+    return base_name
+
 def create_tile_add(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Element-wise addition of two tiles."""
-    return (PTOFunctionBuilder("tile_add")
+    func_name = get_func_name_with_size("tile_add", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("a", rows, cols, dtype)
         .tile("b", rows, cols, dtype)
@@ -170,7 +228,8 @@ def create_tile_add(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_mul(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Element-wise multiplication of two tiles."""
-    return (PTOFunctionBuilder("tile_mul")
+    func_name = get_func_name_with_size("tile_mul", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("a", rows, cols, dtype)
         .tile("b", rows, cols, dtype)
@@ -187,7 +246,8 @@ def create_tile_mul(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_muls(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Multiply tile by scalar."""
-    return (PTOFunctionBuilder("tile_muls")
+    func_name = get_func_name_with_size("tile_muls", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("a", rows, cols, dtype)
         .tile("result", rows, cols, dtype)
@@ -202,7 +262,8 @@ def create_tile_muls(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_exp(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Element-wise exponential."""
-    return (PTOFunctionBuilder("tile_exp")
+    func_name = get_func_name_with_size("tile_exp", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("result", rows, cols, dtype)
@@ -227,7 +288,8 @@ def create_tile_silu(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     4. sigmoid = recip(one_plus_exp) = 1 / (1 + exp(-x))
     5. result = x * sigmoid
     """
-    return (PTOFunctionBuilder("tile_silu")
+    func_name = get_func_name_with_size("tile_silu", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("neg_x", rows, cols, dtype)
@@ -261,7 +323,8 @@ def create_tile_silu(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_rsqrt(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Element-wise reciprocal square root."""
-    return (PTOFunctionBuilder("tile_rsqrt")
+    func_name = get_func_name_with_size("tile_rsqrt", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("result", rows, cols, dtype)
@@ -275,7 +338,8 @@ def create_tile_rsqrt(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_matmul(m=TILE_ROWS, k=TILE_COLS, n=TILE_COLS, dtype=DTYPE):
     """InCore: Matrix multiplication C = A @ B."""
-    return (PTOFunctionBuilder("tile_matmul")
+    func_name = get_func_name_with_size("tile_matmul", m)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("a", m, k, dtype)
         .tile("b", k, n, dtype)
@@ -292,7 +356,8 @@ def create_tile_matmul(m=TILE_ROWS, k=TILE_COLS, n=TILE_COLS, dtype=DTYPE):
 
 def create_tile_rowmax(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Row-wise maximum."""
-    return (PTOFunctionBuilder("tile_rowmax")
+    func_name = get_func_name_with_size("tile_rowmax", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("result", rows, 1, dtype)
@@ -306,7 +371,8 @@ def create_tile_rowmax(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_rowsum(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Row-wise sum."""
-    return (PTOFunctionBuilder("tile_rowsum")
+    func_name = get_func_name_with_size("tile_rowsum", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("result", rows, 1, dtype)
@@ -320,7 +386,8 @@ def create_tile_rowsum(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_rowexpandsub(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Broadcast subtraction x - row_vals."""
-    return (PTOFunctionBuilder("tile_rowexpandsub")
+    func_name = get_func_name_with_size("tile_rowexpandsub", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("row_vals", rows, 1, dtype)
@@ -337,7 +404,8 @@ def create_tile_rowexpandsub(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_rowexpanddiv(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Broadcast division x / row_vals."""
-    return (PTOFunctionBuilder("tile_rowexpanddiv")
+    func_name = get_func_name_with_size("tile_rowexpanddiv", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("row_vals", rows, 1, dtype)
@@ -354,7 +422,8 @@ def create_tile_rowexpanddiv(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
 
 def create_tile_rowexpandmul(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """InCore: Broadcast multiplication x * row_vals."""
-    return (PTOFunctionBuilder("tile_rowexpandmul")
+    func_name = get_func_name_with_size("tile_rowexpandmul", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("row_vals", rows, 1, dtype)
@@ -386,7 +455,8 @@ def create_rmsnorm_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     - Multiply original x by the scaling factor
     - Multiply by learned weights (gamma)
     """
-    return (PTOFunctionBuilder("rmsnorm_tile")
+    func_name = get_func_name_with_size("rmsnorm_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("x_sq", rows, cols, dtype)
@@ -439,7 +509,8 @@ def create_softmax_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     
     softmax(x)_i = exp(x_i - max(x)) / sum(exp(x_i - max(x)))
     """
-    return (PTOFunctionBuilder("softmax_tile")
+    func_name = get_func_name_with_size("softmax_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("row_max", rows, 1, dtype)
@@ -483,7 +554,8 @@ def create_swiglu_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     - up = x @ W_up
     - output = SiLU(gate) * up
     """
-    return (PTOFunctionBuilder("swiglu_tile")
+    func_name = get_func_name_with_size("swiglu_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("gate", rows, cols, dtype)
         .tile("up", rows, cols, dtype)
@@ -529,7 +601,8 @@ def create_linear_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     
     output = input @ weight
     """
-    return (PTOFunctionBuilder("linear_tile")
+    func_name = get_func_name_with_size("linear_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("w", cols, cols, dtype)
@@ -555,7 +628,8 @@ def create_rope_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     
     For simplicity, we assume cos/sin values are precomputed and passed in.
     """
-    return (PTOFunctionBuilder("rope_tile")
+    func_name = get_func_name_with_size("rope_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("cos_pos", rows, cols, dtype)
@@ -594,7 +668,8 @@ def create_attention_score_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     
     Note: In practice, K is transposed before this operation.
     """
-    return (PTOFunctionBuilder("attention_score_tile")
+    func_name = get_func_name_with_size("attention_score_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("q", rows, cols, dtype)
         .tile("k_t", cols, cols, dtype)  # K transposed
@@ -625,7 +700,8 @@ def create_attention_output_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     
     output = attention_weights @ V
     """
-    return (PTOFunctionBuilder("attention_output_tile")
+    func_name = get_func_name_with_size("attention_output_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("weights", rows, cols, dtype)
         .tile("v", cols, cols, dtype)
@@ -645,7 +721,8 @@ def create_residual_add_tile(rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE):
     """
     InCore: Residual connection (add two tiles).
     """
-    return (PTOFunctionBuilder("residual_add_tile")
+    func_name = get_func_name_with_size("residual_add_tile", rows)
+    return (PTOFunctionBuilder(func_name)
         .in_core()
         .tile("x", rows, cols, dtype)
         .tile("residual", rows, cols, dtype)
@@ -967,8 +1044,8 @@ def create_llama_attention_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype
         .scalar_li("tile_size", rows)
         .scalar_li("zero", 0)
         
-        # Process sequence in tiles
-        .for_loop("seq_idx", 0, "num_tiles", 1)
+        # Process sequence in tiles (binary expansion for dynamic seq_len up to 128K)
+        .for_loop("seq_idx", 0, "num_tiles", 1, max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES)
             # Step 1: RMSNorm
             .call("rmsnorm_tile", {
                 "input": "hidden_states",
@@ -1108,7 +1185,8 @@ def create_llama_mlp_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTYPE
         
         .scalar_li("zero", 0)
         
-        .for_loop("seq_idx", 0, "num_tiles", 1)
+        # Binary expansion for dynamic seq_len up to 128K
+        .for_loop("seq_idx", 0, "num_tiles", 1, max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES)
             # RMSNorm
             .call("rmsnorm_tile", {
                 "input": "input",
@@ -1265,7 +1343,11 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
         # ================================================================
         # Each tile computes Q/K/V independently - no cross-tile dependencies
         # OFFSET: ("tensor", "tile_i", 0) - each tile processes different rows
-        .for_loop("tile_i", 0, "num_tiles", 1)
+        # Binary expansion for dynamic seq_len up to 128K
+        # tile_levels: larger blocks use larger tiles for better throughput
+        .for_loop("tile_i", 0, "num_tiles", 1, 
+                  max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES,
+                  tile_levels=TILE_ROWS_BY_LEVEL)
             # ============================================================
             # Phase 1: Pre-Attention for tile_i (independent of other tiles)
             # ============================================================
@@ -1315,7 +1397,10 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
         # For each Q tile, we must attend to ALL K,V tiles
         # This creates the "fan-in" dependency: Q[i] depends on all K[j], V[j]
         # OFFSET: Q uses "q_tile", K/V uses "kv_tile" - creates N*N cross-tile deps
-        .for_loop("q_tile", 0, "num_tiles", 1)
+        # Binary expansion for dynamic seq_len up to 128K
+        .for_loop("q_tile", 0, "num_tiles", 1, 
+                  max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES,
+                  tile_levels=TILE_ROWS_BY_LEVEL)
             # Initialize attention state for this Q tile
             .call("flash_attn_init_state", {
                 "input_zeros_large": "const_zeros_large",
@@ -1329,8 +1414,11 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
             # ============================================================
             # Inner Loop: Q[q_tile] attends to ALL K,V tiles
             # This creates cross-tile dependencies!
+            # Binary expansion for dynamic seq_len up to 128K
             # ============================================================
-            .for_loop("kv_tile", 0, "num_tiles", 1)
+            .for_loop("kv_tile", 0, "num_tiles", 1, 
+                      max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES,
+                      tile_levels=TILE_ROWS_BY_LEVEL)
                 # Compute S[q_tile, kv_tile] = Q_rope[q_tile] @ K_rope[kv_tile].T
                 .call("flash_attn_score_block", {
                     "input_q": ("all_q_rope", "q_tile", 0),  # Q_rope[q_tile]
@@ -1373,7 +1461,10 @@ def create_llama_layer_dynamic(module, rows=TILE_ROWS, cols=TILE_COLS, dtype=DTY
         # Each tile can now process independently, but only after
         # attention for that tile is complete
         # OFFSET: ("tensor", "tile_i", 0) - each tile processes different rows
-        .for_loop("tile_i", 0, "num_tiles", 1)
+        # Binary expansion for dynamic seq_len up to 128K
+        .for_loop("tile_i", 0, "num_tiles", 1, 
+                  max_range=MAX_NUM_TILES, min_range=MIN_NUM_TILES,
+                  tile_levels=TILE_ROWS_BY_LEVEL)
             # Output projection (aggregates multi-head outputs)
             .call("tile_matmul", {
                 "input_a": ("all_attn_out", "tile_i", 0),   # attn_out[tile_i]
@@ -1444,36 +1535,48 @@ def create_llama7b_module():
     """
     Create the complete LLaMA 7B layer module with Flash Attention.
     
+    For each power-of-2 binary expansion level, we create InCore function variants
+    with different tile sizes:
+    - Large blocks (4096, 2048): 64-row tiles for max throughput
+    - Medium blocks (1024, 512, 256): 32-row tiles (standard)
+    
     Returns:
         PTOModule with all InCore and Orchestration functions
     """
     module = PTOModule("llama7b_flash")
     
-    # Level 1: Basic tile operations (InCore)
+    # Level 1: Basic tile operations (InCore) - Create variants for each tile size
     print("Adding Level 1 InCore functions (basic ops)...")
-    module.add_function(create_tile_add())
-    module.add_function(create_tile_mul())
-    module.add_function(create_tile_muls())
-    module.add_function(create_tile_exp())
-    module.add_function(create_tile_silu())
-    module.add_function(create_tile_rsqrt())
-    module.add_function(create_tile_matmul())
-    module.add_function(create_tile_rowmax())
-    module.add_function(create_tile_rowsum())
-    module.add_function(create_tile_rowexpandsub())
-    module.add_function(create_tile_rowexpanddiv())
-    module.add_function(create_tile_rowexpandmul())
+    print(f"  Creating variants for tile sizes: {TILE_SIZE_VARIANTS}")
     
-    # Level 2: Composed operations (InCore)
+    for tile_rows in TILE_SIZE_VARIANTS:
+        suffix = f" ({tile_rows} rows)" if tile_rows != TILE_ROWS else " (standard)"
+        print(f"    - Tile size: {tile_rows}x{TILE_COLS}{suffix}")
+        
+        module.add_function(create_tile_add(rows=tile_rows))
+        module.add_function(create_tile_mul(rows=tile_rows))
+        module.add_function(create_tile_muls(rows=tile_rows))
+        module.add_function(create_tile_exp(rows=tile_rows))
+        module.add_function(create_tile_silu(rows=tile_rows))
+        module.add_function(create_tile_rsqrt(rows=tile_rows))
+        module.add_function(create_tile_matmul(m=tile_rows))
+        module.add_function(create_tile_rowmax(rows=tile_rows))
+        module.add_function(create_tile_rowsum(rows=tile_rows))
+        module.add_function(create_tile_rowexpandsub(rows=tile_rows))
+        module.add_function(create_tile_rowexpanddiv(rows=tile_rows))
+        module.add_function(create_tile_rowexpandmul(rows=tile_rows))
+    
+    # Level 2: Composed operations (InCore) - Create variants for each tile size
     print("Adding Level 2 InCore functions (composed ops)...")
-    module.add_function(create_rmsnorm_tile())
-    module.add_function(create_softmax_tile())
-    module.add_function(create_swiglu_tile())
-    module.add_function(create_linear_tile())
-    module.add_function(create_rope_tile())
-    module.add_function(create_attention_score_tile())
-    module.add_function(create_attention_output_tile())
-    module.add_function(create_residual_add_tile())
+    for tile_rows in TILE_SIZE_VARIANTS:
+        module.add_function(create_rmsnorm_tile(rows=tile_rows))
+        module.add_function(create_softmax_tile(rows=tile_rows))
+        module.add_function(create_swiglu_tile(rows=tile_rows))
+        module.add_function(create_linear_tile(rows=tile_rows))
+        module.add_function(create_rope_tile(rows=tile_rows))
+        module.add_function(create_attention_score_tile(rows=tile_rows))
+        module.add_function(create_attention_output_tile(rows=tile_rows))
+        module.add_function(create_residual_add_tile(rows=tile_rows))
     
     # Flash Attention InCore functions (fits in 256KB SRAM)
     print("Adding Flash Attention InCore functions...")
@@ -1497,7 +1600,7 @@ def create_llama7b_module():
 # Code Generation with Specific Sequence Length
 # =============================================================================
 
-def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: list, max_tiles_for_demo: int = 32):
+def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: list, max_tiles_for_demo: int = None):
     """
     Generate task graph for a specific sequence length.
     
@@ -1506,16 +1609,18 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
         seq_len: Sequence length to process
         output_base: Base output directory
         incore_funcs: List of InCore function names
-        max_tiles_for_demo: Maximum number of tiles to generate for demo (to avoid memory issues)
+        max_tiles_for_demo: Maximum number of tiles to generate for demo (None = no limit)
     """
     # Calculate tiling parameters
     actual_num_full_tiles = seq_len // TILE_ROWS
     actual_tail_rows = seq_len % TILE_ROWS
     actual_has_tail = actual_tail_rows > 0
     
-    # For demo purposes, limit the number of tiles to avoid stack overflow
-    # (The full task graph would have too many tasks for the demo runtime)
-    num_full_tiles = min(actual_num_full_tiles, max_tiles_for_demo)
+    # For demo purposes, optionally limit the number of tiles to avoid memory issues
+    if max_tiles_for_demo is not None:
+        num_full_tiles = min(actual_num_full_tiles, max_tiles_for_demo)
+    else:
+        num_full_tiles = actual_num_full_tiles
     tail_rows = actual_tail_rows if num_full_tiles == actual_num_full_tiles else 0
     has_tail = tail_rows > 0
     
@@ -1598,25 +1703,40 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
     #
     # 使用 CALL 指令自动生成 task scheduling 代码
     # 偏移信息已经在 .call() 中传递: ("tensor", "tile_i", 0)
+    #
+    # IMPORTANT: Pass actual runtime parameters so binary expansion works correctly!
+    # num_tiles controls how many tiles the orchestration processes
+    # The binary expansion will automatically apply adaptive tile sizes
+    runtime_args = {
+        "seq_len": seq_len,
+        "num_tiles": num_full_tiles  # This is limited by max_tiles_for_demo
+    }
     dump_file = gen.compile_and_run_orchestration(
         module.get_function(module.entry_function),
-        ascend_dir
+        ascend_dir,
+        extra_args=runtime_args
     )
     
     # Generate visualization for Ascend (PRIMARY)
+    # Skip PDF generation if SKIP_PDF=1 environment variable is set (saves ~60+ seconds)
+    skip_pdf = os.environ.get('SKIP_PDF', '0') == '1'
+    
     if dump_file and os.path.exists(dump_file):
         print(f"  [Ascend TaskGraph] -> {dump_file}")
         
-        try:
-            from visualize_taskgraph import TaskGraphParser, TaskGraphVisualizer
-            parser = TaskGraphParser(dump_file)
-            parser.parse()
-            visualizer = TaskGraphVisualizer(parser)
-            pdf_file = dump_file.replace('.txt', '.pdf')
-            visualizer.render(pdf_file, format='pdf')
-            print(f"  [Ascend PDF] -> {pdf_file}")
-        except Exception as e:
-            print(f"  [Ascend PDF] Visualization failed: {e}")
+        if skip_pdf:
+            print(f"  [Ascend PDF] Skipped (SKIP_PDF=1)")
+        else:
+            try:
+                from visualize_taskgraph import TaskGraphParser, TaskGraphVisualizer
+                parser = TaskGraphParser(dump_file)
+                parser.parse()
+                visualizer = TaskGraphVisualizer(parser)
+                pdf_file = dump_file.replace('.txt', '.pdf')
+                visualizer.render(pdf_file, format='pdf')
+                print(f"  [Ascend PDF] -> {pdf_file}")
+            except Exception as e:
+                print(f"  [Ascend PDF] Visualization failed: {e}")
     
     # =========================================================================
     # CUDA: InCore functions (kernels) - Orchestration is platform-independent
@@ -1776,12 +1896,27 @@ def main():
     print(f"\nEntry: {module.entry_function}")
     
     # =========================================================================
-    # Generate for seq_len=1024 with Flash Attention
+    # Generate for seq_len=16384 (16K) to demonstrate adaptive tile optimization
     # =========================================================================
-    seq_len = 1024
+    # With 16K sequence: num_tiles = 16384/32 = 512 base-tiles
+    # Binary: 512 = 0b1000000000 → hits 512-block
+    # tile_levels[512] = 64 → scale=2x → actual_iters = 512/2 = 256
+    # This gives 50% reduction in iterations!
+    #
+    # Task count analysis (with adaptive tiles):
+    # - Phase 1 (Pre-Attention): 6 tasks × 256 iters = 1,536 tasks
+    # - Phase 2 (Flash Attention): ~256² = 65,536 score blocks → with adaptive: 128² = 16,384
+    # - Phase 3 (FFN): 6 tasks × 256 iters = 1,536 tasks
+    # Total: ~19,456 tasks (vs ~78,848 without optimization = 75% reduction!)
+    seq_len = 16384  # 16K sequence length
     
-    # Use smaller number of tiles to avoid timeout (3-phase structure creates N^2 tasks)
-    generate_for_seq_len(module, seq_len, output_base, incore_funcs, max_tiles_for_demo=8)
+    # Use demo limit of 256 tiles to verify optimization
+    # 256 >= min_range, so adaptive tiles kick in:
+    # - Binary: 256 = 0b100000000 → hits 256-block
+    # - tile_levels[256] = 64 → scale=2x → actual_iters = 256/2 = 128
+    # Without optimization: 256 tiles → 256 iterations
+    # With optimization: 256 tiles → 128 iterations (50% reduction!)
+    generate_for_seq_len(module, seq_len, output_base, incore_funcs, max_tiles_for_demo=256)
     
     # ==========================================================================
     # Summary

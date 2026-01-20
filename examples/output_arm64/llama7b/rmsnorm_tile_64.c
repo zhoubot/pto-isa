@@ -1,0 +1,145 @@
+// PTO Program: rmsnorm_tile_64
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: rmsnorm_tile_64
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     8
+//   Total capacity (no reuse): 164,608 bytes (160.8 KB)
+//   Total capacity (w/ reuse): 98,816 bytes (96.5 KB)
+//   Reuse savings:            65,792 bytes (40.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   gamma                64x128     f32     32768   [  1,  10]           -
+//   result               64x128     f32     32768   [ 10,  11]           <- x
+//   row_mean             64x1       f32       256   [  5,   8]           -
+//   row_rsqrt            64x1       f32       256   [  8,   9]           <- row_sum
+//   row_sum              64x1       f32       256   [  3,   5]           -
+//   x                    64x128     f32     32768   [  0,   9]           -
+//   x_norm               64x128     f32     32768   [  9,  10]           <- x_sq
+//   x_sq                 64x128     f32     32768   [  2,   3]           -
+//
+// BUFFER REUSE MAP:
+//   row_rsqrt reuses buffer of row_sum
+//   x_norm reuses buffer of x_sq
+//   result reuses buffer of x
+//
+// ======================================================================
+
+// Auto-generated ARM64 NEON code from PTO ISA Compiler
+#include <arm_neon.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+void rmsnorm_tile_64(float* input, float* weights, float* output) {
+    float x[64][128];
+    float x_sq[64][128];
+    float row_sum[64][1];
+    float row_mean[64][1];
+    float row_rsqrt[64][1];
+    float x_norm[64][128];
+    float gamma[64][128];
+    float result[64][128];
+
+    // Loop fusion: 5 loop overheads saved
+
+    // FUSED LOOP (3 ops): x=TLOAD(input,0,0); gamma=TLOAD(weights,0,0); x_sq=TMUL(x,x)
+    for (int _row = 0; _row < 64; _row++) {
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 128; _col += 4) {
+            float32x4_t _vl0 = vld1q_f32(&input[_row * 128 + _col]);
+            vst1q_f32(&x[_row][_col], _vl0);
+            float32x4_t _vl1 = vld1q_f32(&weights[_row * 128 + _col]);
+            vst1q_f32(&gamma[_row][_col], _vl1);
+            float32x4_t _v2 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _v3 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _vr4 = vmulq_f32(_v2, _v3);
+            vst1q_f32(&x_sq[_row][_col], _vr4);
+        }
+        // Scalar cleanup
+        for (; _col < 128; _col++) {
+            x[_row][_col] = input[_row * 128 + _col];
+            gamma[_row][_col] = weights[_row * 128 + _col];
+            x_sq[_row][_col] = x[_row][_col] * x[_row][_col];
+        }
+    }
+
+    // TROWSUM: row_sum = rowsum(x_sq)
+    for (int _row = 0; _row < 64; _row++) {
+        float _sum = 0.0f;
+        for (int _col = 0; _col < 128; _col++) {
+            _sum += x_sq[_row][_col];
+        }
+        row_sum[_row][0] = _sum;}
+
+    int inv_cols = 0.0078125;
+
+    // FUSED LOOP (1 ops): row_mean=TMULS(row_sum,inv_colsf)
+    float32x4_t _vs5 = vdupq_n_f32(inv_colsf);
+    for (int _row = 0; _row < 64; _row++) {
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 1; _col += 4) {
+            float32x4_t _v6 = vld1q_f32(&row_sum[_row][_col]);
+            float32x4_t _vr7 = vmulq_f32(_v6, _vs5);
+            vst1q_f32(&row_mean[_row][_col], _vr7);
+        }
+        // Scalar cleanup
+        for (; _col < 1; _col++) {
+            row_mean[_row][_col] = row_sum[_row][_col] * inv_colsf;
+        }
+    }
+
+    int eps = 1e-05;
+
+    // FUSED LOOP (2 ops): row_mean=TADDS(row_mean,epsf); row_rsqrt=TRSQRT(row_mean)
+    float32x4_t _vs8 = vdupq_n_f32(epsf);
+    for (int _row = 0; _row < 64; _row++) {
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 1; _col += 4) {
+            float32x4_t _v9 = vld1q_f32(&row_mean[_row][_col]);
+            float32x4_t _vr10 = vaddq_f32(_v9, _vs8);
+            vst1q_f32(&row_mean[_row][_col], _vr10);
+            float32x4_t _v11 = vld1q_f32(&row_mean[_row][_col]);
+            float32x4_t _vr12 = vrsqrteq_f32(_v11);
+            vst1q_f32(&row_rsqrt[_row][_col], _vr12);
+        }
+        // Scalar cleanup
+        for (; _col < 1; _col++) {
+            row_mean[_row][_col] = row_mean[_row][_col] + epsf;
+            row_rsqrt[_row][_col] = 1.0f / sqrtf(row_mean[_row][_col]);
+        }
+    }
+
+    // FUSED LOOP (3 ops): x_norm=TROWEXPANDMUL(x,row_rsqrt); result=TMUL(x_norm,gamma); output=TSTORE(result,0,0)
+    for (int _row = 0; _row < 64; _row++) {
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 128; _col += 4) {
+            float32x4_t _v013 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _vb15 = vdupq_n_f32(row_rsqrt[_row][0]);
+            float32x4_t _vr14 = vmulq_f32(_v013, _vb15);
+            vst1q_f32(&x_norm[_row][_col], _vr14);
+            float32x4_t _v16 = vld1q_f32(&x_norm[_row][_col]);
+            float32x4_t _v17 = vld1q_f32(&gamma[_row][_col]);
+            float32x4_t _vr18 = vmulq_f32(_v16, _v17);
+            vst1q_f32(&result[_row][_col], _vr18);
+            float32x4_t _vs19 = vld1q_f32(&result[_row][_col]);
+            vst1q_f32(&output[_row * 128 + _col], _vs19);
+        }
+        // Scalar cleanup
+        for (; _col < 128; _col++) {
+            x_norm[_row][_col] = x[_row][_col] * row_rsqrt[_row][0];
+            result[_row][_col] = x_norm[_row][_col] * gamma[_row][_col];
+            output[_row * 128 + _col] = result[_row][_col];
+        }
+    }
+
+}
