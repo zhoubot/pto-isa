@@ -35,12 +35,25 @@ PTO ISA 定义了一套平台无关的张量操作指令集，包括：
 PTO 编译器支持将统一的 PTO ISA 编译到多种物理 ISA：
 
 ```
-PTO ISA (平台无关)
-    │
-    ├──► ARM64 NEON  (.c)      - Apple Silicon, ARM Servers
-    ├──► NVIDIA CUDA (.cu)     - GPU 加速
-    └──► Huawei Ascend 910B (.cpp) - NPU/AI 加速器
+                    PTO Module
+                        │
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+   InCore Functions  Orchestration  InCore Functions
+   (平台相关)        (平台无关!)    (平台相关)
+        │               │               │
+   ┌────┴────┐          │          ┌────┴────┐
+   ▼         ▼          ▼          ▼         ▼
+ARM64     CUDA      纯 C 代码    Ascend    ...
+NEON      Kernels   (调用 PTO    910B
+(.c)      (.cu)     Runtime)     (.cpp)
+                    (.c)
 ```
+
+**关键设计原则：**
+- **InCore Functions**: 平台相关，编译到 ARM64/CUDA/Ascend 物理 ISA
+- **Orchestration Functions**: **平台无关**，只调用 PTO Runtime 的 task 接口
+- 同一份 Orchestration 代码用于所有后端
 
 **代码生成示例：**
 

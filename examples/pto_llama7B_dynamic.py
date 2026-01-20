@@ -1585,14 +1585,13 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
             f.write(ascend_code)
     print(f"  [Ascend] {len(incore_funcs)} InCore functions generated")
     
-    # Generate Ascend orchestration code
-    ascend_orch = _generate_ascend_orchestration(module, num_full_tiles, tail_rows, seq_len)
-    ascend_orch_file = os.path.join(ascend_dir, f"{module.entry_function}_orchestration.cpp")
-    with open(ascend_orch_file, "w") as f:
-        f.write(ascend_orch)
-    print(f"  [Ascend] Orchestration -> {ascend_orch_file}")
-    
-    # Generate task graph and compile orchestration (generates task dump)
+    # =========================================================================
+    # Generate UNIFIED Orchestration Code (Platform Independent!)
+    # =========================================================================
+    # Orchestration function 只调用 PTO runtime 的 task 接口:
+    #   - pto_task_alloc, pto_task_add_input, pto_task_add_output, pto_task_submit
+    # 这些接口是平台无关的纯 C 代码
+    # ARM64, CUDA, Ascend 后端共享同一份 orchestration 代码
     orch_gen = CustomOrchestrationGenerator(module, num_full_tiles, tail_rows)
     dump_file = orch_gen.compile_and_run(module.entry_function, ascend_dir, seq_len)
     
@@ -1612,7 +1611,7 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
             print(f"  [Ascend PDF] Visualization failed: {e}")
     
     # =========================================================================
-    # CUDA: InCore functions (kernels) + Orchestration (host code)
+    # CUDA: InCore functions (kernels) - Orchestration is platform-independent
     # =========================================================================
     print(f"\n  --- CUDA ---")
     for name in incore_funcs:
@@ -1623,14 +1622,15 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
             f.write(cuda_code)
     print(f"  [CUDA] {len(incore_funcs)} InCore kernels generated")
     
-    # Generate CUDA orchestration
-    cuda_orch = _generate_cuda_orchestration(module, num_full_tiles, tail_rows, seq_len)
-    cuda_orch_file = os.path.join(cuda_dir, f"{module.entry_function}_orchestration.cu")
-    with open(cuda_orch_file, "w") as f:
-        f.write(cuda_orch)
-    print(f"  [CUDA] Orchestration -> {cuda_orch_file}")
+    # Copy platform-independent orchestration code to CUDA directory
+    # (Same .c file - orchestration calls PTO runtime, not CUDA APIs directly)
+    orch_src = os.path.join(ascend_dir, f"{module.entry_function}_orchestration.c")
+    if os.path.exists(orch_src):
+        cuda_orch_file = os.path.join(cuda_dir, f"{module.entry_function}_orchestration.c")
+        shutil.copy(orch_src, cuda_orch_file)
+        print(f"  [CUDA] Orchestration (platform-independent) -> {cuda_orch_file}")
     
-    # Copy task graph to CUDA directory
+    # Copy task graph to CUDA directory (same task graph for all backends)
     if dump_file and os.path.exists(dump_file):
         cuda_dump = os.path.join(cuda_dir, os.path.basename(dump_file))
         shutil.copy(dump_file, cuda_dump)
@@ -1640,7 +1640,7 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
             shutil.copy(pdf_file, cuda_pdf)
     
     # =========================================================================
-    # ARM64: InCore functions + Orchestration
+    # ARM64: InCore functions - Orchestration is platform-independent
     # =========================================================================
     print(f"\n  --- ARM64 ---")
     for name in incore_funcs:
@@ -1651,13 +1651,15 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
             f.write(arm64_code)
     print(f"  [ARM64] {len(incore_funcs)} InCore functions generated")
     
-    # Generate ARM64 orchestration (same structure, just copy from compile output)
-    arm64_orch_file = os.path.join(arm64_dir, f"{module.entry_function}_orchestration.c")
-    ascend_orch_src = os.path.join(ascend_dir, f"{module.entry_function}_orchestration.c")
-    if os.path.exists(ascend_orch_src):
-        shutil.copy(ascend_orch_src, arm64_orch_file)
+    # Copy platform-independent orchestration code to ARM64 directory
+    # (Same .c file as Ascend/CUDA - orchestration is backend-agnostic)
+    orch_src = os.path.join(ascend_dir, f"{module.entry_function}_orchestration.c")
+    if os.path.exists(orch_src):
+        arm64_orch_file = os.path.join(arm64_dir, f"{module.entry_function}_orchestration.c")
+        shutil.copy(orch_src, arm64_orch_file)
+        print(f"  [ARM64] Orchestration (platform-independent) -> {arm64_orch_file}")
     
-    # Copy task graph to ARM64 directory
+    # Copy task graph to ARM64 directory (same task graph for all backends)
     if dump_file and os.path.exists(dump_file):
         arm64_dump = os.path.join(arm64_dir, os.path.basename(dump_file))
         shutil.copy(dump_file, arm64_dump)
@@ -1669,139 +1671,34 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
     return dump_file
 
 
-def _generate_cuda_orchestration(module, num_full_tiles: int, tail_rows: int, seq_len: int) -> str:
-    """Generate CUDA orchestration code (host code that launches CUDA kernels)."""
-    prog = module.functions.get(module.entry_function)
-    
-    lines = []
-    lines.append("/**")
-    lines.append(f" * CUDA Orchestration: {module.entry_function}")
-    lines.append(f" * Sequence Length: {seq_len}")
-    lines.append(f" * num_full_tiles: {num_full_tiles}")
-    lines.append(f" * tail_rows: {tail_rows}")
-    lines.append(" *")
-    lines.append(" * This is HOST code (runs on CPU/ARM64) that orchestrates")
-    lines.append(" * CUDA kernel launches for InCore functions on GPU.")
-    lines.append(" */")
-    lines.append("")
-    lines.append("#include <cuda_runtime.h>")
-    lines.append("#include <stdio.h>")
-    lines.append("")
-    lines.append("// Forward declarations for CUDA kernels")
-    for name, func in module.functions.items():
-        if func.is_in_core:
-            lines.append(f"extern \"C\" void {name}_kernel(float* input, float* output, cudaStream_t stream);")
-    lines.append("")
-    lines.append("/**")
-    lines.append(" * Orchestration function - launches InCore kernels on GPU")
-    lines.append(" * Uses CUDA streams for parallel execution where possible")
-    lines.append(" */")
-    lines.append(f"void {module.entry_function}_cuda(")
-    
-    # Parameters
-    params = []
-    for name in prog.memref_declarations.keys():
-        params.append(f"    float* d_{name}")
-    lines.append(",\n".join(params))
-    lines.append(") {")
-    lines.append("    // Create CUDA streams for parallel kernel execution")
-    lines.append("    cudaStream_t streams[32];")
-    lines.append("    for (int i = 0; i < 32; i++) {")
-    lines.append("        cudaStreamCreate(&streams[i]);")
-    lines.append("    }")
-    lines.append("")
-    lines.append(f"    // Process {num_full_tiles} tiles")
-    lines.append(f"    for (int tile = 0; tile < {num_full_tiles}; tile++) {{")
-    lines.append("        int stream_id = tile % 32;")
-    lines.append("        int row_offset = tile * 8;")
-    lines.append("")
-    lines.append("        // Launch InCore kernels for this tile")
-    lines.append("        // (kernels with no data dependency can use different streams)")
-    lines.append("        // TODO: Add actual kernel launch calls based on task graph")
-    lines.append("    }")
-    lines.append("")
-    lines.append("    // Synchronize all streams")
-    lines.append("    for (int i = 0; i < 32; i++) {")
-    lines.append("        cudaStreamSynchronize(streams[i]);")
-    lines.append("        cudaStreamDestroy(streams[i]);")
-    lines.append("    }")
-    lines.append("}")
-    lines.append("")
-    
-    return "\n".join(lines)
-
-
-def _generate_ascend_orchestration(module, num_full_tiles: int, tail_rows: int, seq_len: int) -> str:
-    """Generate Ascend 910B orchestration code (host code that launches Ascend kernels)."""
-    prog = module.functions.get(module.entry_function)
-    
-    lines = []
-    lines.append("/**")
-    lines.append(f" * Ascend 910B Orchestration: {module.entry_function}")
-    lines.append(f" * Sequence Length: {seq_len}")
-    lines.append(f" * num_full_tiles: {num_full_tiles}")
-    lines.append(f" * tail_rows: {tail_rows}")
-    lines.append(" *")
-    lines.append(" * This is HOST code (runs on CPU/ARM64) that orchestrates")
-    lines.append(" * Ascend kernel launches on NPU.")
-    lines.append(" */")
-    lines.append("")
-    lines.append('#include "acl/acl.h"')
-    lines.append('#include "aclnn/aclnn_ops.h"')
-    lines.append("#include <stdio.h>")
-    lines.append("")
-    lines.append("// Forward declarations for Ascend kernels")
-    for name, func in module.functions.items():
-        if func.is_in_core:
-            lines.append(f"extern \"C\" void {name}_ascend(void* stream, void* input, void* output);")
-    lines.append("")
-    lines.append("/**")
-    lines.append(" * Orchestration function - launches InCore kernels on Ascend NPU")
-    lines.append(" * Uses multiple streams for parallel execution where possible")
-    lines.append(" */")
-    lines.append(f"void {module.entry_function}_ascend(")
-    
-    # Parameters
-    params = []
-    for name in prog.memref_declarations.keys():
-        params.append(f"    void* d_{name}")
-    lines.append(",\n".join(params))
-    lines.append(") {")
-    lines.append("    // Initialize ACL runtime")
-    lines.append("    aclError ret = aclInit(nullptr);")
-    lines.append("    if (ret != ACL_SUCCESS) {")
-    lines.append('        printf("ACL init failed\\n");')
-    lines.append("        return;")
-    lines.append("    }")
-    lines.append("")
-    lines.append("    // Create streams for parallel execution")
-    lines.append("    aclrtStream streams[32];")
-    lines.append("    for (int i = 0; i < 32; i++) {")
-    lines.append("        aclrtCreateStream(&streams[i]);")
-    lines.append("    }")
-    lines.append("")
-    lines.append(f"    // Process {num_full_tiles} tiles")
-    lines.append(f"    for (int tile = 0; tile < {num_full_tiles}; tile++) {{")
-    lines.append("        int stream_id = tile % 32;")
-    lines.append("        int row_offset = tile * 8;")
-    lines.append("")
-    lines.append("        // Launch InCore kernels for this tile")
-    lines.append("        // (kernels with no data dependency can use different streams)")
-    lines.append("        // TODO: Add actual kernel launch calls based on task graph")
-    lines.append("    }")
-    lines.append("")
-    lines.append("    // Synchronize all streams")
-    lines.append("    for (int i = 0; i < 32; i++) {")
-    lines.append("        aclrtSynchronizeStream(streams[i]);")
-    lines.append("        aclrtDestroyStream(streams[i]);")
-    lines.append("    }")
-    lines.append("")
-    lines.append("    // Finalize ACL")
-    lines.append("    aclFinalize();")
-    lines.append("}")
-    lines.append("")
-    
-    return "\n".join(lines)
+# =============================================================================
+# NOTE: Platform-Specific Orchestration Functions are REMOVED
+# =============================================================================
+# 
+# Previously, we had _generate_cuda_orchestration() and _generate_ascend_orchestration()
+# which generated CUDA/Ascend-specific host code. This was WRONG because:
+#
+# 1. Orchestration functions should be PLATFORM-INDEPENDENT
+# 2. They only call PTO runtime task interfaces:
+#    - pto_task_alloc(), pto_task_add_input(), pto_task_add_output(), pto_task_submit()
+# 3. These interfaces are pure C code, not CUDA/Ascend APIs
+# 4. The PTO runtime handles dispatching tasks to the appropriate backend
+#
+# CORRECT ARCHITECTURE:
+#
+#   Orchestration Function (Pure C, Platform-Independent)
+#              │
+#              ▼
+#   PTO Runtime (pto_runtime.c)
+#              │
+#   ┌──────────┼──────────┐
+#   ▼          ▼          ▼
+# ARM64     CUDA       Ascend
+# InCore    Kernels    Kernels
+#
+# The same orchestration .c file is used for ALL backends.
+# Only the InCore functions differ per backend.
+# =============================================================================
 
 
 class CustomOrchestrationGenerator:
