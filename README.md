@@ -56,11 +56,11 @@ pip install -r requirements.txt
 ### Basic Example
 
 ```python
-from pto_compile import PTOProgramBuilder, PTOCompiler, generate_all_backends
+from pto_compile import PTOFunctionBuilder, PTOCompiler, generate_all_backends
 from pto_isa_definition import ElementType, MemorySpace
 
 # Build a GELU activation program
-program = (PTOProgramBuilder("gelu")
+program = (PTOFunctionBuilder("gelu")
     .tile("x", 8, 8, ElementType.F32)
     .tile("y", 8, 8, ElementType.F32)
     .memref("input", MemorySpace.GM, ElementType.F32)
@@ -148,19 +148,19 @@ for (row) for (col) {
 
 ---
 
-# PTOProgramBuilder Reference Guide
+# PTOFunctionBuilder Reference Guide
 
 ## Overview
 
-`PTOProgramBuilder` is a fluent interface for constructing PTO programs. It provides a chainable API to declare tiles, memory references, and operations, then builds a `PTOProgram` object that can be compiled to multiple backends.
+`PTOFunctionBuilder` is a fluent interface for constructing PTO programs. It provides a chainable API to declare tiles, memory references, and operations, then builds a `PTOProgram` object that can be compiled to multiple backends.
 
 ## Basic Structure
 
 ```python
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
-program = (PTOProgramBuilder("program_name")
+program = (PTOFunctionBuilder("program_name")
     # 1. Declare tiles (local tensor storage)
     .tile("name", rows, cols, dtype)
     
@@ -391,7 +391,7 @@ Loop based on tile dimensions.
 ```python
 def build_sigmoid():
     """sigmoid(x) = 1 / (1 + exp(-x))"""
-    return (PTOProgramBuilder("sigmoid")
+    return (PTOFunctionBuilder("sigmoid")
         .tile("x", 8, 8, ElementType.F32)
         .tile("neg_x", 8, 8, ElementType.F32)
         .tile("exp_neg", 8, 8, ElementType.F32)
@@ -413,7 +413,7 @@ def build_sigmoid():
 ```python
 def build_layer_norm(rows=8, cols=8, eps=1e-5):
     """LayerNorm: (x - mean) / sqrt(var + eps)"""
-    return (PTOProgramBuilder("layer_norm")
+    return (PTOFunctionBuilder("layer_norm")
         .tile("x", rows, cols, ElementType.F32)
         .tile("mean", rows, 1, ElementType.F32)
         .tile("centered", rows, cols, ElementType.F32)
@@ -447,7 +447,7 @@ def build_layer_norm(rows=8, cols=8, eps=1e-5):
 ```python
 def build_softmax(rows=8, cols=8):
     """Softmax: exp(x - max) / sum(exp(x - max))"""
-    return (PTOProgramBuilder("softmax")
+    return (PTOFunctionBuilder("softmax")
         .tile("x", rows, cols, ElementType.F32)
         .tile("row_max", rows, 1, ElementType.F32)
         .tile("shifted", rows, cols, ElementType.F32)

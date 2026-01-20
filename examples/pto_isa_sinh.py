@@ -22,7 +22,7 @@ import sys
 # Add parent directory for imports  
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
 
@@ -38,7 +38,7 @@ def build_sinh_program():
     
     Uses 7 terms of Taylor expansion for good accuracy.
     """
-    program = (PTOProgramBuilder("sinh_taylor")
+    program = (PTOFunctionBuilder("sinh_taylor")
         # ====================================================================
         # Tile Declarations
         # ====================================================================

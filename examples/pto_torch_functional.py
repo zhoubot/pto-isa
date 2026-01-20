@@ -22,7 +22,7 @@ import sys
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
 
@@ -44,7 +44,7 @@ def F_relu(rows=8, cols=8):
     F.relu(input) -> Tensor
     Applies ReLU element-wise: ReLU(x) = max(0, x)
     """
-    return (PTOProgramBuilder("F_relu")
+    return (PTOFunctionBuilder("F_relu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -60,7 +60,7 @@ def F_relu6(rows=8, cols=8):
     F.relu6(input) -> Tensor
     ReLU6(x) = min(max(0, x), 6)
     """
-    return (PTOProgramBuilder("F_relu6")
+    return (PTOFunctionBuilder("F_relu6")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("relu_out", rows, cols, DEFAULT_DTYPE)
         .tile("six", rows, cols, DEFAULT_DTYPE)
@@ -80,7 +80,7 @@ def F_leaky_relu(negative_slope=0.01, rows=8, cols=8):
     F.leaky_relu(input, negative_slope=0.01) -> Tensor
     LeakyReLU(x) = max(0,x) + negative_slope * min(0,x)
     """
-    return (PTOProgramBuilder("F_leaky_relu")
+    return (PTOFunctionBuilder("F_leaky_relu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("pos_part", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
@@ -106,7 +106,7 @@ def F_elu(alpha=1.0, rows=8, cols=8):
     F.elu(input, alpha=1.0) -> Tensor
     ELU(x) = max(0,x) + min(0, alpha * (exp(x) - 1))
     """
-    return (PTOProgramBuilder("F_elu")
+    return (PTOFunctionBuilder("F_elu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("pos_part", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -144,7 +144,7 @@ def F_selu(rows=8, cols=8):
     alpha = 1.6732632423543772848170429916717
     scale = 1.0507009873554804934193349852946
     
-    return (PTOProgramBuilder("F_selu")
+    return (PTOFunctionBuilder("F_selu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("pos_part", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -177,7 +177,7 @@ def F_gelu(rows=8, cols=8):
     sqrt_2_over_pi = 0.7978845608028654  # sqrt(2/π)
     coeff = 0.044715
     
-    return (PTOProgramBuilder("F_gelu")
+    return (PTOFunctionBuilder("F_gelu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_cubed", rows, cols, DEFAULT_DTYPE)
         .tile("x_sq", rows, cols, DEFAULT_DTYPE)
@@ -225,7 +225,7 @@ def F_sigmoid(rows=8, cols=8):
     F.sigmoid(input) -> Tensor
     Sigmoid(x) = 1 / (1 + exp(-x))
     """
-    return (PTOProgramBuilder("F_sigmoid")
+    return (PTOFunctionBuilder("F_sigmoid")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg", rows, cols, DEFAULT_DTYPE)
@@ -247,7 +247,7 @@ def F_silu(rows=8, cols=8):
     F.silu(input) -> Tensor (Swish)
     SiLU(x) = x * sigmoid(x)
     """
-    return (PTOProgramBuilder("F_silu")
+    return (PTOFunctionBuilder("F_silu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg", rows, cols, DEFAULT_DTYPE)
@@ -271,7 +271,7 @@ def F_mish(rows=8, cols=8):
     F.mish(input) -> Tensor
     Mish(x) = x * tanh(softplus(x)) = x * tanh(ln(1 + exp(x)))
     """
-    return (PTOProgramBuilder("F_mish")
+    return (PTOFunctionBuilder("F_mish")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("one_plus_exp", rows, cols, DEFAULT_DTYPE)
@@ -306,7 +306,7 @@ def F_tanh(rows=8, cols=8):
     F.tanh(input) -> Tensor
     tanh(x) = (exp(2x) - 1) / (exp(2x) + 1)
     """
-    return (PTOProgramBuilder("F_tanh")
+    return (PTOFunctionBuilder("F_tanh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_2", rows, cols, DEFAULT_DTYPE)
         .tile("exp_2x", rows, cols, DEFAULT_DTYPE)
@@ -330,7 +330,7 @@ def F_softplus(beta=1.0, threshold=20.0, rows=8, cols=8):
     F.softplus(input, beta=1, threshold=20) -> Tensor
     Softplus(x) = (1/beta) * ln(1 + exp(beta * x))
     """
-    return (PTOProgramBuilder("F_softplus")
+    return (PTOFunctionBuilder("F_softplus")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("beta_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_bx", rows, cols, DEFAULT_DTYPE)
@@ -354,7 +354,7 @@ def F_softsign(rows=8, cols=8):
     F.softsign(input) -> Tensor
     Softsign(x) = x / (1 + |x|)
     """
-    return (PTOProgramBuilder("F_softsign")
+    return (PTOFunctionBuilder("F_softsign")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("abs_x", rows, cols, DEFAULT_DTYPE)
         .tile("one_plus_abs", rows, cols, DEFAULT_DTYPE)
@@ -374,7 +374,7 @@ def F_hardsigmoid(rows=8, cols=8):
     F.hardsigmoid(input) -> Tensor
     Hardsigmoid(x) = clamp((x + 3) / 6, 0, 1)
     """
-    return (PTOProgramBuilder("F_hardsigmoid")
+    return (PTOFunctionBuilder("F_hardsigmoid")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_plus_3", rows, cols, DEFAULT_DTYPE)
         .tile("scaled", rows, cols, DEFAULT_DTYPE)
@@ -400,7 +400,7 @@ def F_hardswish(rows=8, cols=8):
     F.hardswish(input) -> Tensor
     Hardswish(x) = x * hardsigmoid(x) = x * clamp((x + 3) / 6, 0, 1)
     """
-    return (PTOProgramBuilder("F_hardswish")
+    return (PTOFunctionBuilder("F_hardswish")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_plus_3", rows, cols, DEFAULT_DTYPE)
         .tile("scaled", rows, cols, DEFAULT_DTYPE)
@@ -428,7 +428,7 @@ def F_hardtanh(min_val=-1.0, max_val=1.0, rows=8, cols=8):
     F.hardtanh(input, min_val=-1, max_val=1) -> Tensor
     Hardtanh(x) = clamp(x, min_val, max_val)
     """
-    return (PTOProgramBuilder("F_hardtanh")
+    return (PTOFunctionBuilder("F_hardtanh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("min_tile", rows, cols, DEFAULT_DTYPE)
         .tile("max_tile", rows, cols, DEFAULT_DTYPE)
@@ -450,7 +450,7 @@ def F_threshold(threshold=0.0, value=0.0, rows=8, cols=8):
     F.threshold(input, threshold, value) -> Tensor
     Threshold(x) = x if x > threshold else value
     """
-    return (PTOProgramBuilder("F_threshold")
+    return (PTOFunctionBuilder("F_threshold")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("thresh_tile", rows, cols, DEFAULT_DTYPE)
         .tile("value_tile", rows, cols, DEFAULT_DTYPE)
@@ -471,7 +471,7 @@ def F_logsigmoid(rows=8, cols=8):
     F.logsigmoid(input) -> Tensor
     LogSigmoid(x) = log(sigmoid(x)) = -softplus(-x)
     """
-    return (PTOProgramBuilder("F_logsigmoid")
+    return (PTOFunctionBuilder("F_logsigmoid")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg_x", rows, cols, DEFAULT_DTYPE)
@@ -496,7 +496,7 @@ def F_softmax(dim=-1, rows=8, cols=8):
     Softmax along last dimension (row-wise for 2D tile)
     softmax(x)_i = exp(x_i - max(x)) / sum(exp(x - max(x)))
     """
-    return (PTOProgramBuilder("F_softmax")
+    return (PTOFunctionBuilder("F_softmax")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("row_max", rows, 1, DEFAULT_DTYPE)
         .tile("x_shifted", rows, cols, DEFAULT_DTYPE)
@@ -522,7 +522,7 @@ def F_log_softmax(dim=-1, rows=8, cols=8):
     F.log_softmax(input, dim) -> Tensor
     log_softmax(x) = log(softmax(x)) = x - max(x) - log(sum(exp(x - max(x))))
     """
-    return (PTOProgramBuilder("F_log_softmax")
+    return (PTOFunctionBuilder("F_log_softmax")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("row_mean", rows, 1, DEFAULT_DTYPE)
         .tile("x_shifted", rows, cols, DEFAULT_DTYPE)
@@ -553,7 +553,7 @@ def F_linear(in_features=8, out_features=8, batch_size=8, bias=True):
     F.linear(input, weight, bias=None) -> Tensor
     output = input @ weight.T + bias
     """
-    builder = (PTOProgramBuilder("F_linear")
+    builder = (PTOFunctionBuilder("F_linear")
         .tile("x", batch_size, in_features, DEFAULT_DTYPE)
         .tile("weight", out_features, in_features, DEFAULT_DTYPE)
         .tile("output", batch_size, out_features, DEFAULT_DTYPE)
@@ -579,7 +579,7 @@ def F_bilinear(in1_features=8, in2_features=8, out_features=8, batch_size=8):
     F.bilinear(input1, input2, weight, bias=None) -> Tensor
     Simplified: output = input1 @ weight @ input2.T + bias
     """
-    return (PTOProgramBuilder("F_bilinear")
+    return (PTOFunctionBuilder("F_bilinear")
         .tile("x1", batch_size, in1_features, DEFAULT_DTYPE)
         .tile("x2", batch_size, in2_features, DEFAULT_DTYPE)
         .tile("weight", in1_features, in2_features, DEFAULT_DTYPE)
@@ -608,7 +608,7 @@ def F_dropout(p=0.0, rows=8, cols=8):
     In inference mode (training=False), returns input unchanged.
     This implementation is for inference only.
     """
-    return (PTOProgramBuilder("F_dropout")
+    return (PTOFunctionBuilder("F_dropout")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -628,7 +628,7 @@ def F_mse_loss(reduction='mean', rows=8, cols=8):
     F.mse_loss(input, target, reduction='mean') -> Tensor
     MSE = mean((input - target)²)
     """
-    return (PTOProgramBuilder("F_mse_loss")
+    return (PTOFunctionBuilder("F_mse_loss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -654,7 +654,7 @@ def F_l1_loss(reduction='mean', rows=8, cols=8):
     F.l1_loss(input, target, reduction='mean') -> Tensor
     L1 = mean(|input - target|)
     """
-    return (PTOProgramBuilder("F_l1_loss")
+    return (PTOFunctionBuilder("F_l1_loss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -680,7 +680,7 @@ def F_smooth_l1_loss(beta=1.0, reduction='mean', rows=8, cols=8):
     F.smooth_l1_loss(input, target, beta=1.0, reduction='mean') -> Tensor
     Huber loss: 0.5 * x² / beta if |x| < beta else |x| - 0.5 * beta
     """
-    return (PTOProgramBuilder("F_smooth_l1_loss")
+    return (PTOFunctionBuilder("F_smooth_l1_loss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -724,7 +724,7 @@ def F_binary_cross_entropy(reduction='mean', rows=8, cols=8):
     F.binary_cross_entropy(input, target, reduction='mean') -> Tensor
     BCE = -mean(target * log(input) + (1-target) * log(1-input))
     """
-    return (PTOProgramBuilder("F_binary_cross_entropy")
+    return (PTOFunctionBuilder("F_binary_cross_entropy")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("log_pred", rows, cols, DEFAULT_DTYPE)
@@ -764,7 +764,7 @@ def F_cross_entropy(rows=8, cols=8):
     Combines log_softmax and nll_loss
     CE = -mean(sum(target * log_softmax(input)))
     """
-    return (PTOProgramBuilder("F_cross_entropy")
+    return (PTOFunctionBuilder("F_cross_entropy")
         .tile("logits", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("row_mean", rows, 1, DEFAULT_DTYPE)
@@ -805,7 +805,7 @@ def F_nll_loss(reduction='mean', rows=8, cols=8):
     NLL = -mean(sum(target * input))
     Assumes input is already log probabilities
     """
-    return (PTOProgramBuilder("F_nll_loss")
+    return (PTOFunctionBuilder("F_nll_loss")
         .tile("log_probs", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("weighted", rows, cols, DEFAULT_DTYPE)
@@ -831,7 +831,7 @@ def F_kl_div(reduction='mean', log_target=False, rows=8, cols=8):
     KL(target || input) = sum(target * (log(target) - input))
     Assumes input is log probabilities
     """
-    return (PTOProgramBuilder("F_kl_div")
+    return (PTOFunctionBuilder("F_kl_div")
         .tile("log_pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("log_target", rows, cols, DEFAULT_DTYPE)
@@ -864,7 +864,7 @@ def F_pairwise_distance(p=2.0, eps=1e-6, rows=8, cols=8):
     Computes pairwise distance: ||x1 - x2||_p
     For p=2 (Euclidean): sqrt(sum((x1 - x2)²))
     """
-    return (PTOProgramBuilder("F_pairwise_distance")
+    return (PTOFunctionBuilder("F_pairwise_distance")
         .tile("x1", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -889,7 +889,7 @@ def F_cosine_similarity(dim=1, eps=1e-8, rows=8, cols=8):
     F.cosine_similarity(x1, x2, dim=1, eps=1e-8) -> Tensor
     cosine_similarity = (x1 · x2) / (||x1|| * ||x2||)
     """
-    return (PTOProgramBuilder("F_cosine_similarity")
+    return (PTOFunctionBuilder("F_cosine_similarity")
         .tile("x1", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("dot_prod", rows, cols, DEFAULT_DTYPE)
@@ -931,7 +931,7 @@ def F_normalize(p=2.0, dim=1, eps=1e-12, rows=8, cols=8):
     F.normalize(input, p=2.0, dim=1, eps=1e-12) -> Tensor
     Normalizes input along dim to have L_p norm of 1
     """
-    return (PTOProgramBuilder("F_normalize")
+    return (PTOFunctionBuilder("F_normalize")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_sq", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
@@ -954,7 +954,7 @@ def F_layer_norm(normalized_shape, eps=1e-5, rows=8, cols=8):
     F.layer_norm(input, normalized_shape, weight=None, bias=None, eps=1e-5) -> Tensor
     Layer normalization
     """
-    return (PTOProgramBuilder("F_layer_norm")
+    return (PTOFunctionBuilder("F_layer_norm")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("mean", rows, 1, DEFAULT_DTYPE)
         .tile("centered", rows, cols, DEFAULT_DTYPE)
@@ -989,7 +989,7 @@ def F_batch_norm(running_mean=None, running_var=None, eps=1e-5, momentum=0.1, ro
                  training=False, momentum=0.1, eps=1e-5) -> Tensor
     Batch normalization (inference mode)
     """
-    return (PTOProgramBuilder("F_batch_norm")
+    return (PTOFunctionBuilder("F_batch_norm")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("mean", 1, cols, DEFAULT_DTYPE)
         .tile("var", 1, cols, DEFAULT_DTYPE)
@@ -1017,7 +1017,7 @@ def F_group_norm(num_groups, eps=1e-5, rows=8, cols=8):
     F.group_norm(input, num_groups, weight=None, bias=None, eps=1e-5) -> Tensor
     Group normalization
     """
-    return (PTOProgramBuilder("F_group_norm")
+    return (PTOFunctionBuilder("F_group_norm")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("mean", rows, 1, DEFAULT_DTYPE)
         .tile("centered", rows, cols, DEFAULT_DTYPE)
@@ -1050,7 +1050,7 @@ def F_avg_pool2d(kernel_size=2, stride=None, rows=8, cols=8):
     F.avg_pool2d(input, kernel_size, stride=None) -> Tensor
     Simplified: global average pooling (entire tile)
     """
-    return (PTOProgramBuilder("F_avg_pool2d")
+    return (PTOFunctionBuilder("F_avg_pool2d")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("result", 1, 1, DEFAULT_DTYPE)
@@ -1069,7 +1069,7 @@ def F_adaptive_avg_pool2d(output_size=(1, 1), rows=8, cols=8):
     F.adaptive_avg_pool2d(input, output_size) -> Tensor
     Adaptive average pooling to specified output size
     """
-    return (PTOProgramBuilder("F_adaptive_avg_pool2d")
+    return (PTOFunctionBuilder("F_adaptive_avg_pool2d")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("result", 1, 1, DEFAULT_DTYPE)

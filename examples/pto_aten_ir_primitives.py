@@ -22,7 +22,7 @@ import sys
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
 
@@ -46,7 +46,7 @@ def prims_abs(rows=8, cols=8):
     Elementwise absolute value.
     PTO Mapping: TABS
     """
-    return (PTOProgramBuilder("prims_abs")
+    return (PTOFunctionBuilder("prims_abs")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -66,7 +66,7 @@ def prims_neg(rows=8, cols=8):
     Elementwise negation.
     PTO Mapping: TNEG
     """
-    return (PTOProgramBuilder("prims_neg")
+    return (PTOFunctionBuilder("prims_neg")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -86,7 +86,7 @@ def prims_exp(rows=8, cols=8):
     Elementwise exponential.
     PTO Mapping: TEXP
     """
-    return (PTOProgramBuilder("prims_exp")
+    return (PTOFunctionBuilder("prims_exp")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -106,7 +106,7 @@ def prims_log(rows=8, cols=8):
     Elementwise natural logarithm.
     PTO Mapping: TLOG
     """
-    return (PTOProgramBuilder("prims_log")
+    return (PTOFunctionBuilder("prims_log")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -126,7 +126,7 @@ def prims_sqrt(rows=8, cols=8):
     Elementwise square root.
     PTO Mapping: TSQRT
     """
-    return (PTOProgramBuilder("prims_sqrt")
+    return (PTOFunctionBuilder("prims_sqrt")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -146,7 +146,7 @@ def prims_rsqrt(rows=8, cols=8):
     Elementwise reciprocal square root: 1/sqrt(x)
     PTO Mapping: TRSQRT
     """
-    return (PTOProgramBuilder("prims_rsqrt")
+    return (PTOFunctionBuilder("prims_rsqrt")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -166,7 +166,7 @@ def prims_reciprocal(rows=8, cols=8):
     Elementwise reciprocal: 1/x
     PTO Mapping: TRECIP
     """
-    return (PTOProgramBuilder("prims_reciprocal")
+    return (PTOFunctionBuilder("prims_reciprocal")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -186,7 +186,7 @@ def aten_relu(rows=8, cols=8):
     Elementwise ReLU: max(0, x)
     PTO Mapping: TRELU
     """
-    return (PTOProgramBuilder("aten_relu")
+    return (PTOFunctionBuilder("aten_relu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -210,7 +210,7 @@ def aten_sigmoid(rows=8, cols=8):
     Elementwise sigmoid: 1 / (1 + exp(-x))
     PTO Mapping: TNEG, TEXP, TADDS, TRECIP (fused)
     """
-    return (PTOProgramBuilder("aten_sigmoid")
+    return (PTOFunctionBuilder("aten_sigmoid")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("t1", rows, cols, DEFAULT_DTYPE)  # -x
         .tile("t2", rows, cols, DEFAULT_DTYPE)  # exp(-x)
@@ -241,7 +241,7 @@ def aten_tanh(rows=8, cols=8):
     
     Using: tanh(x) = (exp(x) - exp(-x)) / (exp(x) + exp(-x))
     """
-    return (PTOProgramBuilder("aten_tanh")
+    return (PTOFunctionBuilder("aten_tanh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg_x", rows, cols, DEFAULT_DTYPE)
@@ -278,7 +278,7 @@ def prims_add(rows=8, cols=8):
     Elementwise addition.
     PTO Mapping: TADD
     """
-    return (PTOProgramBuilder("prims_add")
+    return (PTOFunctionBuilder("prims_add")
         .tile("a", rows, cols, DEFAULT_DTYPE)
         .tile("b", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -301,7 +301,7 @@ def prims_sub(rows=8, cols=8):
     Elementwise subtraction.
     PTO Mapping: TSUB
     """
-    return (PTOProgramBuilder("prims_sub")
+    return (PTOFunctionBuilder("prims_sub")
         .tile("a", rows, cols, DEFAULT_DTYPE)
         .tile("b", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -324,7 +324,7 @@ def prims_mul(rows=8, cols=8):
     Elementwise multiplication.
     PTO Mapping: TMUL
     """
-    return (PTOProgramBuilder("prims_mul")
+    return (PTOFunctionBuilder("prims_mul")
         .tile("a", rows, cols, DEFAULT_DTYPE)
         .tile("b", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -347,7 +347,7 @@ def prims_div(rows=8, cols=8):
     Elementwise division.
     PTO Mapping: TDIV
     """
-    return (PTOProgramBuilder("prims_div")
+    return (PTOFunctionBuilder("prims_div")
         .tile("a", rows, cols, DEFAULT_DTYPE)
         .tile("b", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -370,7 +370,7 @@ def prims_maximum(rows=8, cols=8):
     Elementwise maximum.
     PTO Mapping: TMAX
     """
-    return (PTOProgramBuilder("prims_maximum")
+    return (PTOFunctionBuilder("prims_maximum")
         .tile("a", rows, cols, DEFAULT_DTYPE)
         .tile("b", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -393,7 +393,7 @@ def prims_minimum(rows=8, cols=8):
     Elementwise minimum.
     PTO Mapping: TMIN
     """
-    return (PTOProgramBuilder("prims_minimum")
+    return (PTOFunctionBuilder("prims_minimum")
         .tile("a", rows, cols, DEFAULT_DTYPE)
         .tile("b", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -416,7 +416,7 @@ def prims_pow(rows=8, cols=8):
     Elementwise power: base^exponent = exp(exponent * log(base))
     PTO Mapping: TLOG, TMUL, TEXP (composite)
     """
-    return (PTOProgramBuilder("prims_pow")
+    return (PTOFunctionBuilder("prims_pow")
         .tile("base", rows, cols, DEFAULT_DTYPE)
         .tile("exp", rows, cols, DEFAULT_DTYPE)
         .tile("log_base", rows, cols, DEFAULT_DTYPE)
@@ -450,7 +450,7 @@ def aten_add_scalar(scalar_value, rows=8, cols=8):
     Add scalar to tensor.
     PTO Mapping: TADDS
     """
-    return (PTOProgramBuilder("aten_add_scalar")
+    return (PTOFunctionBuilder("aten_add_scalar")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -470,7 +470,7 @@ def aten_mul_scalar(scalar_value, rows=8, cols=8):
     Multiply tensor by scalar.
     PTO Mapping: TMULS
     """
-    return (PTOProgramBuilder("aten_mul_scalar")
+    return (PTOFunctionBuilder("aten_mul_scalar")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -490,7 +490,7 @@ def aten_div_scalar(scalar_value, rows=8, cols=8):
     Divide tensor by scalar.
     PTO Mapping: TDIVS
     """
-    return (PTOProgramBuilder("aten_div_scalar")
+    return (PTOFunctionBuilder("aten_div_scalar")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -514,7 +514,7 @@ def prims_sum_row(rows=8, cols=8):
     Sum reduction along rows (dim=1).
     PTO Mapping: TROWSUM
     """
-    return (PTOProgramBuilder("prims_sum_row")
+    return (PTOFunctionBuilder("prims_sum_row")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, 1, DEFAULT_DTYPE)  # Result has 1 column
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -534,7 +534,7 @@ def prims_sum_col(rows=8, cols=8):
     Sum reduction along columns (dim=0).
     PTO Mapping: TCOLSUM
     """
-    return (PTOProgramBuilder("prims_sum_col")
+    return (PTOFunctionBuilder("prims_sum_col")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", 1, cols, DEFAULT_DTYPE)  # Result has 1 row
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -554,7 +554,7 @@ def aten_mean_row(rows=8, cols=8):
     Mean reduction along rows.
     PTO Mapping: TROWSUM, TDIVS
     """
-    return (PTOProgramBuilder("aten_mean_row")
+    return (PTOFunctionBuilder("aten_mean_row")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("sum_result", rows, 1, DEFAULT_DTYPE)
         .tile("result", rows, 1, DEFAULT_DTYPE)
@@ -580,7 +580,7 @@ def aten_mm(m=8, k=8, n=8):
     Matrix multiplication: result = self @ mat2
     PTO Mapping: TMATMUL
     """
-    return (PTOProgramBuilder("aten_mm")
+    return (PTOFunctionBuilder("aten_mm")
         .tile("a", m, k, DEFAULT_DTYPE)  # [M, K]
         .tile("b", k, n, DEFAULT_DTYPE)  # [K, N]
         .tile("result", m, n, DEFAULT_DTYPE)  # [M, N]
@@ -603,7 +603,7 @@ def aten_addmm(m=8, k=8, n=8, beta=1.0, alpha=1.0):
     Matrix multiply with bias: beta * self + alpha * (mat1 @ mat2)
     PTO Mapping: TMULS, TMATMUL, TMULS, TADD
     """
-    return (PTOProgramBuilder("aten_addmm")
+    return (PTOFunctionBuilder("aten_addmm")
         .tile("bias", m, n, DEFAULT_DTYPE)  # [M, N]
         .tile("a", m, k, DEFAULT_DTYPE)     # [M, K]
         .tile("b", k, n, DEFAULT_DTYPE)     # [K, N]
@@ -650,7 +650,7 @@ def aten_gelu(rows=8, cols=8):
     
     Simplified: x * sigmoid(1.702 * x)  (fast approximation)
     """
-    return (PTOProgramBuilder("aten_gelu")
+    return (PTOFunctionBuilder("aten_gelu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("scaled_x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_scaled", rows, cols, DEFAULT_DTYPE)
@@ -683,7 +683,7 @@ def aten_silu(rows=8, cols=8):
     Sigmoid Linear Unit: x * sigmoid(x)
     PTO Mapping: TNEG, TEXP, TADDS, TRECIP, TMUL
     """
-    return (PTOProgramBuilder("aten_silu")
+    return (PTOFunctionBuilder("aten_silu")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg", rows, cols, DEFAULT_DTYPE)
@@ -715,7 +715,7 @@ def aten_softmax_row(rows=8, cols=8):
     
     For numerical stability: exp(x_i - max(x)) / sum(exp(x - max(x)))
     """
-    return (PTOProgramBuilder("aten_softmax_row")
+    return (PTOFunctionBuilder("aten_softmax_row")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("sum_exp", rows, 1, DEFAULT_DTYPE)  # Row-wise sum
@@ -752,7 +752,7 @@ def aten_sinh(rows=8, cols=8):
     
     This is the same as the sinh example in pto_isa_sinh.py
     """
-    return (PTOProgramBuilder("aten_sinh")
+    return (PTOFunctionBuilder("aten_sinh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_squared", rows, cols, DEFAULT_DTYPE)
         .tile("term", rows, cols, DEFAULT_DTYPE)
@@ -798,7 +798,7 @@ def aten_cosh(rows=8, cols=8):
     
     Hyperbolic cosine: cosh(x) = (exp(x) + exp(-x)) / 2
     """
-    return (PTOProgramBuilder("aten_cosh")
+    return (PTOFunctionBuilder("aten_cosh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -833,7 +833,7 @@ def aten_clamp(min_val, max_val, rows=8, cols=8):
     Clamp values to [min, max] range.
     PTO Mapping: TMAX (with min), TMIN (with max)
     """
-    return (PTOProgramBuilder("aten_clamp")
+    return (PTOFunctionBuilder("aten_clamp")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("min_tile", rows, cols, DEFAULT_DTYPE)
         .tile("max_tile", rows, cols, DEFAULT_DTYPE)

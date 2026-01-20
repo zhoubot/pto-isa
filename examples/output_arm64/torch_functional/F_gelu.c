@@ -5,99 +5,102 @@
 #include <stdint.h>
 #include <stdio.h>
 
-float x[8][8];
-float x_cubed[8][8];
-float x_sq[8][8];
-float coeff_x3[8][8];
-float inner[8][8];
-float scaled[8][8];
-float tanh_out[8][8];
-float exp_pos[8][8];
-float exp_neg[8][8];
-float sinh_approx[8][8];
-float cosh_approx[8][8];
-float one_plus[8][8];
-float half_x[8][8];
-float result[8][8];
+void F_gelu(float* input, float* output) {
+    float x[8][8];
+    float x_cubed[8][8];
+    float x_sq[8][8];
+    float coeff_x3[8][8];
+    float inner[8][8];
+    float scaled[8][8];
+    float tanh_out[8][8];
+    float exp_pos[8][8];
+    float exp_neg[8][8];
+    float sinh_approx[8][8];
+    float cosh_approx[8][8];
+    float one_plus[8][8];
+    float half_x[8][8];
+    float result[8][8];
 
-// Loop fusion: 14 loop overheads saved
+    // Loop fusion: 14 loop overheads saved
 
-// FUSED LOOP (15 ops): x=TLOAD(input,0,0); x_sq=TMUL(x,x); x_cubed=TMUL(x_sq,x); coeff_x3=TMULS(x_cubed,0.044715f); inner=TADD(x,coeff_x3); scaled=TMULS(inner,0.7978845608028654f); scaled=TMULS(scaled,2.0f); exp_pos=TEXP(scaled); sinh_approx=TADDS(exp_pos,-1.0f); cosh_approx=TADDS(exp_pos,1.0f); tanh_out=TDIV(sinh_approx,cosh_approx); one_plus=TADDS(tanh_out,1.0f); half_x=TMULS(x,0.5f); result=TMUL(half_x,one_plus); output=TSTORE(result,0,0)
-float32x4_t _vs0 = vdupq_n_f32(0.044715f);
-float32x4_t _vs1 = vdupq_n_f32(0.7978845608028654f);
-float32x4_t _vs2 = vdupq_n_f32(2.0f);
-float32x4_t _vs3 = vdupq_n_f32(-1.0f);
-float32x4_t _vs4 = vdupq_n_f32(1.0f);
-float32x4_t _vs5 = vdupq_n_f32(0.5f);
-for (int _row = 0; _row < 8; _row++) {
-    int _col;
-    // Vectorized loop
-    for (_col = 0; _col + 4 <= 8; _col += 4) {
-        float32x4_t _vl6 = vld1q_f32(&input[_row * 8 + _col]);
-        vst1q_f32(&x[_row][_col], _vl6);
-        float32x4_t _v7 = vld1q_f32(&x[_row][_col]);
-        float32x4_t _v8 = vld1q_f32(&x[_row][_col]);
-        float32x4_t _vr9 = vmulq_f32(_v7, _v8);
-        vst1q_f32(&x_sq[_row][_col], _vr9);
-        float32x4_t _v10 = vld1q_f32(&x_sq[_row][_col]);
-        float32x4_t _v11 = vld1q_f32(&x[_row][_col]);
-        float32x4_t _vr12 = vmulq_f32(_v10, _v11);
-        vst1q_f32(&x_cubed[_row][_col], _vr12);
-        float32x4_t _v13 = vld1q_f32(&x_cubed[_row][_col]);
-        float32x4_t _vr14 = vmulq_f32(_v13, _vs0);
-        vst1q_f32(&coeff_x3[_row][_col], _vr14);
-        float32x4_t _v15 = vld1q_f32(&x[_row][_col]);
-        float32x4_t _v16 = vld1q_f32(&coeff_x3[_row][_col]);
-        float32x4_t _vr17 = vaddq_f32(_v15, _v16);
-        vst1q_f32(&inner[_row][_col], _vr17);
-        float32x4_t _v18 = vld1q_f32(&inner[_row][_col]);
-        float32x4_t _vr19 = vmulq_f32(_v18, _vs1);
-        vst1q_f32(&scaled[_row][_col], _vr19);
-        float32x4_t _v20 = vld1q_f32(&scaled[_row][_col]);
-        float32x4_t _vr21 = vmulq_f32(_v20, _vs2);
-        vst1q_f32(&scaled[_row][_col], _vr21);
-        float32x4_t _v22 = vld1q_f32(&scaled[_row][_col]);
-        float32x4_t _vr23 = _v22;
-        vst1q_f32(&exp_pos[_row][_col], _vr23);
-        float32x4_t _v24 = vld1q_f32(&exp_pos[_row][_col]);
-        float32x4_t _vr25 = vaddq_f32(_v24, _vs3);
-        vst1q_f32(&sinh_approx[_row][_col], _vr25);
-        float32x4_t _v26 = vld1q_f32(&exp_pos[_row][_col]);
-        float32x4_t _vr27 = vaddq_f32(_v26, _vs4);
-        vst1q_f32(&cosh_approx[_row][_col], _vr27);
-        float32x4_t _v28 = vld1q_f32(&sinh_approx[_row][_col]);
-        float32x4_t _v29 = vld1q_f32(&cosh_approx[_row][_col]);
-        float32x4_t _vr30 = vdivq_f32(_v28, _v29);
-        vst1q_f32(&tanh_out[_row][_col], _vr30);
-        float32x4_t _v31 = vld1q_f32(&tanh_out[_row][_col]);
-        float32x4_t _vr32 = vaddq_f32(_v31, _vs4);
-        vst1q_f32(&one_plus[_row][_col], _vr32);
-        float32x4_t _v33 = vld1q_f32(&x[_row][_col]);
-        float32x4_t _vr34 = vmulq_f32(_v33, _vs5);
-        vst1q_f32(&half_x[_row][_col], _vr34);
-        float32x4_t _v35 = vld1q_f32(&half_x[_row][_col]);
-        float32x4_t _v36 = vld1q_f32(&one_plus[_row][_col]);
-        float32x4_t _vr37 = vmulq_f32(_v35, _v36);
-        vst1q_f32(&result[_row][_col], _vr37);
-        float32x4_t _vs38 = vld1q_f32(&result[_row][_col]);
-        vst1q_f32(&output[_row * 8 + _col], _vs38);
+    // FUSED LOOP (15 ops): x=TLOAD(input,0,0); x_sq=TMUL(x,x); x_cubed=TMUL(x_sq,x); coeff_x3=TMULS(x_cubed,0.044715f); inner=TADD(x,coeff_x3); scaled=TMULS(inner,0.7978845608028654f); scaled=TMULS(scaled,2.0f); exp_pos=TEXP(scaled); sinh_approx=TADDS(exp_pos,-1.0f); cosh_approx=TADDS(exp_pos,1.0f); tanh_out=TDIV(sinh_approx,cosh_approx); one_plus=TADDS(tanh_out,1.0f); half_x=TMULS(x,0.5f); result=TMUL(half_x,one_plus); output=TSTORE(result,0,0)
+    float32x4_t _vs0 = vdupq_n_f32(0.044715f);
+    float32x4_t _vs1 = vdupq_n_f32(0.7978845608028654f);
+    float32x4_t _vs2 = vdupq_n_f32(2.0f);
+    float32x4_t _vs3 = vdupq_n_f32(-1.0f);
+    float32x4_t _vs4 = vdupq_n_f32(1.0f);
+    float32x4_t _vs5 = vdupq_n_f32(0.5f);
+    for (int _row = 0; _row < 8; _row++) {
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 8; _col += 4) {
+            float32x4_t _vl6 = vld1q_f32(&input[_row * 8 + _col]);
+            vst1q_f32(&x[_row][_col], _vl6);
+            float32x4_t _v7 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _v8 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _vr9 = vmulq_f32(_v7, _v8);
+            vst1q_f32(&x_sq[_row][_col], _vr9);
+            float32x4_t _v10 = vld1q_f32(&x_sq[_row][_col]);
+            float32x4_t _v11 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _vr12 = vmulq_f32(_v10, _v11);
+            vst1q_f32(&x_cubed[_row][_col], _vr12);
+            float32x4_t _v13 = vld1q_f32(&x_cubed[_row][_col]);
+            float32x4_t _vr14 = vmulq_f32(_v13, _vs0);
+            vst1q_f32(&coeff_x3[_row][_col], _vr14);
+            float32x4_t _v15 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _v16 = vld1q_f32(&coeff_x3[_row][_col]);
+            float32x4_t _vr17 = vaddq_f32(_v15, _v16);
+            vst1q_f32(&inner[_row][_col], _vr17);
+            float32x4_t _v18 = vld1q_f32(&inner[_row][_col]);
+            float32x4_t _vr19 = vmulq_f32(_v18, _vs1);
+            vst1q_f32(&scaled[_row][_col], _vr19);
+            float32x4_t _v20 = vld1q_f32(&scaled[_row][_col]);
+            float32x4_t _vr21 = vmulq_f32(_v20, _vs2);
+            vst1q_f32(&scaled[_row][_col], _vr21);
+            float32x4_t _v22 = vld1q_f32(&scaled[_row][_col]);
+            float32x4_t _vr23 = _v22;
+            vst1q_f32(&exp_pos[_row][_col], _vr23);
+            float32x4_t _v24 = vld1q_f32(&exp_pos[_row][_col]);
+            float32x4_t _vr25 = vaddq_f32(_v24, _vs3);
+            vst1q_f32(&sinh_approx[_row][_col], _vr25);
+            float32x4_t _v26 = vld1q_f32(&exp_pos[_row][_col]);
+            float32x4_t _vr27 = vaddq_f32(_v26, _vs4);
+            vst1q_f32(&cosh_approx[_row][_col], _vr27);
+            float32x4_t _v28 = vld1q_f32(&sinh_approx[_row][_col]);
+            float32x4_t _v29 = vld1q_f32(&cosh_approx[_row][_col]);
+            float32x4_t _vr30 = vdivq_f32(_v28, _v29);
+            vst1q_f32(&tanh_out[_row][_col], _vr30);
+            float32x4_t _v31 = vld1q_f32(&tanh_out[_row][_col]);
+            float32x4_t _vr32 = vaddq_f32(_v31, _vs4);
+            vst1q_f32(&one_plus[_row][_col], _vr32);
+            float32x4_t _v33 = vld1q_f32(&x[_row][_col]);
+            float32x4_t _vr34 = vmulq_f32(_v33, _vs5);
+            vst1q_f32(&half_x[_row][_col], _vr34);
+            float32x4_t _v35 = vld1q_f32(&half_x[_row][_col]);
+            float32x4_t _v36 = vld1q_f32(&one_plus[_row][_col]);
+            float32x4_t _vr37 = vmulq_f32(_v35, _v36);
+            vst1q_f32(&result[_row][_col], _vr37);
+            float32x4_t _vs38 = vld1q_f32(&result[_row][_col]);
+            vst1q_f32(&output[_row * 8 + _col], _vs38);
+        }
+        // Scalar cleanup
+        for (; _col < 8; _col++) {
+            x[_row][_col] = input[_row * 8 + _col];
+            x_sq[_row][_col] = x[_row][_col] * x[_row][_col];
+            x_cubed[_row][_col] = x_sq[_row][_col] * x[_row][_col];
+            coeff_x3[_row][_col] = x_cubed[_row][_col] * 0.044715f;
+            inner[_row][_col] = x[_row][_col] + coeff_x3[_row][_col];
+            scaled[_row][_col] = inner[_row][_col] * 0.7978845608028654f;
+            scaled[_row][_col] = scaled[_row][_col] * 2.0f;
+            exp_pos[_row][_col] = expf(scaled[_row][_col]);
+            sinh_approx[_row][_col] = exp_pos[_row][_col] + -1.0f;
+            cosh_approx[_row][_col] = exp_pos[_row][_col] + 1.0f;
+            tanh_out[_row][_col] = sinh_approx[_row][_col] / cosh_approx[_row][_col];
+            one_plus[_row][_col] = tanh_out[_row][_col] + 1.0f;
+            half_x[_row][_col] = x[_row][_col] * 0.5f;
+            result[_row][_col] = half_x[_row][_col] * one_plus[_row][_col];
+            output[_row * 8 + _col] = result[_row][_col];
+        }
     }
-    // Scalar cleanup
-    for (; _col < 8; _col++) {
-        x[_row][_col] = input[_row * 8 + _col];
-        x_sq[_row][_col] = x[_row][_col] * x[_row][_col];
-        x_cubed[_row][_col] = x_sq[_row][_col] * x[_row][_col];
-        coeff_x3[_row][_col] = x_cubed[_row][_col] * 0.044715f;
-        inner[_row][_col] = x[_row][_col] + coeff_x3[_row][_col];
-        scaled[_row][_col] = inner[_row][_col] * 0.7978845608028654f;
-        scaled[_row][_col] = scaled[_row][_col] * 2.0f;
-        exp_pos[_row][_col] = expf(scaled[_row][_col]);
-        sinh_approx[_row][_col] = exp_pos[_row][_col] + -1.0f;
-        cosh_approx[_row][_col] = exp_pos[_row][_col] + 1.0f;
-        tanh_out[_row][_col] = sinh_approx[_row][_col] / cosh_approx[_row][_col];
-        one_plus[_row][_col] = tanh_out[_row][_col] + 1.0f;
-        half_x[_row][_col] = x[_row][_col] * 0.5f;
-        result[_row][_col] = half_x[_row][_col] * one_plus[_row][_col];
-        output[_row * 8 + _col] = result[_row][_col];
-    }
+
 }

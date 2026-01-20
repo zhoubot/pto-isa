@@ -99,7 +99,7 @@
 
 ## 2. ISA 已定义但 Builder 未实现的指令
 
-以下指令在 `pto_isa_definition.py` 中已定义，但 `PTOProgramBuilder` 没有对应方法：
+以下指令在 `pto_isa_definition.py` 中已定义，但 `PTOFunctionBuilder` 没有对应方法：
 
 ### 2.1 Reduction 指令
 
@@ -254,8 +254,8 @@ class TTANH(TileInstruction):
 ### 5.2 建议的 Builder 扩展
 
 ```python
-# pto_compile.py - PTOProgramBuilder
-def rowmax(self, dst: str, src: str) -> "PTOProgramBuilder":
+# pto_compile.py - PTOFunctionBuilder
+def rowmax(self, dst: str, src: str) -> "PTOFunctionBuilder":
     """Row-wise maximum reduction."""
     from pto_isa_definition import TROWMAX
     self._instructions.append(TROWMAX(
@@ -264,7 +264,7 @@ def rowmax(self, dst: str, src: str) -> "PTOProgramBuilder":
     ))
     return self
 
-def cmp(self, dst: str, src0: str, src1: str, mode: str = "gt") -> "PTOProgramBuilder":
+def cmp(self, dst: str, src0: str, src1: str, mode: str = "gt") -> "PTOFunctionBuilder":
     """Element-wise comparison producing mask."""
     from pto_isa_definition import TCMP, CompareMode
     mode_map = {"eq": CompareMode.EQ, "ne": CompareMode.NE, 
@@ -278,7 +278,7 @@ def cmp(self, dst: str, src0: str, src1: str, mode: str = "gt") -> "PTOProgramBu
     ))
     return self
 
-def sel(self, dst: str, mask: str, src0: str, src1: str) -> "PTOProgramBuilder":
+def sel(self, dst: str, mask: str, src0: str, src1: str) -> "PTOFunctionBuilder":
     """Select elements based on mask: dst = mask ? src0 : src1"""
     from pto_isa_definition import TSEL
     self._instructions.append(TSEL(

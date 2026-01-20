@@ -22,7 +22,7 @@ import sys
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
 
@@ -47,7 +47,7 @@ def nn_ReLU(rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.ReLU.html
     PTO Mapping: TRELU
     """
-    return (PTOProgramBuilder("nn_ReLU")
+    return (PTOFunctionBuilder("nn_ReLU")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -67,7 +67,7 @@ def nn_ReLU6(rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.ReLU6.html
     PTO Mapping: TRELU, TEXPANDS, TMIN
     """
-    return (PTOProgramBuilder("nn_ReLU6")
+    return (PTOFunctionBuilder("nn_ReLU6")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("relu_out", rows, cols, DEFAULT_DTYPE)
         .tile("six", rows, cols, DEFAULT_DTYPE)
@@ -91,7 +91,7 @@ def nn_LeakyReLU(negative_slope=0.01, rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.LeakyReLU.html
     PTO Mapping: TRELU, TNEG, TRELU, TNEG, TMULS, TADD
     """
-    return (PTOProgramBuilder("nn_LeakyReLU")
+    return (PTOFunctionBuilder("nn_LeakyReLU")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("pos_part", rows, cols, DEFAULT_DTYPE)    # max(0, x)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)       # -x
@@ -129,7 +129,7 @@ def nn_ELU(alpha=1.0, rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.ELU.html
     """
-    return (PTOProgramBuilder("nn_ELU")
+    return (PTOFunctionBuilder("nn_ELU")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("pos_part", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -173,7 +173,7 @@ def nn_Sigmoid(rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Sigmoid.html
     PTO Mapping: TNEG, TEXP, TADDS, TRECIP
     """
-    return (PTOProgramBuilder("nn_Sigmoid")
+    return (PTOFunctionBuilder("nn_Sigmoid")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg", rows, cols, DEFAULT_DTYPE)
@@ -200,7 +200,7 @@ def nn_Tanh(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Tanh.html
     """
-    return (PTOProgramBuilder("nn_Tanh")
+    return (PTOFunctionBuilder("nn_Tanh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
@@ -233,7 +233,7 @@ def nn_Softmax(rows=8, cols=8):
     Note: Simplified version without max subtraction for numerical stability.
     PTO Mapping: TEXP, TROWSUM, TDIV
     """
-    return (PTOProgramBuilder("nn_Softmax")
+    return (PTOFunctionBuilder("nn_Softmax")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("sum_exp", rows, 1, DEFAULT_DTYPE)
@@ -258,7 +258,7 @@ def nn_LogSoftmax(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.LogSoftmax.html
     """
-    return (PTOProgramBuilder("nn_LogSoftmax")
+    return (PTOFunctionBuilder("nn_LogSoftmax")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("sum_exp", rows, 1, DEFAULT_DTYPE)
@@ -286,7 +286,7 @@ def nn_GELU(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.GELU.html
     """
-    return (PTOProgramBuilder("nn_GELU")
+    return (PTOFunctionBuilder("nn_GELU")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("scaled_x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_scaled", rows, cols, DEFAULT_DTYPE)
@@ -318,7 +318,7 @@ def nn_SiLU(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.SiLU.html
     """
-    return (PTOProgramBuilder("nn_SiLU")
+    return (PTOFunctionBuilder("nn_SiLU")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg", rows, cols, DEFAULT_DTYPE)
@@ -347,7 +347,7 @@ def nn_Mish(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Mish.html
     """
-    return (PTOProgramBuilder("nn_Mish")
+    return (PTOFunctionBuilder("nn_Mish")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
         .tile("one_plus_exp", rows, cols, DEFAULT_DTYPE)
@@ -391,7 +391,7 @@ def nn_Hardswish(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Hardswish.html
     """
-    return (PTOProgramBuilder("nn_Hardswish")
+    return (PTOFunctionBuilder("nn_Hardswish")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_plus_3", rows, cols, DEFAULT_DTYPE)
         .tile("relu_out", rows, cols, DEFAULT_DTYPE)
@@ -427,7 +427,7 @@ def nn_Hardsigmoid(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Hardsigmoid.html
     """
-    return (PTOProgramBuilder("nn_Hardsigmoid")
+    return (PTOFunctionBuilder("nn_Hardsigmoid")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_plus_3", rows, cols, DEFAULT_DTYPE)
         .tile("relu_out", rows, cols, DEFAULT_DTYPE)
@@ -456,7 +456,7 @@ def nn_Softplus(beta=1.0, rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Softplus.html
     """
-    return (PTOProgramBuilder("nn_Softplus")
+    return (PTOFunctionBuilder("nn_Softplus")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("scaled_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -491,7 +491,7 @@ def nn_LayerNorm(rows=8, cols=8, eps=1e-5):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html
     Simplified: without learnable gamma/beta parameters.
     """
-    return (PTOProgramBuilder("nn_LayerNorm")
+    return (PTOFunctionBuilder("nn_LayerNorm")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("mean", rows, 1, DEFAULT_DTYPE)
@@ -538,7 +538,7 @@ def nn_RMSNorm(rows=8, cols=8, eps=1e-5):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.RMSNorm.html
     """
-    return (PTOProgramBuilder("nn_RMSNorm")
+    return (PTOFunctionBuilder("nn_RMSNorm")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x_squared", rows, cols, DEFAULT_DTYPE)
         .tile("mean_sq_sum", rows, 1, DEFAULT_DTYPE)
@@ -583,7 +583,7 @@ def nn_Linear(in_features=8, out_features=8, batch_size=8):
     
     Note: bias is pre-expanded to [batch_size, out_features] for compatibility.
     """
-    return (PTOProgramBuilder("nn_Linear")
+    return (PTOFunctionBuilder("nn_Linear")
         .tile("x", batch_size, in_features, DEFAULT_DTYPE)
         .tile("weight", in_features, out_features, DEFAULT_DTYPE)
         .tile("bias", batch_size, out_features, DEFAULT_DTYPE)  # Pre-expanded bias
@@ -613,7 +613,7 @@ def nn_Bilinear(in1_features=8, in2_features=8, out_features=8, batch_size=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Bilinear.html
     """
-    return (PTOProgramBuilder("nn_Bilinear")
+    return (PTOFunctionBuilder("nn_Bilinear")
         .tile("x1", batch_size, in1_features, DEFAULT_DTYPE)
         .tile("x2", batch_size, in2_features, DEFAULT_DTYPE)
         .tile("product", batch_size, in1_features, DEFAULT_DTYPE)
@@ -646,7 +646,7 @@ def nn_MSELoss(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
     """
-    return (PTOProgramBuilder("nn_MSELoss")
+    return (PTOFunctionBuilder("nn_MSELoss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -678,7 +678,7 @@ def nn_L1Loss(rows=8, cols=8):
     
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.L1Loss.html
     """
-    return (PTOProgramBuilder("nn_L1Loss")
+    return (PTOFunctionBuilder("nn_L1Loss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -713,7 +713,7 @@ def nn_SmoothL1Loss(beta=1.0, rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.SmoothL1Loss.html
     Simplified approximation using smooth components.
     """
-    return (PTOProgramBuilder("nn_SmoothL1Loss")
+    return (PTOFunctionBuilder("nn_SmoothL1Loss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -761,7 +761,7 @@ def nn_CrossEntropyLoss(rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
     Simplified: assumes target is one-hot encoded.
     """
-    return (PTOProgramBuilder("nn_CrossEntropyLoss")
+    return (PTOFunctionBuilder("nn_CrossEntropyLoss")
         .tile("pred", rows, cols, DEFAULT_DTYPE)
         .tile("target", rows, cols, DEFAULT_DTYPE)
         .tile("exp_pred", rows, cols, DEFAULT_DTYPE)
@@ -812,7 +812,7 @@ def nn_Dropout(p=0.0, rows=8, cols=8):
     Reference: https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout.html
     This implements inference mode (identity).
     """
-    return (PTOProgramBuilder("nn_Dropout")
+    return (PTOFunctionBuilder("nn_Dropout")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -837,7 +837,7 @@ def nn_Embedding(num_embeddings=64, embedding_dim=8):
     Note: This is a simplified version - actual embedding requires indexing.
     Here we show matrix multiply with one-hot encoded indices.
     """
-    return (PTOProgramBuilder("nn_Embedding")
+    return (PTOFunctionBuilder("nn_Embedding")
         .tile("indices_onehot", 8, num_embeddings, DEFAULT_DTYPE)  # One-hot indices
         .tile("weight", num_embeddings, embedding_dim, DEFAULT_DTYPE)
         .tile("result", 8, embedding_dim, DEFAULT_DTYPE)

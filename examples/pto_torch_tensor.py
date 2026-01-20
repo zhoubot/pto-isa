@@ -21,7 +21,7 @@ import sys
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
 
@@ -43,7 +43,7 @@ def tensor_add(rows=8, cols=8):
     Tensor.add(other) -> Tensor
     Elementwise addition: self + other
     """
-    return (PTOProgramBuilder("tensor_add")
+    return (PTOFunctionBuilder("tensor_add")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -62,7 +62,7 @@ def tensor_sub(rows=8, cols=8):
     Tensor.sub(other) -> Tensor
     Elementwise subtraction: self - other
     """
-    return (PTOProgramBuilder("tensor_sub")
+    return (PTOFunctionBuilder("tensor_sub")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -81,7 +81,7 @@ def tensor_mul(rows=8, cols=8):
     Tensor.mul(other) -> Tensor
     Elementwise multiplication: self * other
     """
-    return (PTOProgramBuilder("tensor_mul")
+    return (PTOFunctionBuilder("tensor_mul")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -100,7 +100,7 @@ def tensor_div(rows=8, cols=8):
     Tensor.div(other) -> Tensor
     Elementwise division: self / other
     """
-    return (PTOProgramBuilder("tensor_div")
+    return (PTOFunctionBuilder("tensor_div")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -119,7 +119,7 @@ def tensor_neg(rows=8, cols=8):
     Tensor.neg() -> Tensor
     Negation: -self
     """
-    return (PTOProgramBuilder("tensor_neg")
+    return (PTOFunctionBuilder("tensor_neg")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -135,7 +135,7 @@ def tensor_abs(rows=8, cols=8):
     Tensor.abs() -> Tensor
     Absolute value: |self|
     """
-    return (PTOProgramBuilder("tensor_abs")
+    return (PTOFunctionBuilder("tensor_abs")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -152,7 +152,7 @@ def tensor_pow(exponent=2.0, rows=8, cols=8):
     Power: self ** exponent (for exponent=2, uses self*self)
     """
     if exponent == 2.0:
-        return (PTOProgramBuilder("tensor_pow2")
+        return (PTOFunctionBuilder("tensor_pow2")
             .tile("self", rows, cols, DEFAULT_DTYPE)
             .tile("result", rows, cols, DEFAULT_DTYPE)
             .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -163,7 +163,7 @@ def tensor_pow(exponent=2.0, rows=8, cols=8):
             .build())
     else:
         # General power: exp(exponent * log(self))
-        return (PTOProgramBuilder("tensor_pow")
+        return (PTOFunctionBuilder("tensor_pow")
             .tile("self", rows, cols, DEFAULT_DTYPE)
             .tile("log_self", rows, cols, DEFAULT_DTYPE)
             .tile("scaled", rows, cols, DEFAULT_DTYPE)
@@ -183,7 +183,7 @@ def tensor_sqrt(rows=8, cols=8):
     Tensor.sqrt() -> Tensor
     Square root: sqrt(self)
     """
-    return (PTOProgramBuilder("tensor_sqrt")
+    return (PTOFunctionBuilder("tensor_sqrt")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -199,7 +199,7 @@ def tensor_rsqrt(rows=8, cols=8):
     Tensor.rsqrt() -> Tensor
     Reciprocal square root: 1/sqrt(self)
     """
-    return (PTOProgramBuilder("tensor_rsqrt")
+    return (PTOFunctionBuilder("tensor_rsqrt")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -215,7 +215,7 @@ def tensor_reciprocal(rows=8, cols=8):
     Tensor.reciprocal() -> Tensor
     Reciprocal: 1/self
     """
-    return (PTOProgramBuilder("tensor_reciprocal")
+    return (PTOFunctionBuilder("tensor_reciprocal")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -231,7 +231,7 @@ def tensor_square(rows=8, cols=8):
     Tensor.square() -> Tensor
     Square: self * self
     """
-    return (PTOProgramBuilder("tensor_square")
+    return (PTOFunctionBuilder("tensor_square")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -247,7 +247,7 @@ def tensor_addcmul(value=1.0, rows=8, cols=8):
     Tensor.addcmul(tensor1, tensor2, value=1) -> Tensor
     self + value * tensor1 * tensor2
     """
-    return (PTOProgramBuilder("tensor_addcmul")
+    return (PTOFunctionBuilder("tensor_addcmul")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("tensor1", rows, cols, DEFAULT_DTYPE)
         .tile("tensor2", rows, cols, DEFAULT_DTYPE)
@@ -273,7 +273,7 @@ def tensor_addcdiv(value=1.0, rows=8, cols=8):
     Tensor.addcdiv(tensor1, tensor2, value=1) -> Tensor
     self + value * tensor1 / tensor2
     """
-    return (PTOProgramBuilder("tensor_addcdiv")
+    return (PTOFunctionBuilder("tensor_addcdiv")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("tensor1", rows, cols, DEFAULT_DTYPE)
         .tile("tensor2", rows, cols, DEFAULT_DTYPE)
@@ -304,7 +304,7 @@ def tensor_sin(rows=8, cols=8):
     Sine: sin(self)
     Approximation using Taylor series: x - x³/6 + x⁵/120
     """
-    return (PTOProgramBuilder("tensor_sin")
+    return (PTOFunctionBuilder("tensor_sin")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("x3", rows, cols, DEFAULT_DTYPE)
@@ -333,7 +333,7 @@ def tensor_cos(rows=8, cols=8):
     Cosine: cos(self)
     Approximation: 1 - x²/2 + x⁴/24
     """
-    return (PTOProgramBuilder("tensor_cos")
+    return (PTOFunctionBuilder("tensor_cos")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("x4", rows, cols, DEFAULT_DTYPE)
@@ -361,7 +361,7 @@ def tensor_tan(rows=8, cols=8):
     Tensor.tan() -> Tensor
     Tangent: tan(self) = sin(self)/cos(self)
     """
-    return (PTOProgramBuilder("tensor_tan")
+    return (PTOFunctionBuilder("tensor_tan")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("x3", rows, cols, DEFAULT_DTYPE)
@@ -406,7 +406,7 @@ def tensor_sinh(rows=8, cols=8):
     Tensor.sinh() -> Tensor
     Hyperbolic sine: (exp(x) - exp(-x)) / 2
     """
-    return (PTOProgramBuilder("tensor_sinh")
+    return (PTOFunctionBuilder("tensor_sinh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -430,7 +430,7 @@ def tensor_cosh(rows=8, cols=8):
     Tensor.cosh() -> Tensor
     Hyperbolic cosine: (exp(x) + exp(-x)) / 2
     """
-    return (PTOProgramBuilder("tensor_cosh")
+    return (PTOFunctionBuilder("tensor_cosh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("neg_x", rows, cols, DEFAULT_DTYPE)
         .tile("exp_x", rows, cols, DEFAULT_DTYPE)
@@ -454,7 +454,7 @@ def tensor_tanh(rows=8, cols=8):
     Tensor.tanh() -> Tensor
     Hyperbolic tangent: (exp(2x) - 1) / (exp(2x) + 1)
     """
-    return (PTOProgramBuilder("tensor_tanh")
+    return (PTOFunctionBuilder("tensor_tanh")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("exp_2x", rows, cols, DEFAULT_DTYPE)
@@ -478,7 +478,7 @@ def tensor_asin(rows=8, cols=8):
     Tensor.asin() -> Tensor
     Arc sine: asin(x) ≈ x + x³/6 + 3x⁵/40 (for small x)
     """
-    return (PTOProgramBuilder("tensor_asin")
+    return (PTOFunctionBuilder("tensor_asin")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("x3", rows, cols, DEFAULT_DTYPE)
@@ -507,7 +507,7 @@ def tensor_acos(rows=8, cols=8):
     Arc cosine: acos(x) = π/2 - asin(x)
     """
     pi_over_2 = 1.5707963267948966
-    return (PTOProgramBuilder("tensor_acos")
+    return (PTOFunctionBuilder("tensor_acos")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("x3", rows, cols, DEFAULT_DTYPE)
@@ -539,7 +539,7 @@ def tensor_atan(rows=8, cols=8):
     Tensor.atan() -> Tensor
     Arc tangent: atan(x) ≈ x - x³/3 + x⁵/5 (for small x)
     """
-    return (PTOProgramBuilder("tensor_atan")
+    return (PTOFunctionBuilder("tensor_atan")
         .tile("x", rows, cols, DEFAULT_DTYPE)
         .tile("x2", rows, cols, DEFAULT_DTYPE)
         .tile("x3", rows, cols, DEFAULT_DTYPE)
@@ -571,7 +571,7 @@ def tensor_exp(rows=8, cols=8):
     Tensor.exp() -> Tensor
     Exponential: exp(self)
     """
-    return (PTOProgramBuilder("tensor_exp")
+    return (PTOFunctionBuilder("tensor_exp")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -588,7 +588,7 @@ def tensor_exp2(rows=8, cols=8):
     Base-2 exponential: 2^self = exp(self * ln(2))
     """
     ln2 = 0.6931471805599453
-    return (PTOProgramBuilder("tensor_exp2")
+    return (PTOFunctionBuilder("tensor_exp2")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("scaled", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -606,7 +606,7 @@ def tensor_expm1(rows=8, cols=8):
     Tensor.expm1() -> Tensor
     exp(self) - 1
     """
-    return (PTOProgramBuilder("tensor_expm1")
+    return (PTOFunctionBuilder("tensor_expm1")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("exp_val", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -624,7 +624,7 @@ def tensor_log(rows=8, cols=8):
     Tensor.log() -> Tensor
     Natural logarithm: ln(self)
     """
-    return (PTOProgramBuilder("tensor_log")
+    return (PTOFunctionBuilder("tensor_log")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -641,7 +641,7 @@ def tensor_log2(rows=8, cols=8):
     Base-2 logarithm: log2(self) = ln(self) / ln(2)
     """
     inv_ln2 = 1.4426950408889634  # 1/ln(2)
-    return (PTOProgramBuilder("tensor_log2")
+    return (PTOFunctionBuilder("tensor_log2")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("ln_val", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -660,7 +660,7 @@ def tensor_log10(rows=8, cols=8):
     Base-10 logarithm: log10(self) = ln(self) / ln(10)
     """
     inv_ln10 = 0.4342944819032518  # 1/ln(10)
-    return (PTOProgramBuilder("tensor_log10")
+    return (PTOFunctionBuilder("tensor_log10")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("ln_val", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -678,7 +678,7 @@ def tensor_log1p(rows=8, cols=8):
     Tensor.log1p() -> Tensor
     ln(1 + self)
     """
-    return (PTOProgramBuilder("tensor_log1p")
+    return (PTOFunctionBuilder("tensor_log1p")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("one_plus", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -700,7 +700,7 @@ def tensor_max_elementwise(rows=8, cols=8):
     Tensor.max(other) -> Tensor
     Elementwise maximum: max(self, other)
     """
-    return (PTOProgramBuilder("tensor_max_elementwise")
+    return (PTOFunctionBuilder("tensor_max_elementwise")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -719,7 +719,7 @@ def tensor_min_elementwise(rows=8, cols=8):
     Tensor.min(other) -> Tensor
     Elementwise minimum: min(self, other)
     """
-    return (PTOProgramBuilder("tensor_min_elementwise")
+    return (PTOFunctionBuilder("tensor_min_elementwise")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -738,7 +738,7 @@ def tensor_clamp(min_val=0.0, max_val=1.0, rows=8, cols=8):
     Tensor.clamp(min, max) -> Tensor
     Clamp values to [min, max]
     """
-    return (PTOProgramBuilder("tensor_clamp")
+    return (PTOFunctionBuilder("tensor_clamp")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("min_tile", rows, cols, DEFAULT_DTYPE)
         .tile("max_tile", rows, cols, DEFAULT_DTYPE)
@@ -772,7 +772,7 @@ def tensor_sum(rows=8, cols=8):
     Tensor.sum() -> Tensor
     Sum of all elements
     """
-    return (PTOProgramBuilder("tensor_sum")
+    return (PTOFunctionBuilder("tensor_sum")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("result", 1, 1, DEFAULT_DTYPE)
@@ -790,7 +790,7 @@ def tensor_mean(rows=8, cols=8):
     Tensor.mean() -> Tensor
     Mean of all elements
     """
-    return (PTOProgramBuilder("tensor_mean")
+    return (PTOFunctionBuilder("tensor_mean")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("total", 1, 1, DEFAULT_DTYPE)
@@ -811,7 +811,7 @@ def tensor_std(rows=8, cols=8):
     Standard deviation: sqrt(var)
     """
     n = float(rows * cols)
-    return (PTOProgramBuilder("tensor_std")
+    return (PTOFunctionBuilder("tensor_std")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("total", 1, 1, DEFAULT_DTYPE)
@@ -848,7 +848,7 @@ def tensor_var(rows=8, cols=8):
     Variance: mean((self - mean)²)
     """
     n = float(rows * cols)
-    return (PTOProgramBuilder("tensor_var")
+    return (PTOFunctionBuilder("tensor_var")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("total", 1, 1, DEFAULT_DTYPE)
@@ -879,7 +879,7 @@ def tensor_prod(rows=8, cols=8):
     Tensor.prod() -> Tensor
     Product of all elements: exp(sum(log(self)))
     """
-    return (PTOProgramBuilder("tensor_prod")
+    return (PTOFunctionBuilder("tensor_prod")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("log_self", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
@@ -905,7 +905,7 @@ def tensor_mm(m=8, k=8, n=8):
     Tensor.mm(mat2) -> Tensor
     Matrix multiplication: self @ mat2
     """
-    return (PTOProgramBuilder("tensor_mm")
+    return (PTOFunctionBuilder("tensor_mm")
         .tile("self", m, k, DEFAULT_DTYPE)
         .tile("mat2", k, n, DEFAULT_DTYPE)
         .tile("result", m, n, DEFAULT_DTYPE)
@@ -932,7 +932,7 @@ def tensor_dot(size=64):
     Tensor.dot(other) -> Tensor
     Dot product of two 1D tensors (represented as 1xN tile)
     """
-    return (PTOProgramBuilder("tensor_dot")
+    return (PTOFunctionBuilder("tensor_dot")
         .tile("self", 1, size, DEFAULT_DTYPE)
         .tile("other", 1, size, DEFAULT_DTYPE)
         .tile("prod", 1, size, DEFAULT_DTYPE)
@@ -953,7 +953,7 @@ def tensor_mv(m=8, n=8):
     Tensor.mv(vec) -> Tensor
     Matrix-vector multiplication: self @ vec
     """
-    return (PTOProgramBuilder("tensor_mv")
+    return (PTOFunctionBuilder("tensor_mv")
         .tile("self", m, n, DEFAULT_DTYPE)
         .tile("vec", n, 1, DEFAULT_DTYPE)
         .tile("result", m, 1, DEFAULT_DTYPE)
@@ -976,7 +976,7 @@ def tensor_sigmoid(rows=8, cols=8):
     Tensor.sigmoid() -> Tensor
     Sigmoid: 1 / (1 + exp(-self))
     """
-    return (PTOProgramBuilder("tensor_sigmoid")
+    return (PTOFunctionBuilder("tensor_sigmoid")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("neg_self", rows, cols, DEFAULT_DTYPE)
         .tile("exp_neg", rows, cols, DEFAULT_DTYPE)
@@ -998,7 +998,7 @@ def tensor_relu(rows=8, cols=8):
     Tensor.relu() -> Tensor
     ReLU: max(0, self)
     """
-    return (PTOProgramBuilder("tensor_relu")
+    return (PTOFunctionBuilder("tensor_relu")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)
@@ -1014,7 +1014,7 @@ def tensor_softmax(dim=-1, rows=8, cols=8):
     Tensor.softmax(dim) -> Tensor
     Softmax along specified dimension
     """
-    return (PTOProgramBuilder("tensor_softmax")
+    return (PTOFunctionBuilder("tensor_softmax")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_mean", rows, 1, DEFAULT_DTYPE)
         .tile("shifted", rows, cols, DEFAULT_DTYPE)
@@ -1039,7 +1039,7 @@ def tensor_log_softmax(dim=-1, rows=8, cols=8):
     Tensor.log_softmax(dim) -> Tensor
     Log-softmax along specified dimension
     """
-    return (PTOProgramBuilder("tensor_log_softmax")
+    return (PTOFunctionBuilder("tensor_log_softmax")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_mean", rows, 1, DEFAULT_DTYPE)
         .tile("shifted", rows, cols, DEFAULT_DTYPE)
@@ -1072,7 +1072,7 @@ def tensor_sign(rows=8, cols=8):
     Approximation: x / (|x| + eps)
     """
     eps = 1e-7
-    return (PTOProgramBuilder("tensor_sign")
+    return (PTOFunctionBuilder("tensor_sign")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("abs_self", rows, cols, DEFAULT_DTYPE)
         .tile("abs_plus_eps", rows, cols, DEFAULT_DTYPE)
@@ -1092,7 +1092,7 @@ def tensor_lerp(weight=0.5, rows=8, cols=8):
     Tensor.lerp(end, weight) -> Tensor
     Linear interpolation: self + weight * (end - self)
     """
-    return (PTOProgramBuilder("tensor_lerp")
+    return (PTOFunctionBuilder("tensor_lerp")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("end", rows, cols, DEFAULT_DTYPE)
         .tile("diff", rows, cols, DEFAULT_DTYPE)
@@ -1115,7 +1115,7 @@ def tensor_logit(eps=1e-6, rows=8, cols=8):
     Tensor.logit(eps) -> Tensor
     Logit: log(x / (1 - x))
     """
-    return (PTOProgramBuilder("tensor_logit")
+    return (PTOFunctionBuilder("tensor_logit")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("one_minus", rows, cols, DEFAULT_DTYPE)
         .tile("ratio", rows, cols, DEFAULT_DTYPE)
@@ -1137,7 +1137,7 @@ def tensor_xlogy(rows=8, cols=8):
     Tensor.xlogy(other) -> Tensor
     Computes self * log(other)
     """
-    return (PTOProgramBuilder("tensor_xlogy")
+    return (PTOFunctionBuilder("tensor_xlogy")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("log_other", rows, cols, DEFAULT_DTYPE)
@@ -1158,7 +1158,7 @@ def tensor_hypot(rows=8, cols=8):
     Tensor.hypot(other) -> Tensor
     Hypotenuse: sqrt(self² + other²)
     """
-    return (PTOProgramBuilder("tensor_hypot")
+    return (PTOFunctionBuilder("tensor_hypot")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("other", rows, cols, DEFAULT_DTYPE)
         .tile("self_sq", rows, cols, DEFAULT_DTYPE)
@@ -1184,7 +1184,7 @@ def tensor_frac(rows=8, cols=8):
     Fractional part: self - floor(self)
     Approximation: self - (self - 0.5).round() for values near integers
     """
-    return (PTOProgramBuilder("tensor_frac")
+    return (PTOFunctionBuilder("tensor_frac")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("ones", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -1203,7 +1203,7 @@ def tensor_cumsum(dim=1, rows=8, cols=8):
     Tensor.cumsum(dim) -> Tensor
     Cumulative sum along dimension (simplified row-wise)
     """
-    return (PTOProgramBuilder("tensor_cumsum")
+    return (PTOFunctionBuilder("tensor_cumsum")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("row_sum", rows, 1, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
@@ -1222,7 +1222,7 @@ def tensor_diff(n=1, dim=-1, rows=8, cols=8):
     Finite difference along dimension
     Simplified: returns input (actual diff requires complex indexing)
     """
-    return (PTOProgramBuilder("tensor_diff")
+    return (PTOFunctionBuilder("tensor_diff")
         .tile("self", rows, cols, DEFAULT_DTYPE)
         .tile("result", rows, cols, DEFAULT_DTYPE)
         .memref("input", MemorySpace.GM, DEFAULT_DTYPE)

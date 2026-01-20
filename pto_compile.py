@@ -178,12 +178,12 @@ class PTOProgram:
 # DSL Builder - Fluent Interface
 # =============================================================================
 
-class PTOProgramBuilder:
+class PTOFunctionBuilder:
     """
     Fluent interface for building PTO programs.
     
     Example:
-        program = (PTOProgramBuilder("matmul")
+        program = (PTOFunctionBuilder("matmul")
             .tile("a", 64, 64, ElementType.F16)
             .tile("b", 64, 64, ElementType.F16)
             .tile("c", 64, 64, ElementType.F32)
@@ -226,13 +226,13 @@ class PTOProgramBuilder:
     
     # Declaration methods
     def tile(self, name: str, rows: int, cols: int, 
-             dtype: ElementType = ElementType.F32) -> "PTOProgramBuilder":
+             dtype: ElementType = ElementType.F32) -> "PTOFunctionBuilder":
         """Declare a tile variable."""
         self.program.add_tile(name, rows, cols, dtype)
         self.symbol_table.define(name, Symbol(name, "tile", TileType.create(rows, cols, dtype)))
         return self
     
-    def scalar(self, name: str, dtype: ElementType = ElementType.F32) -> "PTOProgramBuilder":
+    def scalar(self, name: str, dtype: ElementType = ElementType.F32) -> "PTOFunctionBuilder":
         """Declare a scalar variable."""
         self.program.add_scalar(name, dtype)
         self.symbol_table.define(name, Symbol(name, "scalar", dtype))
@@ -240,7 +240,7 @@ class PTOProgramBuilder:
     
     def memref(self, name: str, space: MemorySpace = MemorySpace.GM,
                dtype: ElementType = ElementType.F32,
-               shape: Optional[Tuple[int, int]] = None) -> "PTOProgramBuilder":
+               shape: Optional[Tuple[int, int]] = None) -> "PTOFunctionBuilder":
         """Declare a memory reference."""
         tile_shape = TileShape(*shape) if shape else None
         self.program.add_memref(name, space, dtype, tile_shape)
@@ -248,7 +248,7 @@ class PTOProgramBuilder:
         return self
     
     # Tile memory operations
-    def load(self, dst: str, src_mem: str, row: int = 0, col: int = 0) -> "PTOProgramBuilder":
+    def load(self, dst: str, src_mem: str, row: int = 0, col: int = 0) -> "PTOFunctionBuilder":
         """Load data from memory into a tile."""
         self._add_instr(TLOAD(
             dst=self._get_tile(dst),
@@ -258,7 +258,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def store(self, src: str, dst_mem: str, row: int = 0, col: int = 0) -> "PTOProgramBuilder":
+    def store(self, src: str, dst_mem: str, row: int = 0, col: int = 0) -> "PTOFunctionBuilder":
         """Store data from a tile into memory."""
         self._add_instr(TSTORE(
             src=self._get_tile(src),
@@ -269,7 +269,7 @@ class PTOProgramBuilder:
         return self
     
     # Tile arithmetic operations
-    def add(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def add(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Elementwise add of two tiles."""
         self._add_instr(TADD(
             dst=self._get_tile(dst),
@@ -278,7 +278,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def sub(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def sub(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Elementwise subtract of two tiles."""
         self._add_instr(TSUB(
             dst=self._get_tile(dst),
@@ -287,7 +287,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def mul(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def mul(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Elementwise multiply of two tiles."""
         self._add_instr(TMUL(
             dst=self._get_tile(dst),
@@ -296,7 +296,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def div(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def div(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Elementwise divide of two tiles."""
         self._add_instr(TDIV(
             dst=self._get_tile(dst),
@@ -312,7 +312,7 @@ class PTOProgramBuilder:
         name = f"_imm_{abs(hash(value)) % 10000}"
         return ScalarOperand(name=str(value), element_type=ElementType.F32)
     
-    def adds(self, dst: str, src: str, scalar: float) -> "PTOProgramBuilder":
+    def adds(self, dst: str, src: str, scalar: float) -> "PTOFunctionBuilder":
         """Add scalar to all elements of tile."""
         self._add_instr(TADDS(
             dst=self._get_tile(dst),
@@ -321,7 +321,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def muls(self, dst: str, src: str, scalar: float) -> "PTOProgramBuilder":
+    def muls(self, dst: str, src: str, scalar: float) -> "PTOFunctionBuilder":
         """Multiply all elements of tile by scalar."""
         self._add_instr(TMULS(
             dst=self._get_tile(dst),
@@ -330,7 +330,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def divs(self, dst: str, src: str, scalar: float) -> "PTOProgramBuilder":
+    def divs(self, dst: str, src: str, scalar: float) -> "PTOFunctionBuilder":
         """Divide all elements of tile by scalar."""
         self._add_instr(TDIVS(
             dst=self._get_tile(dst),
@@ -340,7 +340,7 @@ class PTOProgramBuilder:
         return self
     
     # Matrix operations
-    def matmul(self, dst: str, a: str, b: str) -> "PTOProgramBuilder":
+    def matmul(self, dst: str, a: str, b: str) -> "PTOFunctionBuilder":
         """Matrix multiply."""
         self._add_instr(TMATMUL(
             dst=self._get_tile(dst),
@@ -349,7 +349,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def matmul_acc(self, dst: str, acc: str, a: str, b: str) -> "PTOProgramBuilder":
+    def matmul_acc(self, dst: str, acc: str, a: str, b: str) -> "PTOFunctionBuilder":
         """Matrix multiply with accumulator."""
         self._add_instr(TMATMUL_ACC(
             dst=self._get_tile(dst),
@@ -360,7 +360,7 @@ class PTOProgramBuilder:
         return self
     
     # Activation functions
-    def relu(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def relu(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply ReLU activation."""
         self._add_instr(TRELU(
             dst=self._get_tile(dst),
@@ -368,7 +368,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def exp(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def exp(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply exponential."""
         self._add_instr(TEXP(
             dst=self._get_tile(dst),
@@ -376,7 +376,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def log(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def log(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply natural logarithm."""
         self._add_instr(TLOG(
             dst=self._get_tile(dst),
@@ -384,7 +384,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def sqrt(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def sqrt(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply square root."""
         self._add_instr(TSQRT(
             dst=self._get_tile(dst),
@@ -392,7 +392,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def abs(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def abs(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply absolute value."""
         self._add_instr(TABS(
             dst=self._get_tile(dst),
@@ -400,7 +400,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def neg(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def neg(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply negation."""
         self._add_instr(TNEG(
             dst=self._get_tile(dst),
@@ -408,7 +408,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def rsqrt(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def rsqrt(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply reciprocal square root (1/sqrt(x))."""
         self._add_instr(TRSQRT(
             dst=self._get_tile(dst),
@@ -416,7 +416,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def recip(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def recip(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Apply reciprocal (1/x)."""
         self._add_instr(TRECIP(
             dst=self._get_tile(dst),
@@ -425,7 +425,7 @@ class PTOProgramBuilder:
         return self
     
     # Binary max/min operations
-    def max(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def max(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Elementwise maximum of two tiles."""
         self._add_instr(TMAX(
             dst=self._get_tile(dst),
@@ -434,7 +434,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def min(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def min(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Elementwise minimum of two tiles."""
         self._add_instr(TMIN(
             dst=self._get_tile(dst),
@@ -444,7 +444,7 @@ class PTOProgramBuilder:
         return self
     
     # Broadcast operations
-    def expands(self, dst: str, value: float) -> "PTOProgramBuilder":
+    def expands(self, dst: str, value: float) -> "PTOFunctionBuilder":
         """Broadcast a scalar value to all elements of a tile."""
         self._add_instr(TEXPANDS(
             dst=self._get_tile(dst),
@@ -452,7 +452,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def rowexpand(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def rowexpand(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Broadcast first element of each row across the row."""
         self._add_instr(TROWEXPAND(
             dst=self._get_tile(dst),
@@ -460,7 +460,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def colexpand(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def colexpand(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Broadcast first element of each column across the column."""
         self._add_instr(TCOLEXPAND(
             dst=self._get_tile(dst),
@@ -469,7 +469,7 @@ class PTOProgramBuilder:
         return self
     
     # Row-wise broadcast operations (src1 is [N,1], broadcast to [N,M])
-    def rowexpandsub(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def rowexpandsub(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Row-wise broadcast subtract: dst = src0 - broadcast(src1)."""
         self._add_instr(TROWEXPANDSUB(
             dst=self._get_tile(dst),
@@ -478,7 +478,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def rowexpanddiv(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def rowexpanddiv(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Row-wise broadcast divide: dst = src0 / broadcast(src1)."""
         self._add_instr(TROWEXPANDDIV(
             dst=self._get_tile(dst),
@@ -487,7 +487,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def rowexpandmul(self, dst: str, src0: str, src1: str) -> "PTOProgramBuilder":
+    def rowexpandmul(self, dst: str, src0: str, src1: str) -> "PTOFunctionBuilder":
         """Row-wise broadcast multiply: dst = src0 * broadcast(src1)."""
         self._add_instr(TROWEXPANDMUL(
             dst=self._get_tile(dst),
@@ -497,7 +497,7 @@ class PTOProgramBuilder:
         return self
     
     # Reduction operations
-    def rowsum(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def rowsum(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Sum reduction across rows."""
         self._add_instr(TROWSUM(
             dst=self._get_tile(dst),
@@ -505,7 +505,7 @@ class PTOProgramBuilder:
         ))
         return self
     
-    def colsum(self, dst: str, src: str) -> "PTOProgramBuilder":
+    def colsum(self, dst: str, src: str) -> "PTOFunctionBuilder":
         """Sum reduction across columns."""
         self._add_instr(TCOLSUM(
             dst=self._get_tile(dst),
@@ -514,7 +514,7 @@ class PTOProgramBuilder:
         return self
     
     # Loop constructs
-    def for_loop(self, iv_name: str, lb: int, ub: int, step: int = 1) -> "PTOProgramBuilder":
+    def for_loop(self, iv_name: str, lb: int, ub: int, step: int = 1) -> "PTOFunctionBuilder":
         """Begin a FOR loop."""
         self.symbol_table.push_scope()
         self.symbol_table.define(iv_name, Symbol(iv_name, "index", ElementType.INDEX))
@@ -528,7 +528,7 @@ class PTOProgramBuilder:
         self._loop_stack.append([])
         return self
     
-    def end_for(self) -> "PTOProgramBuilder":
+    def end_for(self) -> "PTOFunctionBuilder":
         """End a FOR loop."""
         if not self._loop_stack:
             raise ValidationError("ENDFOR without matching FOR")
@@ -552,7 +552,7 @@ class PTOProgramBuilder:
         return self
     
     def tile_loop(self, iv_name: str, tile_name: str, 
-                  dimension: str = "rows", step: int = 1) -> "PTOProgramBuilder":
+                  dimension: str = "rows", step: int = 1) -> "PTOFunctionBuilder":
         """
         Begin a loop that iterates based on tile dimensions.
         
@@ -571,7 +571,7 @@ class PTOProgramBuilder:
         return self.for_loop(iv_name, 0, bound, step)
     
     def nested_tile_loop(self, outer_iv: str, inner_iv: str, tile_name: str,
-                         outer_step: int = 1, inner_step: int = 1) -> "PTOProgramBuilder":
+                         outer_step: int = 1, inner_step: int = 1) -> "PTOFunctionBuilder":
         """
         Begin a 2-level nested loop that iterates over tile dimensions.
         
@@ -589,7 +589,7 @@ class PTOProgramBuilder:
         
         return self
     
-    def end_nested_loop(self) -> "PTOProgramBuilder":
+    def end_nested_loop(self) -> "PTOFunctionBuilder":
         """End a 2-level nested loop."""
         self.end_for()  # End inner
         self.end_for()  # End outer
@@ -687,6 +687,7 @@ class CodeGenerator:
         """Generate PTO assembly code."""
         self.output = []
         self._emit_header()
+        self._emit_function_start()
         self._emit_declarations()
         self._emit_instructions()
         self._emit_footer()
@@ -703,21 +704,33 @@ class CodeGenerator:
         self._emit(f"// Generated by PTO ISA Compiler")
         self._emit("")
     
+    def _emit_function_start(self):
+        """Emit function definition with name and parameters."""
+        # Collect memory references for function parameters
+        memref_params = []
+        for name, memref_type in self.program.memref_declarations.items():
+            memref_params.append(f"%{name}: {memref_type}")
+        
+        # Generate function signature
+        if memref_params:
+            params_str = ", ".join(memref_params)
+            self._emit(f"func @{self.program.name}({params_str}) {{")
+        else:
+            self._emit(f"func @{self.program.name}() {{")
+        
+        self.indent_level += 1
+    
     def _emit_declarations(self):
         """Emit variable declarations."""
         self._emit("// Tile Declarations")
         for name, tile_type in self.program.tile_declarations.items():
-            self._emit(f"// %{name} : {tile_type}")
+            self._emit(f"%{name} = alloc_tile : {tile_type}")
         
-        self._emit("")
-        self._emit("// Scalar Declarations")
-        for name, dtype in self.program.scalar_declarations.items():
-            self._emit(f"// %{name} : {dtype.value}")
-        
-        self._emit("")
-        self._emit("// MemRef Declarations")
-        for name, memref_type in self.program.memref_declarations.items():
-            self._emit(f"// %{name} : {memref_type}")
+        if self.program.scalar_declarations:
+            self._emit("")
+            self._emit("// Scalar Declarations")
+            for name, dtype in self.program.scalar_declarations.items():
+                self._emit(f"%{name} = alloc_scalar : {dtype.value}")
         
         self._emit("")
     
@@ -733,17 +746,17 @@ class CodeGenerator:
             self._emit(instr.to_pto_as())
             self.indent_level += 1
         elif isinstance(instr, ENDFOR):
-            self.indent_level = max(0, self.indent_level - 1)
+            self.indent_level = max(1, self.indent_level - 1)  # Keep at least 1 for function body
             self._emit(instr.to_pto_as())
         elif isinstance(instr, IF):
             self._emit(instr.to_pto_as())
             self.indent_level += 1
         elif isinstance(instr, ELSE):
-            self.indent_level = max(0, self.indent_level - 1)
+            self.indent_level = max(1, self.indent_level - 1)
             self._emit(instr.to_pto_as())
             self.indent_level += 1
         elif isinstance(instr, ENDIF):
-            self.indent_level = max(0, self.indent_level - 1)
+            self.indent_level = max(1, self.indent_level - 1)
             self._emit(instr.to_pto_as())
         else:
             self._emit(instr.to_pto_as())
@@ -751,7 +764,9 @@ class CodeGenerator:
     def _emit_footer(self):
         """Emit program footer."""
         self._emit("")
-        self._emit("// End of program")
+        self._emit("return")
+        self.indent_level = 0
+        self._emit("}")
 
 
 # =============================================================================
@@ -1762,20 +1777,37 @@ class MultiBackendCodeGenerator:
         
         lines = [f"// PTO Program: {program.name}", arm64_generate_header()]
         
+        # Collect memory references for function parameters
+        memref_params = []
+        for name, memref_type in program.memref_declarations.items():
+            c_type = ARM64_TYPE_MAP.get(memref_type.element_type.value, "float")
+            memref_params.append(f"{c_type}* {name}")
+        
+        # Generate function signature
+        if memref_params:
+            func_params = ", ".join(memref_params)
+            lines.append(f"void {program.name}({func_params}) {{")
+        else:
+            lines.append(f"void {program.name}(void) {{")
+        
+        # Declare tiles as local variables inside the function
         for name, info in tile_info.items():
             c_type = ARM64_TYPE_MAP.get(info.dtype, "float")
-            lines.append(f"{c_type} {name}[{info.rows}][{info.cols}];")
+            lines.append(f"    {c_type} {name}[{info.rows}][{info.cols}];")
         lines.append("")
         
         if self.enable_fusion:
             optimizer = LoopFusionOptimizer(tile_info)
             fused_result = optimizer.optimize(mock_instructions)
-            lines.append(f"// Loop fusion: {optimizer.stats['fusion_savings']} loop overheads saved\n")
+            lines.append(f"    // Loop fusion: {optimizer.stats['fusion_savings']} loop overheads saved\n")
             
             fused_codegen = FusedCodeGenerator()
             for item in fused_result:
                 if isinstance(item, FusedLoop):
-                    lines.extend(fused_codegen.generate_fused_loop(item))
+                    # Indent the fused loop code
+                    fused_lines = fused_codegen.generate_fused_loop(item)
+                    for fused_line in fused_lines:
+                        lines.append(f"    {fused_line}" if fused_line else "")
                     lines.append("")
                 elif isinstance(item, FusionBarrier):
                     instr = item.raw_instr
@@ -1783,9 +1815,13 @@ class MultiBackendCodeGenerator:
                     rows = info.rows if info else 8
                     cols = info.cols if info else 8
                     dtype = info.dtype if info else "f32"
-                    lines.extend(_gen_arm64_barrier_op(instr, rows, cols, dtype, tile_info))
+                    # Indent the barrier code
+                    barrier_lines = _gen_arm64_barrier_op(instr, rows, cols, dtype, tile_info)
+                    for barrier_line in barrier_lines:
+                        lines.append(f"    {barrier_line}" if barrier_line else "")
                     lines.append("")
         
+        lines.append("}")
         return "\n".join(lines)
     
     def generate_cuda(self, program) -> str:
@@ -1926,7 +1962,7 @@ class MultiBackendCodeGenerator:
         Generate code for all backends and save to files.
         
         Args:
-            program: PTOProgram built using PTOProgramBuilder
+            program: PTOProgram built using PTOFunctionBuilder
             output_prefix: Category name for output subdirectory (e.g., "sinh_taylor", "aten_primitives")
             output_base_dir: Base directory for output
             
@@ -2013,7 +2049,7 @@ if __name__ == "__main__":
     print("Example 1: Simple Matrix Multiply")
     print("=" * 60)
     
-    program1 = (PTOProgramBuilder("matmul_example")
+    program1 = (PTOFunctionBuilder("matmul_example")
         # Declare tiles
         .tile("a", 64, 64, ElementType.F16)
         .tile("b", 64, 64, ElementType.F16)
@@ -2040,7 +2076,7 @@ if __name__ == "__main__":
     print("Example 2: Tiled Matrix Multiply with Nested Loops")
     print("=" * 60)
     
-    program2 = (PTOProgramBuilder("tiled_matmul")
+    program2 = (PTOFunctionBuilder("tiled_matmul")
         # Declare tiles (smaller tiles for tiling)
         .tile("a_tile", 16, 16, ElementType.F16)
         .tile("b_tile", 16, 16, ElementType.F16)
@@ -2073,7 +2109,7 @@ if __name__ == "__main__":
     print("Example 3: MLP Forward Pass")
     print("=" * 60)
     
-    program3 = (PTOProgramBuilder("mlp_forward")
+    program3 = (PTOFunctionBuilder("mlp_forward")
         # Input, weights, bias, output tiles
         .tile("input", 64, 128, ElementType.F16)
         .tile("weight", 128, 64, ElementType.F16)

@@ -30,7 +30,7 @@ import sys
 # Add parent directory for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pto_compile import PTOProgramBuilder, PTOCompiler
+from pto_compile import PTOFunctionBuilder, PTOCompiler
 from pto_isa_definition import ElementType, MemorySpace
 
 
@@ -64,7 +64,7 @@ def scaled_dot_product_attention(seq_len=8, head_dim=8):
     """
     scale = 1.0 / (head_dim ** 0.5)  # 1/sqrt(d_k)
     
-    return (PTOProgramBuilder("scaled_dot_product_attention")
+    return (PTOFunctionBuilder("scaled_dot_product_attention")
         # Input tiles: Q, K, V of shape [seq_len, head_dim]
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
@@ -134,7 +134,7 @@ def sdpa_with_scale(seq_len=8, head_dim=8, scale=None):
     if scale is None:
         scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("sdpa_with_scale")
+    return (PTOFunctionBuilder("sdpa_with_scale")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -188,7 +188,7 @@ def attention_with_causal_mask(seq_len=8, head_dim=8):
     scale = 1.0 / (head_dim ** 0.5)
     large_neg = -1e9  # Approximation of -inf for softmax
     
-    return (PTOProgramBuilder("attention_causal_mask")
+    return (PTOFunctionBuilder("attention_causal_mask")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -255,7 +255,7 @@ def attention_with_alibi(seq_len=8, head_dim=8, alibi_slope=0.1):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("attention_alibi")
+    return (PTOFunctionBuilder("attention_alibi")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -318,7 +318,7 @@ def attention_with_relative_position_bias(seq_len=8, head_dim=8):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("attention_relative_position")
+    return (PTOFunctionBuilder("attention_relative_position")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -378,7 +378,7 @@ def attention_with_sliding_window(seq_len=8, head_dim=8, window_size=4):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("attention_sliding_window")
+    return (PTOFunctionBuilder("attention_sliding_window")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -438,7 +438,7 @@ def linear_projection_qkv(seq_len=8, d_model=64, head_dim=8):
     
     This is the first step in multi-head attention.
     """
-    return (PTOProgramBuilder("linear_projection_qkv")
+    return (PTOFunctionBuilder("linear_projection_qkv")
         .tile("X", seq_len, d_model, DEFAULT_DTYPE)
         .tile("W_Q", d_model, head_dim, DEFAULT_DTYPE)
         .tile("W_K", d_model, head_dim, DEFAULT_DTYPE)
@@ -477,7 +477,7 @@ def output_projection(seq_len=8, head_dim=8, d_model=64):
     Projects attention output back to model dimension:
     Output = Attention @ W_O
     """
-    return (PTOProgramBuilder("output_projection")
+    return (PTOFunctionBuilder("output_projection")
         .tile("attn_out", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("W_O", head_dim, d_model, DEFAULT_DTYPE)
         .tile("output", seq_len, d_model, DEFAULT_DTYPE)
@@ -504,7 +504,7 @@ def multi_head_attention_single_head(seq_len=8, head_dim=8):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("mha_single_head")
+    return (PTOFunctionBuilder("mha_single_head")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -577,7 +577,7 @@ def flex_attention_with_score_mod(seq_len=8, head_dim=8):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("flex_attention_score_mod")
+    return (PTOFunctionBuilder("flex_attention_score_mod")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -641,7 +641,7 @@ def flex_attention_with_block_mask(seq_len=8, head_dim=8):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("flex_attention_block_mask")
+    return (PTOFunctionBuilder("flex_attention_block_mask")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -716,7 +716,7 @@ def document_attention(seq_len=8, head_dim=8):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("document_attention")
+    return (PTOFunctionBuilder("document_attention")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -775,7 +775,7 @@ def prefix_lm_attention(seq_len=8, head_dim=8, prefix_len=4):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("prefix_lm_attention")
+    return (PTOFunctionBuilder("prefix_lm_attention")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -836,7 +836,7 @@ def soft_capping_attention(seq_len=8, head_dim=8, cap_value=50.0):
     """
     scale = 1.0 / (head_dim ** 0.5)
     
-    return (PTOProgramBuilder("soft_capping_attention")
+    return (PTOFunctionBuilder("soft_capping_attention")
         .tile("Q", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("K", seq_len, head_dim, DEFAULT_DTYPE)
         .tile("V", seq_len, head_dim, DEFAULT_DTYPE)
@@ -906,7 +906,7 @@ def create_causal_mask_tile(seq_len=8):
     
     FlexAttention: create_block_mask(causal_mask_fn, ...)
     """
-    return (PTOProgramBuilder("create_causal_mask")
+    return (PTOFunctionBuilder("create_causal_mask")
         .tile("mask", seq_len, seq_len, DEFAULT_DTYPE)
         .tile("ones", seq_len, seq_len, DEFAULT_DTYPE)
         .memref("mask_mem", MemorySpace.GM, DEFAULT_DTYPE)
@@ -930,7 +930,7 @@ def attention_score_to_weight(seq_len=8):
     
     This is the core normalization step in attention.
     """
-    return (PTOProgramBuilder("score_to_weight")
+    return (PTOFunctionBuilder("score_to_weight")
         .tile("scores", seq_len, seq_len, DEFAULT_DTYPE)
         .tile("row_sum", seq_len, 1, DEFAULT_DTYPE)
         .tile("shifted", seq_len, seq_len, DEFAULT_DTYPE)
