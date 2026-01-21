@@ -14,6 +14,7 @@ This document summarizes all the updates made to the PTO ISA Compiler project to
 8. [Dynamic Tiling Support](#8-dynamic-tiling-support)
 9. [Performance Results](#9-performance-results)
 10. [SRAM Constraint Analysis](#10-sram-constraint-analysis)
+11. [Memory Estimation Clarification](#11-memory-estimation-clarification)
 
 ---
 
@@ -265,6 +266,42 @@ O:  tile_rows × head_dim
 
 ### Implication
 With 256KB SRAM (Ascend 910B), maximum tile size is 64 rows. To use larger tiles (128+), would need 512KB+ SRAM.
+
+---
+
+## 11. Memory Estimation Clarification
+
+### What IS Included (Task Management Only)
+
+| Data Structure | Size | Purpose |
+|----------------|------|---------|
+| **PendingTask** | 2,864 bytes/task | Task metadata + fanout[512] array |
+| **TensorMapEntry** | 56 bytes/entry | Dependency tracking hash table |
+| **Ready Queue** | 16 KB (fixed) | Ready task queue |
+
+The largest component of `PendingTask` is the **fanout[512]** array (2 KB), which stores downstream dependent task IDs.
+
+### What is NOT Included
+
+| Memory Type | LLaMA-7B Scale |
+|-------------|----------------|
+| **Model Weights** (W_q, W_k, W_v, W_o, W_gate, W_up, W_down) | ~14 GB (fp16) / ~7 GB (int8) |
+| **Input/Output Tensors** | Depends on batch size and seq_len |
+| **InCore Tile Buffers** (Q, K, V, S, O per block) | ~144 KB per block |
+| **KV Cache** | ~4 GB for 16K context |
+| **Intermediate Activations** | Proportional to seq_len |
+
+### Example Comparison (SeqLen = 16K)
+
+```
+Task Management Memory:    ~548 MB    (what we estimate)
+Model Weights:            ~14,000 MB  (fp16)
+KV Cache:                  ~4,000 MB  (estimated)
+─────────────────────────────────────
+Total (actual inference): ~18,500 MB
+```
+
+**Conclusion**: Our memory estimates reflect only the overhead of building the task graph in the Orchestration function, NOT the memory required to actually execute the InCore functions with real model weights and activations.
 
 ---
 
