@@ -18,7 +18,8 @@ static llvm::StringRef stripDialect(llvm::StringRef opName) {
 
 static bool isPtoMetaOp(mlir::Operation *op) {
   auto name = op->getName().getStringRef();
-  return name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.tsync";
+  return name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.tsync" ||
+         name == "pto.make_tensor_view" || name == "pto.alloc_tile";
 }
 
 static bool isPtoInstrOp(mlir::Operation *op) {
@@ -166,13 +167,25 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     // Collect `.arg` types so we can choose TMOV/TSTORE enum variants correctly.
     std::map<std::string, std::string> argTypes;
     for (auto &op : block->getOperations()) {
-      if (op.getName().getStringRef() != "pto.arg")
+      auto name = op.getName().getStringRef();
+      if (name == "pto.arg") {
+        auto n = op.getAttrOfType<mlir::StringAttr>("name");
+        auto t = op.getAttrOfType<mlir::StringAttr>("type");
+        if (!n || !t)
+          continue;
+        argTypes[n.getValue().str()] = t.getValue().str();
         continue;
-      auto n = op.getAttrOfType<mlir::StringAttr>("name");
-      auto t = op.getAttrOfType<mlir::StringAttr>("type");
-      if (!n || !t)
+      }
+      if (name == "pto.alloc_tile") {
+        auto operands = readOperands(&op);
+        if (operands.empty())
+          continue;
+        auto typeSig = op.getAttrOfType<mlir::StringAttr>("typesig");
+        if (!typeSig)
+          continue;
+        argTypes[operands[0]] = typeSig.getValue().str();
         continue;
-      argTypes[n.getValue().str()] = t.getValue().str();
+      }
     }
 
     mlir::OpBuilder b(module.getContext());

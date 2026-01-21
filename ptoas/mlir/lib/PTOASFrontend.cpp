@@ -133,6 +133,13 @@ static void splitAttrAndTypeSig(std::string rest, std::string &operandsPart, std
   }
 }
 
+static std::string normalizePtoMnemonic(std::string op) {
+  op = trim(std::move(op));
+  if (op.rfind("pto.", 0) == 0)
+    op = op.substr(4);
+  return op;
+}
+
 } // namespace
 
 mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, std::string &errorOut) {
@@ -312,6 +319,56 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
       continue;
     }
 
+    // SSA-style destination binding (PTO-AS sugar):
+    //
+    //   %dst = pto.tadd %src0, %src1 : ...
+    //
+    // Lowers to the existing DPS-like internal form by inserting %dst as the first operand:
+    //
+    //   pto.tadd operands = ["%dst", "%src0", "%src1"]
+    //
+    // Also used for declaration-like helpers:
+    //   %t0 = pto.alloc_tile %addr : !pto.tile<...>
+    //   %x  = pto.make_tensor_view %arg0, ... : !pto.tensor<...>
+    auto eqPos = line.find('=');
+    if (eqPos != std::string::npos && line.rfind(".const ", 0) != 0 && line.rfind(".arg ", 0) != 0) {
+      auto lhs = trim(line.substr(0, eqPos));
+      auto rhs = trim(line.substr(eqPos + 1));
+      if (lhs.empty() || rhs.empty())
+        llvm::report_fatal_error("invalid assignment (expected: %dst = <op> ...)");
+
+      std::string opcode;
+      std::string rest;
+      auto sp = rhs.find(' ');
+      if (sp == std::string::npos) {
+        opcode = trim(rhs);
+        rest = "";
+      } else {
+        opcode = trim(rhs.substr(0, sp));
+        rest = trim(rhs.substr(sp + 1));
+      }
+
+      opcode = normalizePtoMnemonic(opcode);
+      std::string operandsPart, attrDict, typeSig;
+      splitAttrAndTypeSig(rest, operandsPart, attrDict, typeSig);
+
+      auto rhsOperands = splitTopLevelCommas(operandsPart);
+      llvm::SmallVector<mlir::Attribute> operandAttrs;
+      operandAttrs.reserve(1 + rhsOperands.size());
+      operandAttrs.push_back(b.getStringAttr(lhs));
+      for (auto &opnd : rhsOperands)
+        operandAttrs.push_back(b.getStringAttr(opnd));
+
+      mlir::OperationState st(loc, ("pto." + opcode).c_str());
+      st.addAttribute("operands", b.getArrayAttr(operandAttrs));
+      if (!attrDict.empty())
+        st.addAttribute("attrs", b.getStringAttr(attrDict));
+      if (!typeSig.empty())
+        st.addAttribute("typesig", b.getStringAttr(typeSig));
+      b.create(st);
+      continue;
+    }
+
     // Instruction: <opcode> [<operand_list>] [attr_dict] [: type_sig]
     //
     // For convenience (and to support "marker" statements like `prologue`),
@@ -326,6 +383,7 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
       opcode = trim(line.substr(0, space));
       rest = trim(line.substr(space + 1));
     }
+    opcode = normalizePtoMnemonic(opcode);
     std::string operandsPart, attrDict, typeSig;
     splitAttrAndTypeSig(rest, operandsPart, attrDict, typeSig);
 

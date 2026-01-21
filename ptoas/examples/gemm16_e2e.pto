@@ -9,21 +9,8 @@
 ;   ./ptoas/mlir/build/bin/ptoas ptoas/examples/gemm16_e2e.pto -o /tmp/gemm16.cce --insert-events --emit-bin=/tmp/gemm16.bin --arch dav-c220-cube ...
 
 prologue
-get_block_num %bn : index
-get_block_idx %bid : index
-
-.arg %a : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
-.arg %b : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
-.arg %c : !pto.tensor<dtype=f32, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
-
-; L1 tiles loaded from GM
-.arg %a_mat : !pto.tile<loc=Mat, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
-.arg %b_mat : !pto.tile<loc=Mat, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
-
-; Matmul operands / accumulator
-.arg %a_left : !pto.tile<loc=Left, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
-.arg %b_right : !pto.tile<loc=Right, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=ColMajor, fractal=512, pad=Null>
-.arg %c_acc : !pto.tile<loc=Acc, dtype=f32, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=1024, pad=Null>
+%bn = pto.get_block_num : index
+%bid = pto.get_block_idx : index
 
 .const %addr_a_mat = 0x0 : index
 .const %addr_b_mat = 0x20000 : index
@@ -31,19 +18,26 @@ get_block_idx %bid : index
 .const %addr_b_right = 0x0 : index
 .const %addr_c_acc = 0x0 : index
 
-tassign %a_mat, %addr_a_mat : (!pto.tile<...>, index)
-tassign %b_mat, %addr_b_mat : (!pto.tile<...>, index)
-tassign %a_left, %addr_a_left : (!pto.tile<...>, index)
-tassign %b_right, %addr_b_right : (!pto.tile<...>, index)
-tassign %c_acc, %addr_c_acc : (!pto.tile<...>, index)
+%a = pto.make_tensor_view %arg0, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
+%b = pto.make_tensor_view %arg1, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
+%c = pto.make_tensor_view %arg2, dtype=f32, shape=[16,16] strides=[16,1], layout=ND
 
-tload %a_mat, %a[0, 0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
-tload %b_mat, %b[0, 0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
+; L1 tiles loaded from GM
+%a_mat = pto.alloc_tile %addr_a_mat : !pto.tile<loc=Mat, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
+%b_mat = pto.alloc_tile %addr_b_mat : !pto.tile<loc=Mat, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
 
-tmov %a_left, %a_mat : (!pto.tile<...>, !pto.tile<...>)
-tmov %b_right, %b_mat : (!pto.tile<...>, !pto.tile<...>)
+; Matmul operands / accumulator
+%a_left = pto.alloc_tile %addr_a_left : !pto.tile<loc=Left, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
+%b_right = pto.alloc_tile %addr_b_right : !pto.tile<loc=Right, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=ColMajor, fractal=512, pad=Null>
+%c_acc = pto.alloc_tile %addr_c_acc : !pto.tile<loc=Acc, dtype=f32, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=1024, pad=Null>
 
-tmatmul %c_acc, %a_left, %b_right : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
-tstore %c[0, 0], %c_acc : (!pto.tensor<...>, index, index, !pto.tile<...>)
+%a_mat = pto.tload %a[0, 0]
+%b_mat = pto.tload %b[0, 0]
+
+%a_left = pto.tmov %a_mat
+%b_right = pto.tmov %b_mat
+
+%c_acc = pto.tmatmul %a_left, %b_right
+pto.tstore %c[0, 0], %c_acc
 
 epilogue

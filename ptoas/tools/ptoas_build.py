@@ -112,6 +112,49 @@ def _split_attr_and_typesig(rest: str) -> Tuple[str, str, str]:
     return text, attr_dict, type_sig
 
 
+def _normalize_opcode(op: str) -> str:
+    op = op.strip()
+    if op.startswith("pto."):
+        return op[4:]
+    return op
+
+
+def _extract_list_or_empty(s: str, key: str) -> str:
+    pos = s.find(key)
+    if pos < 0:
+        return ""
+    pos += len(key)
+    while pos < len(s) and s[pos].isspace():
+        pos += 1
+    if pos >= len(s) or s[pos] != "[":
+        return ""
+    depth = 0
+    for i in range(pos, len(s)):
+        if s[i] == "[":
+            depth += 1
+        elif s[i] == "]":
+            depth -= 1
+            if depth == 0:
+                return s[pos : i + 1]
+    return ""
+
+
+def _extract_scalar_or_empty(s: str, key: str) -> str:
+    pos = s.find(key)
+    if pos < 0:
+        return ""
+    pos += len(key)
+    while pos < len(s) and s[pos].isspace():
+        pos += 1
+    end = pos
+    while end < len(s):
+        ch = s[end]
+        if ch.isspace() or ch in ",}:":
+            break
+        end += 1
+    return s[pos:end].strip()
+
+
 def _parse_operand(op: str) -> Tuple[str, Optional[Tuple[str, str]]]:
     op = op.strip()
     m = re.fullmatch(r"(%[A-Za-z_][A-Za-z0-9_.]*)\[(.+)\]", op)
@@ -129,6 +172,7 @@ def parse_pto(path: Path) -> Tuple[List[ArgDecl], List[ConstDecl], List[Instr]]:
     args: List[ArgDecl] = []
     consts: List[ConstDecl] = []
     instrs: List[Instr] = []
+    view_alias: Dict[str, str] = {}  # viewName (no %) -> baseArg (no %)
 
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = _strip_trailing_semicolon(_strip_comment(raw)).strip()
@@ -159,23 +203,147 @@ def parse_pto(path: Path) -> Tuple[List[ArgDecl], List[ConstDecl], List[Instr]]:
             consts.append(ConstDecl(name=name[1:], literal=lit, type_str=type_str))
             continue
 
-        # Instruction: <opcode> <operands...> [attr-dict] [: type_sig]
+        const_map = {c.name: c.literal for c in consts}
+
+        def rewrite_operand(o: str) -> str:
+            o = o.strip()
+            m = re.fullmatch(r"(%[A-Za-z_][A-Za-z0-9_.]*)\[(.+)\]", o)
+            if m:
+                base = m.group(1)[1:]
+                if base in view_alias:
+                    return f"%{view_alias[base]}[{m.group(2)}]"
+                return o
+            if o.startswith("%"):
+                key = o[1:]
+                if key in view_alias:
+                    return f"%{view_alias[key]}"
+            return o
+
+        # SSA-style destination binding:
+        #   %dst = pto.tadd %src0, %src1
+        if "=" in line and not line.startswith("."):
+            lhs, rhs = line.split("=", 1)
+            lhs = lhs.strip()
+            rhs = rhs.strip()
+            if not lhs or not rhs:
+                raise ValueError(f"invalid assignment: {raw}")
+
+            parts = rhs.split(None, 1)
+            opcode = _normalize_opcode(parts[0])
+            rest = parts[1] if len(parts) > 1 else ""
+            rest, attr_dict, type_sig = _split_attr_and_typesig(rest)
+
+            if opcode == "make_tensor_view":
+                ops = _split_top_level_commas(rest)
+                if not ops:
+                    raise ValueError("pto.make_tensor_view expects at least %argN")
+                base = ops[0].strip()
+                if not base.startswith("%"):
+                    raise ValueError("pto.make_tensor_view base must start with %")
+                view = lhs
+                if not view.startswith("%"):
+                    raise ValueError("pto.make_tensor_view result must start with %")
+
+                opts = ", ".join(ops[1:]).strip()
+                dtype = _extract_scalar_or_empty(opts, "dtype=") or _extract_scalar_or_empty(opts, "element=")
+                if not dtype:
+                    raise ValueError("pto.make_tensor_view missing dtype=...")
+                layout = _extract_scalar_or_empty(opts, "layout=") or "ND"
+                shape_lit = _extract_list_or_empty(opts, "shape=")
+                if not shape_lit:
+                    raise ValueError("pto.make_tensor_view missing shape=[...]")
+                stride_lit = _extract_list_or_empty(opts, "strides=") or _extract_list_or_empty(opts, "stride=")
+
+                def subst_list(lit: str) -> List[str]:
+                    inner = lit.strip()[1:-1]
+                    parts = [x.strip() for x in _split_top_level_commas(inner) if x.strip()]
+                    out: List[str] = []
+                    for it in parts:
+                        if it.startswith("%"):
+                            k = it[1:]
+                            out.append(const_map.get(k, it))
+                        else:
+                            out.append(it)
+                    return out
+
+                shape_items = subst_list(shape_lit)
+                if len(shape_items) not in (2, 5):
+                    raise ValueError(f"shape must be 2 or 5 dims: {shape_lit}")
+                if stride_lit:
+                    stride_items = subst_list(stride_lit)
+                    if len(stride_items) not in (2, 5):
+                        raise ValueError(f"stride must be 2 or 5 dims: {stride_lit}")
+                else:
+                    stride_items = [shape_items[-1], "1"] if len(shape_items) == 2 else ["1", "1", "1", shape_items[-1], "1"]
+
+                tensor_ty = (
+                    f"!pto.tensor<dtype={dtype}, shape=[{','.join(shape_items)}], stride=[{','.join(stride_items)}], layout={layout}>"
+                )
+
+                base_name = base[1:]
+                if all(a.name != base_name for a in args):
+                    args.append(ArgDecl(name=base_name, type_str=tensor_ty))
+                view_alias[view[1:]] = base_name
+                continue
+
+            if opcode == "alloc_tile":
+                if not lhs.startswith("%"):
+                    raise ValueError("pto.alloc_tile result must start with %")
+                if not type_sig.startswith("!pto.tile"):
+                    raise ValueError("pto.alloc_tile requires ': !pto.tile<...>'")
+                tile_name = lhs[1:]
+                if all(a.name != tile_name for a in args):
+                    args.append(ArgDecl(name=tile_name, type_str=type_sig))
+                ops = [o.strip() for o in _split_top_level_commas(rest) if o.strip()]
+                if ops:
+                    instrs.append(Instr(opcode="tassign", operands=[f"%{tile_name}", rewrite_operand(ops[0])]))
+                continue
+
+            rhs_ops = _split_top_level_commas(rest) if rest else []
+            operands = [lhs] + rhs_ops
+            operands = [rewrite_operand(o) for o in operands]
+            instrs.append(Instr(opcode=opcode, operands=operands, attr_dict=attr_dict, type_sig=type_sig))
+            continue
+
+        # Instruction: <opcode> [<operands...>] [attr-dict] [: type_sig]
+        if " " not in line:
+            instrs.append(Instr(opcode=_normalize_opcode(line.strip()), operands=[]))
+            continue
+
         opcode, rest = line.split(None, 1)
+        opcode = _normalize_opcode(opcode)
         rest, attr_dict, type_sig = _split_attr_and_typesig(rest)
         operands = _split_top_level_commas(rest)
+        operands = [rewrite_operand(o) for o in operands]
         instrs.append(Instr(opcode=opcode.strip(), operands=operands, attr_dict=attr_dict, type_sig=type_sig))
 
     return args, consts, instrs
 
 
-def _parse_list_int5(s: str) -> List[str]:
+def _parse_list_int2or5(s: str) -> List[str]:
     s = s.strip()
     if not (s.startswith("[") and s.endswith("]")):
         raise ValueError(f"Expected list literal [..]: {s}")
     items = [x.strip() for x in s[1:-1].split(",") if x.strip()]
-    if len(items) != 5:
-        raise ValueError(f"Expected 5 elements: {s}")
+    if len(items) not in (2, 5):
+        raise ValueError(f"Expected 2 or 5 elements: {s}")
     return items
+
+
+def _shape_to5(shape: List[str]) -> List[str]:
+    if len(shape) == 5:
+        return shape
+    if len(shape) == 2:
+        return ["1", "1", "1", shape[0], shape[1]]
+    raise ValueError(f"shape must be 2-D or 5-D: {shape}")
+
+
+def _stride_to5(stride: List[str]) -> List[str]:
+    if len(stride) == 5:
+        return stride
+    if len(stride) == 2:
+        return ["1", "1", "1", stride[0], stride[1]]
+    raise ValueError(f"stride must be 2-D or 5-D: {stride}")
 
 
 def _cpp_int(v: str) -> str:
@@ -239,9 +407,19 @@ def _parse_tensor_type(type_str: str) -> Dict[str, str]:
     # compat: element -> dtype
     if "dtype" not in kv and "element" in kv:
         kv["dtype"] = kv["element"]
-    for k in ("dtype", "shape", "stride", "layout"):
-        if k not in kv:
-            raise ValueError(f"tensor missing {k}: {type_str}")
+
+    if "dtype" not in kv or "shape" not in kv:
+        raise ValueError(f"tensor missing dtype/shape: {type_str}")
+
+    kv.setdefault("layout", "ND")
+    if "stride" not in kv and "strides" in kv:
+        kv["stride"] = kv["strides"]
+    if "stride" not in kv:
+        shape = _parse_list_int2or5(kv["shape"])
+        if len(shape) == 2:
+            kv["stride"] = f"[{shape[1]},1]"
+        else:
+            kv["stride"] = f"[1,1,1,{shape[4]},1]"
     return kv
 
 
@@ -330,8 +508,8 @@ def emit_cpp(
     # GlobalTensor declarations.
     for a, t in tensor_args:
         elem_cpp = _cpp_elem(t["dtype"])
-        shape = _parse_list_int5(t["shape"])
-        stride = _parse_list_int5(t["stride"])
+        shape = _shape_to5(_parse_list_int2or5(t["shape"]))
+        stride = _stride_to5(_parse_list_int2or5(t["stride"]))
         layout = t["layout"]
         lines.append(f"  using {a.name}_Shape = Shape<{', '.join(_cpp_int(x) for x in shape)}>;")
         lines.append(f"  using {a.name}_Stride = Stride<{', '.join(_cpp_int(x) for x in stride)}>;")

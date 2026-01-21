@@ -19,6 +19,12 @@ tadd %dst, %src0, %src1 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 PTO-AS uses a **destination-passing style (DPS)** surface syntax: instructions explicitly name their destination
 operands (typically the first operand) instead of binding SSA results with `%dst = ...`.
 
+For convenience, frontends may also accept an SSA-style *destination sugar*:
+
+```text
+%dst = pto.tadd %src0, %src1 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
+```
+
 PTO-AS is a synchronous, line-ordered format: there is no `wait(...)` clause and no implicit event result. If a program
 needs to model an explicit dependency, it uses an explicit instruction (for example `tsync`) with event operands.
 
@@ -137,7 +143,7 @@ tcmp %mask, %a, %b {cmpMode = #pto.cmp<GT>} : (!pto.tile<...>, !pto.tile<...>, !
 
 PTO-AS supports a small set of non-instruction directives for declaring external inputs and constants.
 
-Argument declaration (introduces a named value):
+Legacy argument declaration (introduces a named value):
 
 ```text
 .arg %a : !pto.tile<...>;
@@ -148,6 +154,20 @@ Event arguments (when modeling a dependency explicitly):
 ```text
 .arg %e0 : !pto.event<...>;
 ```
+
+New-format declarations (recommended):
+
+- Tensor views from implicit kernel args:
+
+  ```text
+  %x = pto.make_tensor_view %arg0, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
+  ```
+
+- Tile allocation (optionally binds an address, replacing `tassign`):
+
+  ```text
+  %tx = pto.alloc_tile %addr_x : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+  ```
 
 Constant declaration (introduces a named value):
 

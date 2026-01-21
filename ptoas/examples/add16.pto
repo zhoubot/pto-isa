@@ -1,14 +1,9 @@
-; Minimal PTO-AS demo (DPS)
+; Minimal PTO-AS demo (new format)
 ;
 ; This example is intended to be consumed by `ptoas/tools/ptoas_build.py`.
 
-.arg %x : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
-.arg %y : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
-.arg %z : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
-
-.arg %tx : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-.arg %ty : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-.arg %tz : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+.const %c16 = 16 : index
+.const %c1 = 1 : index
 
 .const %addr_x = 0x0 : index
 .const %addr_y = 0x8000 : index
@@ -16,11 +11,15 @@
 .const %r0 = 0 : index
 .const %c0 = 0 : index
 
-tassign %tx, %addr_x : (!pto.tile<...>, index)
-tassign %ty, %addr_y : (!pto.tile<...>, index)
-tassign %tz, %addr_z : (!pto.tile<...>, index)
+%x = pto.make_tensor_view %arg0, dtype=f16, shape=[%c16,%c16] strides=[%c16,%c1], layout=ND
+%y = pto.make_tensor_view %arg1, dtype=f16, shape=[%c16,%c16] strides=[%c16,%c1], layout=ND
+%z = pto.make_tensor_view %arg2, dtype=f16, shape=[%c16,%c16] strides=[%c16,%c1], layout=ND
 
-tload %tx, %x[%r0, %c0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
-tload %ty, %y[%r0, %c0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
-tadd %tz, %tx, %ty : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
-tstore %z[%r0, %c0], %tz : (!pto.tensor<...>, index, index, !pto.tile<...>)
+%tx = pto.alloc_tile %addr_x : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%ty = pto.alloc_tile %addr_y : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%tz = pto.alloc_tile %addr_z : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+
+%tx = pto.tload %x[%r0, %c0]
+%ty = pto.tload %y[%r0, %c0]
+%tz = pto.tadd %tx, %ty
+pto.tstore %z[%r0, %c0], %tz

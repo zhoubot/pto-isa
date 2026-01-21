@@ -105,19 +105,35 @@ source $HOME/Ascend/ascend-toolkit/latest/bin/setenv.bash
 
 This repo also contains a prototype PTO assembler toolchain under `ptoas/`.
 
-### PTO-AS Syntax Updates (SSA → DPS)
+### PTO-AS Syntax Updates (DPS + SSA-Style Sugar)
 
-The textual PTO assembly format (PTO-AS) was redesigned from SSA-style result binding:
+PTO-AS is primarily a destination-passing style (DPS) format, but the assembler frontends accept a few MLIR-like
+SSA-style conveniences.
+
+Legacy SSA-style result binding (older docs/examples):
 
 ```text
 %dst = tadd %src0, %src1 : (...) -> ...
 ```
 
-to **destination-passing style (DPS)**:
+Canonical DPS form (still accepted):
 
 ```text
 tadd %dst, %src0, %src1 : (...)
 ```
+
+New SSA-style *destination sugar* (recommended for readability; still DPS under the hood):
+
+```text
+%dst = pto.tadd %src0, %src1 : (...)
+%t0  = pto.tload %x[%r0, %c0]
+pto.tstore %y[%r0, %c0], %t0
+```
+
+Declaration updates:
+
+- Tensors can be introduced via `pto.make_tensor_view` from implicit `%argN` kernel args (instead of `.arg %x : !pto.tensor<...>`).
+- Tiles can be introduced via `pto.alloc_tile` (optionally binding an address), replacing the `.arg tile + tassign` pattern.
 
 Key type spelling changes:
 

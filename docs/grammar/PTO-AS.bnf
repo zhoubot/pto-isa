@@ -6,7 +6,7 @@
 
 <program>        ::= { <stmt> }
 
-<stmt>           ::= <instr_stmt> | <directive_stmt>
+<stmt>           ::= <instr_stmt> | <assign_stmt> | <directive_stmt>
 
 <directive_stmt> ::= <arg_decl> | <const_decl>
 <arg_decl>       ::= '.arg' <value> ':' <type> ';'?
@@ -15,7 +15,8 @@
 ; An instruction is one line. PTO-AS uses destination-passing style (DPS):
 ; destination values are explicit operands (typically the first operand).
 ; Type signatures are recommended for readability but optional.
-<instr_stmt>     ::= <opcode> <operand_list> [ <attr_dict> ] [ ':' <type_sig> ] ';'?
+<instr_stmt>     ::= <opcode> [ <operand_list> ] [ <attr_dict> ] [ ':' <type_sig> ] ';'?
+<assign_stmt>    ::= <value> '=' <opcode> [ <operand_list> ] [ <attr_dict> ] [ ':' <type_sig> ] ';'?
 <operand_list>   ::= <operand> { ',' <operand> }
 
 ; Operands may be named values, an indexed memory view (PTX-like), or an opaque attribute literal (e.g. `#pto.op<TADD>`).

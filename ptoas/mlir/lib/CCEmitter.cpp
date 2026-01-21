@@ -127,6 +127,74 @@ static std::vector<std::string> parseList5(const std::string &s) {
   return items;
 }
 
+static std::vector<std::string> parseList2or5(const std::string &s) {
+  auto t = trim(s);
+  if (t.size() < 2 || t.front() != '[' || t.back() != ']')
+    llvm::report_fatal_error(llvm::Twine("Expected list literal [..]: ") + t);
+  std::vector<std::string> items;
+  std::string inner = t.substr(1, t.size() - 2);
+  for (auto &p : splitTopLevelCommas(inner))
+    items.push_back(trim(p));
+  if (items.size() != 2 && items.size() != 5)
+    llvm::report_fatal_error(llvm::Twine("Expected 2 or 5 elements: ") + t);
+  return items;
+}
+
+static std::vector<std::string> shapeTo5(const std::vector<std::string> &shape) {
+  if (shape.size() == 5)
+    return shape;
+  if (shape.size() == 2)
+    return {"1", "1", "1", shape[0], shape[1]};
+  llvm::report_fatal_error("shape must be 2-D or 5-D");
+}
+
+static std::vector<std::string> strideTo5(const std::vector<std::string> &stride) {
+  if (stride.size() == 5)
+    return stride;
+  if (stride.size() == 2)
+    return {"1", "1", "1", stride[0], stride[1]};
+  llvm::report_fatal_error("stride must be 2-D or 5-D");
+}
+
+static std::string extractBracketListOrEmpty(const std::string &s, llvm::StringRef key) {
+  auto pos = s.find(key.str());
+  if (pos == std::string::npos)
+    return "";
+  pos += key.size();
+  while (pos < s.size() && std::isspace((unsigned char)s[pos]))
+    pos++;
+  if (pos >= s.size() || s[pos] != '[')
+    return "";
+  int depth = 0;
+  for (size_t i = pos; i < s.size(); ++i) {
+    if (s[i] == '[')
+      depth++;
+    else if (s[i] == ']') {
+      depth--;
+      if (depth == 0)
+        return s.substr(pos, i - pos + 1);
+    }
+  }
+  return "";
+}
+
+static std::string extractScalarAfterKeyOrEmpty(const std::string &s, llvm::StringRef key) {
+  auto pos = s.find(key.str());
+  if (pos == std::string::npos)
+    return "";
+  pos += key.size();
+  while (pos < s.size() && std::isspace((unsigned char)s[pos]))
+    pos++;
+  size_t end = pos;
+  while (end < s.size()) {
+    char c = s[end];
+    if (std::isspace((unsigned char)c) || c == ',' || c == '}' || c == ':')
+      break;
+    end++;
+  }
+  return trim(s.substr(pos, end - pos));
+}
+
 static std::optional<std::map<std::string, std::string>> tryParseAngleKVs(const std::string &typeStr,
                                                                           llvm::StringRef prefix) {
   auto t = trim(typeStr);
@@ -169,6 +237,99 @@ static bool isTileType(const std::string &typeStr) { return llvm::StringRef(type
 static bool isTensorType(const std::string &typeStr) {
   auto s = llvm::StringRef(typeStr);
   return s.starts_with("!pto.tensor<") || s.starts_with("!pto.gtensor<");
+}
+
+static std::vector<std::string> readOperands(mlir::Operation *op);
+
+struct MakeTensorViewInfo {
+  std::string viewName; // with leading %
+  std::string baseArg;  // with leading % (e.g. %arg0)
+  std::string typeStr;  // !pto.tensor<...>
+};
+
+struct AllocTileInfo {
+  std::string tileName;                 // with leading %
+  std::string typeStr;                  // !pto.tile<...>
+  std::optional<std::string> addrValue; // optional address operand (e.g. %addr_x)
+};
+
+static std::string buildTensorTypeFromMakeView(mlir::Operation *op) {
+  auto operands = readOperands(op);
+  if (operands.size() < 2)
+    llvm::report_fatal_error("pto.make_tensor_view expects at least 2 operands (%view, %argN)");
+
+  auto typeSig = op->getAttrOfType<mlir::StringAttr>("typesig");
+  if (typeSig && llvm::StringRef(typeSig.getValue()).starts_with("!pto.tensor"))
+    return typeSig.getValue().str();
+
+  // Merge leftover tokens; the frontend splits by top-level commas only, so multiple `k=v`
+  // pairs may end up in a single operand when the input omits commas between them.
+  std::string opts;
+  for (size_t i = 2; i < operands.size(); ++i) {
+    if (!opts.empty())
+      opts += ", ";
+    opts += operands[i];
+  }
+
+  auto dtype = extractScalarAfterKeyOrEmpty(opts, "dtype=");
+  if (dtype.empty())
+    dtype = extractScalarAfterKeyOrEmpty(opts, "element=");
+  if (dtype.empty())
+    llvm::report_fatal_error("pto.make_tensor_view missing dtype=...");
+
+  auto layout = extractScalarAfterKeyOrEmpty(opts, "layout=");
+  if (layout.empty())
+    layout = "ND";
+
+  auto shapeLit = extractBracketListOrEmpty(opts, "shape=");
+  if (shapeLit.empty())
+    llvm::report_fatal_error("pto.make_tensor_view missing shape=[...]");
+
+  auto strideLit = extractBracketListOrEmpty(opts, "strides=");
+  if (strideLit.empty())
+    strideLit = extractBracketListOrEmpty(opts, "stride=");
+
+  auto shape = parseList2or5(shapeLit);
+  std::vector<std::string> stride;
+  if (!strideLit.empty()) {
+    stride = parseList2or5(strideLit);
+  } else {
+    if (shape.size() == 2)
+      stride = {shape[1], "1"};
+    else
+      stride = defaultStrideForShape5(shapeTo5(shape));
+  }
+
+  std::ostringstream ss;
+  ss << "!pto.tensor<dtype=" << dtype << ", shape=[";
+  for (size_t i = 0; i < shape.size(); ++i) {
+    if (i)
+      ss << ",";
+    ss << shape[i];
+  }
+  ss << "], stride=[";
+  for (size_t i = 0; i < stride.size(); ++i) {
+    if (i)
+      ss << ",";
+    ss << stride[i];
+  }
+  ss << "], layout=" << layout << ">";
+  return ss.str();
+}
+
+static AllocTileInfo readAllocTile(mlir::Operation *op) {
+  auto operands = readOperands(op);
+  if (operands.empty())
+    llvm::report_fatal_error("pto.alloc_tile expects at least 1 operand (%tile)");
+  auto typeSig = op->getAttrOfType<mlir::StringAttr>("typesig");
+  if (!typeSig || !llvm::StringRef(typeSig.getValue()).starts_with("!pto.tile"))
+    llvm::report_fatal_error("pto.alloc_tile missing ': !pto.tile<...>' type");
+  AllocTileInfo out;
+  out.tileName = trim(operands[0]);
+  out.typeStr = typeSig.getValue().str();
+  if (operands.size() >= 2)
+    out.addrValue = trim(operands[1]);
+  return out;
 }
 
 static RecordEventInfo readRecordEvent(mlir::Operation *op) {
@@ -241,6 +402,8 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   std::vector<ArgInfo> args;
   std::vector<ConstInfo> consts;
   std::vector<RecordEventInfo> events;
+  std::vector<MakeTensorViewInfo> makeViews;
+  std::vector<AllocTileInfo> allocTiles;
 
   for (auto &op : module.getBody()->getOperations()) {
     auto name = op.getName().getStringRef();
@@ -261,12 +424,28 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       consts.push_back({n.getValue().str(), v.getValue().str(), t.getValue().str()});
       continue;
     }
+    if (name == "pto.make_tensor_view") {
+      auto operands = readOperands(&op);
+      if (operands.size() < 2)
+        llvm::report_fatal_error("pto.make_tensor_view expects: %view, %argN, ...");
+      makeViews.push_back({trim(operands[0]), trim(operands[1]), buildTensorTypeFromMakeView(&op)});
+      continue;
+    }
+    if (name == "pto.alloc_tile") {
+      allocTiles.push_back(readAllocTile(&op));
+      continue;
+    }
   }
 
   module.walk([&](mlir::Operation *op) {
     if (op->getName().getStringRef() == "pto.record_event")
       events.push_back(readRecordEvent(op));
   });
+
+  // Const map (for substituting %c* inside make_tensor_view type spellings).
+  std::map<std::string, std::string> constMap;
+  for (auto &c : consts)
+    constMap[c.name] = trim(c.value);
 
   // Classify args.
   struct TensorArg {
@@ -280,6 +459,30 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
 
   std::vector<TensorArg> tensorArgs;
   std::vector<TileLocal> tileLocals;
+
+  // New-format declarations:
+  // - `pto.make_tensor_view` introduces a view symbol that aliases a kernel base argument.
+  // - `pto.alloc_tile` introduces a local tile value (optionally pre-bound to an address).
+  std::map<std::string, std::string> tensorViewAlias; // "%view" -> "%argN"
+
+  auto ensureArg = [&](const std::string &name, const std::string &typeStr) {
+    for (auto &a : args) {
+      if (a.name == name) {
+        if (a.typeStr != typeStr)
+          llvm::report_fatal_error("conflicting types for the same symbol");
+        return;
+      }
+    }
+    args.push_back({name, typeStr});
+  };
+
+  for (auto &mv : makeViews) {
+    tensorViewAlias[mv.viewName] = mv.baseArg;
+    ensureArg(mv.baseArg, mv.typeStr);
+  }
+  for (auto &at : allocTiles)
+    ensureArg(at.tileName, at.typeStr);
+
   for (auto &a : args) {
     if (isTensorType(a.typeStr)) {
       auto kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tensor");
@@ -324,8 +527,19 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   for (auto &t : tensorArgs) {
     auto &kv = t.kv;
     auto dtype = kv.at("dtype");
-    auto shape = parseList5(kv.at("shape"));
-    auto stride = kv.count("stride") ? parseList5(kv.at("stride")) : defaultStrideForShape5(shape);
+    auto shape = shapeTo5(parseList2or5(kv.at("shape")));
+    for (auto &v : shape)
+      if (!v.empty() && v[0] == '%')
+        v = constMap.at(v);
+    std::vector<std::string> stride;
+    if (kv.count("stride")) {
+      stride = strideTo5(parseList2or5(kv.at("stride")));
+      for (auto &v : stride)
+        if (!v.empty() && v[0] == '%')
+          v = constMap.at(v);
+    } else {
+      stride = defaultStrideForShape5(shape);
+    }
     auto layout = kv.count("layout") ? kv.at("layout") : "ND";
     auto elemCpp = elemToCpp(dtype);
     auto baseName = t.a.name.substr(1);
@@ -389,6 +603,9 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   auto resolve = [&](const std::string &v) -> std::string {
     auto t = trim(v);
     if (!t.empty() && t[0] == '%') {
+      auto aliasIt = tensorViewAlias.find(t);
+      if (aliasIt != tensorViewAlias.end())
+        t = aliasIt->second;
       auto key = t.substr(1);
       // Tensor args become g_<name>, tile locals become t_<name>, consts become c_<name>.
       for (auto &ta : tensorArgs)
@@ -404,6 +621,15 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     }
     return t;
   };
+
+  // Tile address binding (new-format PTO-AS removes explicit `tassign`).
+  for (auto &at : allocTiles) {
+    if (!at.addrValue)
+      continue;
+    os << "  TASSIGN(" << resolve(at.tileName) << ", " << resolve(*at.addrValue) << ");\n";
+  }
+  if (!allocTiles.empty())
+    os << "\n";
 
   auto emitInstrCall = [&](mlir::Operation *op, const std::string *assignEvent) -> std::string {
     auto opcode = mnemonicFor(op->getName().getStringRef());
@@ -609,7 +835,8 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     for (auto it = block.begin(); it != block.end(); ++it) {
       auto *op = &*it;
       auto name = op->getName().getStringRef();
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event")
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.make_tensor_view" ||
+          name == "pto.alloc_tile")
         continue;
 
       // `record_event` assignment is a lookahead within the same block.
@@ -682,6 +909,8 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
 std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoRoot) {
   std::vector<ArgInfo> args;
   std::vector<ConstInfo> consts;
+  std::vector<MakeTensorViewInfo> makeViews;
+  std::vector<AllocTileInfo> allocTiles;
 
   for (auto &op : module.getBody()->getOperations()) {
     auto name = op.getName().getStringRef();
@@ -702,7 +931,22 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       consts.push_back({n.getValue().str(), v.getValue().str(), t.getValue().str()});
       continue;
     }
+    if (name == "pto.make_tensor_view") {
+      auto operands = readOperands(&op);
+      if (operands.size() < 2)
+        llvm::report_fatal_error("pto.make_tensor_view expects: %view, %argN, ...");
+      makeViews.push_back({trim(operands[0]), trim(operands[1]), buildTensorTypeFromMakeView(&op)});
+      continue;
+    }
+    if (name == "pto.alloc_tile") {
+      allocTiles.push_back(readAllocTile(&op));
+      continue;
+    }
   }
+
+  std::map<std::string, std::string> constMap;
+  for (auto &c : consts)
+    constMap[c.name] = trim(c.value);
 
   // Classify args.
   struct TensorArg {
@@ -716,6 +960,26 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
 
   std::vector<TensorArg> tensorArgs;
   std::vector<TileLocal> tileLocals;
+
+  std::map<std::string, std::string> tensorViewAlias; // "%view" -> "%argN"
+  auto ensureArg = [&](const std::string &name, const std::string &typeStr) {
+    for (auto &a : args) {
+      if (a.name == name) {
+        if (a.typeStr != typeStr)
+          llvm::report_fatal_error("conflicting types for the same symbol");
+        return;
+      }
+    }
+    args.push_back({name, typeStr});
+  };
+
+  for (auto &mv : makeViews) {
+    tensorViewAlias[mv.viewName] = mv.baseArg;
+    ensureArg(mv.baseArg, mv.typeStr);
+  }
+  for (auto &at : allocTiles)
+    ensureArg(at.tileName, at.typeStr);
+
   for (auto &a : args) {
     if (isTensorType(a.typeStr)) {
       auto kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tensor");
@@ -757,8 +1021,19 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
   for (auto &t : tensorArgs) {
     auto &kv = t.kv;
     auto dtype = kv.at("dtype");
-    auto shape = parseList5(kv.at("shape"));
-    auto stride = kv.count("stride") ? parseList5(kv.at("stride")) : defaultStrideForShape5(shape);
+    auto shape = shapeTo5(parseList2or5(kv.at("shape")));
+    for (auto &v : shape)
+      if (!v.empty() && v[0] == '%')
+        v = constMap.at(v);
+    std::vector<std::string> stride;
+    if (kv.count("stride")) {
+      stride = strideTo5(parseList2or5(kv.at("stride")));
+      for (auto &v : stride)
+        if (!v.empty() && v[0] == '%')
+          v = constMap.at(v);
+    } else {
+      stride = defaultStrideForShape5(shape);
+    }
     auto layout = kv.count("layout") ? kv.at("layout") : "ND";
     auto elemCpp = elemToCpp(dtype);
     auto baseName = t.a.name.substr(1);
@@ -816,6 +1091,9 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
   auto resolve = [&](const std::string &v) -> std::string {
     auto t = trim(v);
     if (!t.empty() && t[0] == '%') {
+      auto aliasIt = tensorViewAlias.find(t);
+      if (aliasIt != tensorViewAlias.end())
+        t = aliasIt->second;
       auto key = t.substr(1);
       for (auto &ta : tensorArgs)
         if (ta.a.name.substr(1) == key)
@@ -830,6 +1108,15 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
     }
     return t;
   };
+
+  // Tile address binding (new-format PTO-AS removes explicit `tassign`).
+  for (auto &at : allocTiles) {
+    if (!at.addrValue)
+      continue;
+    os << "  TASSIGN(" << resolve(at.tileName) << ", " << resolve(*at.addrValue) << ");\n";
+  }
+  if (!allocTiles.empty())
+    os << "\n";
 
   auto emitInstrCallCpu = [&](mlir::Operation *op) -> std::string {
     auto opcode = mnemonicFor(op->getName().getStringRef());
@@ -990,7 +1277,8 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
 
     for (auto &op : block.getOperations()) {
       auto name = op.getName().getStringRef();
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.tsync")
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.tsync" ||
+          name == "pto.make_tensor_view" || name == "pto.alloc_tile")
         continue;
 
       if (name == "scf.for") {
