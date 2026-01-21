@@ -1,7 +1,7 @@
 ; PTO-AS (PTO Assembly) BNF
 ;
 ; This grammar describes the synchronous PTO-AS surface syntax used by the ISA docs.
-; The format is MLIR-inspired (SSA values, MLIR-like types), but does not model async event flow.
+; The format is MLIR-inspired (MLIR-like value names and types), but does not model async event flow.
 ;
 
 <program>        ::= { <stmt> }
@@ -9,18 +9,17 @@
 <stmt>           ::= <instr_stmt> | <directive_stmt>
 
 <directive_stmt> ::= <arg_decl> | <const_decl>
-<arg_decl>       ::= '.arg' <ssa> ':' <type> ';'?
-<const_decl>     ::= '.const' <ssa> '=' <literal> ':' <type> ';'?
+<arg_decl>       ::= '.arg' <value> ':' <type> ';'?
+<const_decl>     ::= '.const' <value> '=' <literal> ':' <type> ';'?
 
-; An instruction is one line. It may optionally bind SSA results.
+; An instruction is one line. PTO-AS uses destination-passing style (DPS):
+; destination values are explicit operands (typically the first operand).
 ; Type signatures are recommended for readability but optional.
-<instr_stmt>     ::= [ <ssa_list> '=' ] <opcode> <operand_list> [ <attr_dict> ] [ ':' <type_sig> ] ';'?
-
-<ssa_list>       ::= <ssa> { ',' <ssa> }
+<instr_stmt>     ::= <opcode> <operand_list> [ <attr_dict> ] [ ':' <type_sig> ] ';'?
 <operand_list>   ::= <operand> { ',' <operand> }
 
-; Operands may be SSA values, an indexed memory view (PTX-like), or an opaque attribute literal (e.g. `#pto.op<TADD>`).
-<operand>        ::= <ssa> | <ssa> '[' <index> ',' <index> ']' | <opaque_attr>
+; Operands may be named values, an indexed memory view (PTX-like), or an opaque attribute literal (e.g. `#pto.op<TADD>`).
+<operand>        ::= <value> | <value> '[' <index> ',' <index> ']' | <opaque_attr>
 
 <attr_dict>      ::= '{' [ <attr_list> ] '}'
 <attr_list>      ::= <attr> { ',' <attr> }
@@ -28,15 +27,15 @@
 <attr_value>     ::= <identifier> | <literal> | <opaque_attr>
 <opaque_attr>    ::= '#' <identifier> '<' { <attr_char> } '>'
 
-<type_sig>       ::= <type> | '(' <type_list> ')' '->' <type> | '(' <type_list> ')' '->' '(' <type_list> ')'
+<type_sig>       ::= <type> | '(' <type_list> ')'
 <type_list>      ::= <type> { ',' <type> }
 
 <type>           ::= <mlir_type>
 <mlir_type>      ::= { <type_char> }
 
 <opcode>         ::= <identifier>
-<ssa>            ::= '%' <identifier>
-<index>          ::= <ssa> | <literal>
+<value>          ::= '%' <identifier>
+<index>          ::= <value> | <literal>
 <literal>        ::= <integer> | <float>
 <identifier>     ::= <id_start> { <id_continue> }
 

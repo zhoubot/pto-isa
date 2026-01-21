@@ -25,7 +25,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tsels %src0, %src1, %selectMode : !pto.tile<...>
+tsels %dst, %src0, %src1, %selectMode : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

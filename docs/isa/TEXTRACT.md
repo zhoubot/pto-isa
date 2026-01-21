@@ -19,7 +19,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = textract %src[%r0, %r1] : !pto.tile<...> -> !pto.tile<...>
+textract %dst, %src[%r0, %r1] : (!pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

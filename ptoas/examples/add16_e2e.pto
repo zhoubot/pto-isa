@@ -1,0 +1,34 @@
+; End-to-end NPU demo for `ptoas`:
+;   foo.pto -> ptoas -> foo.cce -> bisheng -> foo.bin -> run on NPU from Python (numpy check)
+;
+; Notes:
+; - Uses a minimal "complete-ish" kernel shape with prologue/epilogue and block id queries.
+; - Still launches with blockDim=1 in the Python runner (so r0 == 0 at runtime).
+
+prologue
+get_block_num %bn : index
+get_block_idx %bid : index
+imul %r0, %bid, 16 : index
+
+.arg %x : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
+.arg %y : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
+.arg %z : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
+
+.arg %tx : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+.arg %ty : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+.arg %tz : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+
+.const %addr_x = 0x0 : index
+.const %addr_y = 0x8000 : index
+.const %addr_z = 0x10000 : index
+
+tassign %tx, %addr_x : (!pto.tile<...>, index)
+tassign %ty, %addr_y : (!pto.tile<...>, index)
+tassign %tz, %addr_z : (!pto.tile<...>, index)
+
+tload %tx, %x[%r0, 0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
+tload %ty, %y[%r0, 0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
+tadd %tz, %tx, %ty : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
+tstore %z[%r0, 0], %tz : (!pto.tensor<...>, index, index, !pto.tile<...>)
+
+epilogue

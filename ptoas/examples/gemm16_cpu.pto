@@ -1,0 +1,54 @@
+; 16x16 GEMM for CPU simulator target.
+;
+; C = A @ B
+;   A: f16[16,16]
+;   B: f16[16,16]
+;   C: f32[16,16]
+;
+; This variant uses a Left tile base layout compatible with `include/pto/cpu/TMatmul.hpp`:
+;   Left  : blayout=ColMajor, slayout=RowMajor
+;   Right : blayout=RowMajor, slayout=ColMajor
+;   Acc   : blayout=ColMajor, slayout=RowMajor
+;
+; Use with:
+;   ./ptoas/mlir/build/bin/ptoas ptoas/examples/gemm16_cpu.pto --target cpu -o /tmp/gemm16_cpu.cpp
+
+prologue
+get_block_num %bn : index
+get_block_idx %bid : index
+
+.arg %a : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
+.arg %b : !pto.tensor<dtype=f16, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
+.arg %c : !pto.tensor<dtype=f32, shape=[1,1,1,16,16], stride=[1,1,1,16,1], layout=ND>
+
+; L1 tiles loaded from GM
+.arg %a_mat : !pto.tile<loc=Mat, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
+.arg %b_mat : !pto.tile<loc=Mat, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
+
+; Matmul operands / accumulator
+.arg %a_left : !pto.tile<loc=Left, dtype=f16, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=512, pad=Null>
+.arg %b_right : !pto.tile<loc=Right, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=ColMajor, fractal=512, pad=Null>
+.arg %c_acc : !pto.tile<loc=Acc, dtype=f32, rows=16, cols=16, blayout=ColMajor, valid=16x16, slayout=RowMajor, fractal=1024, pad=Null>
+
+.const %addr_a_mat = 0x0 : index
+.const %addr_b_mat = 0x20000 : index
+.const %addr_a_left = 0x0 : index
+.const %addr_b_right = 0x0 : index
+.const %addr_c_acc = 0x0 : index
+
+tassign %a_mat, %addr_a_mat : (!pto.tile<...>, index)
+tassign %b_mat, %addr_b_mat : (!pto.tile<...>, index)
+tassign %a_left, %addr_a_left : (!pto.tile<...>, index)
+tassign %b_right, %addr_b_right : (!pto.tile<...>, index)
+tassign %c_acc, %addr_c_acc : (!pto.tile<...>, index)
+
+tload %a_mat, %a[0, 0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
+tload %b_mat, %b[0, 0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
+
+tmov %a_left, %a_mat : (!pto.tile<...>, !pto.tile<...>)
+tmov %b_right, %b_mat : (!pto.tile<...>, !pto.tile<...>)
+
+tmatmul %c_acc, %a_left, %b_right : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
+tstore %c[0, 0], %c_acc : (!pto.tensor<...>, index, index, !pto.tile<...>)
+
+epilogue

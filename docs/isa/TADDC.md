@@ -17,7 +17,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = taddc %src0, %src1, %src2 : !pto.tile<...>
+taddc %dst, %src0, %src1, %src2 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

@@ -19,7 +19,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tcvt %src {rmode = #pto.round_mode<CAST_RINT>} : !pto.tile<...> -> !pto.tile<...>
+tcvt %dst, %src {rmode = #pto.round_mode<CAST_RINT>} : (!pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

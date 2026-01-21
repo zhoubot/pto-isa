@@ -2,6 +2,6 @@
 
 用于实现自定义 kernel / operator 的示例与脚手架。
 
-## 文件
+## 子目录
 
-- `cce_based.cpp`：基于 CCE 的自定义实现示例。如何构建与调用请参考对应的测试/构建脚本。
+- `gemm_python/`：Python → PTO-AS → `ptoas` 的端到端 GEMM 示例（CPU + NPU）。

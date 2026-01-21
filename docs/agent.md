@@ -27,6 +27,8 @@ This document is a fast, practical orientation for agents working in this repo: 
   - NPU ST build/run: `tests/script/run_st.py`, `tests/run_st.sh`
   - Test layout overview: `tests/README.md`
 - Demos: `demos/` (CPU demos used by `tests/run_cpu.py --demo ...`)
+- Kernels: `kernels/` (self-contained kernel/operator mini-projects)
+  - Python GEMM end-to-end example (CPU + NPU): `kernels/custom/gemm_python/`
 
 ## Run: CPU Simulator (Recommended First)
 
@@ -99,3 +101,195 @@ source $HOME/Ascend/ascend-toolkit/latest/bin/setenv.bash
   - CPU and NPU ST CMake projects support `PTO_GLIBCXX_USE_CXX11_ABI=auto|0|1` and auto-detect when possible.
 - **`sim` open-files limit**: simulator runs may require a higher `ulimit -n` (see `docs/getting-started.md` and `build.sh`).
 
+## PTO-AS + `ptoas` Tooling (Assembly → CCE → BIN)
+
+This repo also contains a prototype PTO assembler toolchain under `ptoas/`.
+
+### PTO-AS Syntax Updates (SSA → DPS)
+
+The textual PTO assembly format (PTO-AS) was redesigned from SSA-style result binding:
+
+```text
+%dst = tadd %src0, %src1 : (...) -> ...
+```
+
+to **destination-passing style (DPS)**:
+
+```text
+tadd %dst, %src0, %src1 : (...)
+```
+
+Key type spelling changes:
+
+- Global memory type renamed from `!pto.gtensor<...>` to `!pto.tensor<...>`.
+- The element field is renamed from `element=...` to `dtype=...`.
+- Canonical spellings live in `docs/grammar/PTO-AS.md`.
+
+Relevant files:
+
+- Spec/grammar: `docs/grammar/PTO-AS.md`, `docs/grammar/PTO-AS.bnf`
+- ISA pages: `docs/isa/*.md` (examples updated to DPS + `!pto.tensor` + `dtype`)
+- TableGen prototype: `ptoas/PTOAS.td` (spec-only dialect surface)
+  - Auto-generated op stubs: `ptoas/PTOASOps.td` (regen: `python3 ptoas/tools/gen_ptoas_ops_td.py`)
+
+### Python Prototype (`*.pto` → `*.bin`) (No MLIR required)
+
+For quick experiments without MLIR, there is a Python pipeline:
+
+- Script: `ptoas/tools/ptoas_build.py`
+- Example input: `ptoas/examples/add16.pto`
+- Output: emits `*_kernel.cpp`, compiles with `bisheng`, and extracts `__aicore_rel_binary` into `*.bin`.
+
+Run:
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/ptoas_build.py ptoas/examples/add16.pto --arch dav-c220-vec
+```
+
+Notes:
+
+- The Python tool accepts the newer `!pto.tensor<dtype=...>` and also tolerates older `!pto.gtensor<element=...>` spellings.
+
+### MLIR-based `ptoas` (Buildable/Distributable Binary)
+
+There is also an MLIR-linked `ptoas` prototype under `ptoas/mlir/`:
+
+- Source + build: `ptoas/mlir/CMakeLists.txt`, `ptoas/mlir/tools/ptoas_main.cpp`
+- Frontend: parses PTO-AS into an MLIR module with **unregistered** `pto.*` ops:
+  - `ptoas/mlir/lib/PTOASFrontend.cpp`
+- Pass prototype: inserts `pto.record_event` + `pto.tsync` between memory/vector op boundaries (heuristic):
+  - `ptoas/mlir/lib/InsertEventsPass.cpp`
+- Emitter: emits Ascend CCE source from the module:
+  - `ptoas/mlir/lib/CCEmitter.cpp`
+- Bisheng driver: compiles `.cce` and extracts `__aicore_rel_binary` into `.bin`:
+  - `ptoas/mlir/lib/BishengDriver.cpp`
+
+`ptoas` supports two emission targets:
+
+- `--target npu`: emit Ascend CCE (`*.cce`) and optionally `--emit-bin=...` via `bisheng`.
+- `--target cpu`: emit CPU-simulator C++ (`*.cpp`); disables `--insert-events` automatically.
+
+#### Build MLIR + `ptoas`
+
+`mlir-opt` is not assumed to exist system-wide; build it from `~/llvm-project`:
+
+```bash
+bash ptoas/mlir/scripts/build_all.sh
+```
+
+Outputs:
+
+- `~/llvm-project/build-mlir/bin/mlir-opt`
+- `ptoas/mlir/build/bin/ptoas`
+
+#### End-to-end Test (Emit `.cce` + `.bin`)
+
+Use the minimal test program:
+
+- `ptoas/examples/add16_min.pto`
+
+Run:
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+export PTO_REPO_ROOT=$(pwd)
+
+./ptoas/mlir/build/bin/ptoas ptoas/examples/add16_min.pto \
+  -o /tmp/add16_min.cce \
+  --insert-events \
+  --emit-bin=/tmp/add16_min.bin \
+  --arch dav-c220-vec \
+  --memory-model MEMORY_BASE \
+  --repo-root "$PTO_REPO_ROOT" \
+  --ascend-home "$ASCEND_HOME_PATH"
+```
+
+This produces:
+
+- `/tmp/add16_min.cce` (generated kernel source)
+- `/tmp/add16_min.bin` (extracted `__aicore_rel_binary`)
+
+### Run On Real NPU (Python + `acl` + `numpy`)
+
+The extracted `*.bin` is a useful build artifact, but `acl.rt.binary_load_from_file(..., [])` may fail with error `107000`
+on some setups. A reliable way to validate kernels on real hardware is to build a **fatobj shared library** with `bisheng`
+and launch the kernel via `<<<>>>` (same pattern as `tests/npu/*/src/st`).
+
+End-to-end script (builds `*.cce` + `*.bin`, then builds a `*.so`, launches on NPU, and checks with numpy):
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/run_e2e_npu.py --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+Inputs used by the script:
+
+- `ptoas/examples/add16_e2e.pto` (Vec add)
+- `ptoas/examples/gemm16_e2e.pto` (Cube GEMM: f16xf16->f32)
+
+### Run On CPU Simulator (Emit C++ + `ctypes` + `numpy`)
+
+CPU target emits a shared-library-friendly kernel entry:
+
+- `extern "C" void pto_kernel_cpu(void* arg0, void* arg1, void* arg2)`
+
+End-to-end script (emits `*.cpp`, builds `*.so` with `clang++`, runs on CPU, checks with numpy):
+
+```bash
+python3 ptoas/tools/run_e2e_cpu.py
+```
+
+Notes:
+
+- CPU GEMM uses a CPU-specific tile layout that matches `include/pto/cpu/TMatmul.hpp`:
+  - Example: `ptoas/examples/gemm16_cpu.pto`
+
+### Python Frontend (“Binding”) For PTO-AS
+
+There is also a small Python “binding” layer that can **generate PTO-AS** and drive the full toolchain:
+
+- Low-level PTO-AS builder (generates `*.pto` text): `ptoas/python/pto_asm.py`
+- AST-based frontend (Python -> PTO-AS, supports `for`/`if`): `ptoas/python/ast_frontend.py`
+- Shared compile/run helpers: `ptoas/python/pipeline.py`
+- End-to-end runner (Python frontend -> `*.pto` -> `ptoas` -> `*.cce`/`*.bin` -> NPU run -> numpy check):
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/run_python_frontend_e2e.py --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+### Python ST Runner (CPU + NPU)
+
+Simple Python ST runner for the `ptoas` toolchain:
+
+```bash
+python3 ptoas/tools/run_py_st.py --list
+python3 ptoas/tools/run_py_st.py --case add16 --target both --ascend-home "$ASCEND_HOME_PATH" --device 0
+python3 ptoas/tools/run_py_st.py --case gemm16 --target both --ascend-home "$ASCEND_HOME_PATH" --device 0
+```
+
+### Kernels: Python GEMM Example (CPU + NPU)
+
+There is also a kernel-style example under `kernels/` that uses Python to generate PTO-AS and runs the full toolchain:
+
+```bash
+python3 kernels/custom/gemm_python/run.py --target cpu
+python3 kernels/custom/gemm_python/run.py --target npu --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+python3 kernels/custom/gemm_python/run.py --target both --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+### Control Flow In PTO-AS (Prototype)
+
+PTO-AS frontend also supports a small subset of MLIR-like SCF control flow (textual blocks):
+
+```text
+scf.for %i = 0 to 2 step 1 {
+  icmp_lt %cond, %i, 1 : i1
+  scf.if %cond {
+    ...
+  } else {
+    ...
+  }
+}
+```

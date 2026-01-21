@@ -23,13 +23,13 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Tile/scalar form:
 
 ```text
-%dst = tdivs %src, %scalar : !pto.tile<...>, f32
+tdivs %dst, %src, %scalar : (!pto.tile<...>, !pto.tile<...>, f32)
 ```
 
 Scalar/tile form:
 
 ```text
-%dst = tdivs %scalar, %src : f32, !pto.tile<...>
+tdivs %dst, %scalar, %src : (f32, f32, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

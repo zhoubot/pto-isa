@@ -30,7 +30,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form (conceptual):
 
 ```text
-%dst = tfillpad %src : !pto.tile<...> -> !pto.tile<...>
+tfillpad %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 
 ## C++ Intrinsic

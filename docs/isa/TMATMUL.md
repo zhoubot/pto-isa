@@ -25,7 +25,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%acc = tmatmul %a, %b : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+tmatmul %acc, %a, %b : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

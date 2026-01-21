@@ -25,7 +25,8 @@ In the C++ intrinsics, this is represented by passing event objects as extra arg
 
 Instruction docs show PTO-AS examples using MLIR-like conventions:
 
-- SSA value names use `%name`.
-- Types use MLIR-style spellings such as `!pto.tile<...>` and `!pto.memref<...>`.
+- Named values use `%name`.
+- Most instructions use **destination-passing style (DPS)**: the first operand is the destination.
+- Types use MLIR-style spellings such as `!pto.tile<...>` and `!pto.tensor<...>`.
 
 See `docs/grammar/PTO-AS.md` for the full syntax and grammar.

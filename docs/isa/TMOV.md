@@ -25,12 +25,12 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 The PTO IR design recommends splitting `TMOV` into a family of ops:
 
 ```text
-%left  = tmov.m2l %mat  : !pto.tile<...> -> !pto.tile<...>
-%right = tmov.m2r %mat  : !pto.tile<...> -> !pto.tile<...>
-%bias  = tmov.m2b %mat  : !pto.tile<...> -> !pto.tile<...>
-%scale = tmov.m2s %mat  : !pto.tile<...> -> !pto.tile<...>
-%vec   = tmov.a2v %acc  : !pto.tile<...> -> !pto.tile<...>
-%v1    = tmov.v2v %v0   : !pto.tile<...> -> !pto.tile<...>
+tmov.m2l %left, %mat : (!pto.tile<...>, !pto.tile<...>)
+tmov.m2r %right, %mat : (!pto.tile<...>, !pto.tile<...>)
+tmov.m2b %bias, %mat : (!pto.tile<...>, !pto.tile<...>)
+tmov.m2s %scale, %mat : (!pto.tile<...>, !pto.tile<...>)
+tmov.a2v %vec, %acc : (!pto.tile<...>, !pto.tile<...>)
+tmov.v2v %v1, %v0 : (!pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

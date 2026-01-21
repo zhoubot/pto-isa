@@ -12,7 +12,7 @@ Not applicable.
 
 PTO-AS form: see `docs/grammar/PTO-AS.md`.
 
-`TASSIGN` is typically introduced by bufferization/lowering when mapping SSA tiles to physical storage.
+`TASSIGN` is typically introduced by bufferization/lowering when mapping tile values to physical storage.
 
 Synchronous form:
 

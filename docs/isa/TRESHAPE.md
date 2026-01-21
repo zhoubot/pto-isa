@@ -11,7 +11,7 @@ This is a *bitwise* reshape: it does not change values, it only changes how the 
 PTO-AS form: see `docs/grammar/PTO-AS.md`.
 
 ```text
-%dst = treshape %src : !pto.tile<...>
+treshape %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 
 ## C++ Intrinsic

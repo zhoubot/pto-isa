@@ -17,7 +17,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = mgather %mem, %idx : !pto.memref<...>, !pto.tile<...> -> !pto.tile<...>
+mgather %dst, %mem, %idx : (!pto.tile<...>, !pto.tensor<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 
@@ -32,4 +32,3 @@ PTO_INST RecordEvent MGATHER(TileDst& dst, GlobalData& src, TileInd& indexes, Wa
 
 - Index interpretation is target-defined. The CPU simulator treats indices as linear element indices into `src.data()`.
 - No bounds checks are enforced on `indexes` by the CPU simulator.
-

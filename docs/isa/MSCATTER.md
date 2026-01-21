@@ -19,7 +19,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-mscatter %src, %mem, %idx : !pto.memref<...>, !pto.tile<...>, !pto.tile<...>
+mscatter %mem, %src, %idx : (!pto.tensor<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 
@@ -34,4 +34,3 @@ PTO_INST RecordEvent MSCATTER(GlobalData& dst, TileSrc& src, TileInd& indexes, W
 
 - Index interpretation is target-defined. The CPU simulator treats indices as linear element indices into `dst.data()`.
 - No bounds checks are enforced on `indexes` by the CPU simulator.
-

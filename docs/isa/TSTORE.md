@@ -17,7 +17,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-tstore %t1, %sv_out[%c0, %c0]
+tstore %sv_out[%c0, %c0], %t1 : (!pto.tensor<...>, index, index, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

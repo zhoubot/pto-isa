@@ -17,8 +17,8 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form (conceptual):
 
 ```text
-%dst, %executed = tmrgsort %src0, %src1 {exhausted = false}
-    : !pto.tile<...>, !pto.tile<...> -> (!pto.tile<...>, vector<4xi16>)
+tmrgsort %dst, %executed, %tmp, %src0, %src1 {exhausted = false}
+    : (!pto.tile<...>, vector<4xi16>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

@@ -17,7 +17,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = texpands %scalar : f32, !pto.tile<...>
+texpands %dst, %scalar : (f32, f32, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 

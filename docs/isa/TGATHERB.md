@@ -19,7 +19,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tgatherb %src, %offsets : !pto.tile<...> -> !pto.tile<...>
+tgatherb %dst, %src, %offsets : (!pto.tile<...>, !pto.tile<...>)
 ```
 ## C++ Intrinsic
 
