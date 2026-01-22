@@ -1,4 +1,28 @@
 // PTO Program: F_softsign
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_softsign
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 1,024 bytes (1.0 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            256 bytes (25.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   abs_x                8x8        f32       256   [  1,   2]           -
+//   one_plus_abs         8x8        f32       256   [  2,   3]           -
+//   result               8x8        f32       256   [  3,   4]           <- abs_x
+//   x                    8x8        f32       256   [  0,   3]           -
+//
+// BUFFER REUSE MAP:
+//   result reuses buffer of abs_x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

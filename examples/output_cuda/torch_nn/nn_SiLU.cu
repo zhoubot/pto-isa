@@ -1,4 +1,32 @@
 // PTO Program: nn_SiLU
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_SiLU
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            768 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_neg              8x8        f32       256   [  2,   3]           -
+//   neg_x                8x8        f32       256   [  1,   2]           -
+//   one_plus             8x8        f32       256   [  3,   4]           <- neg_x
+//   result               8x8        f32       256   [  5,   6]           <- one_plus
+//   sigmoid_out          8x8        f32       256   [  4,   5]           <- exp_neg
+//   x                    8x8        f32       256   [  0,   5]           -
+//
+// BUFFER REUSE MAP:
+//   one_plus reuses buffer of neg_x
+//   sigmoid_out reuses buffer of exp_neg
+//   result reuses buffer of one_plus
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

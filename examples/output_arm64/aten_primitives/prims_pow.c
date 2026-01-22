@@ -1,11 +1,34 @@
 // PTO Program: prims_pow
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: prims_pow
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 81,920 bytes (80.0 KB)
+//   Total capacity (w/ reuse): 81,920 bytes (80.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   base                 1x4096     f32     16384   [  3,  14]           -
+//   exp_tile             1x4096     f32     16384   [  4,  15]           -
+//   log_base             1x4096     f32     16384   [  5,  15]           -
+//   product              1x4096     f32     16384   [  6,  16]           -
+//   result               1x4096     f32     16384   [  7,  17]           -
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-void prims_pow(float* input_base, float* input_exp, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+void prims_pow(float* input_base, float* input_exp, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     float base[1][4096];
     float exp_tile[1][4096];
     float log_base[1][4096];
@@ -95,3 +118,59 @@ void prims_pow(float* input_base, float* input_exp, float* output, int32_t num_f
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "prims_pow"; }
+enum { kPtoNumMemrefs = 3 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input_base",
+    "input_exp",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(16384),
+    (size_t)(16384),
+    (size_t)(16384),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    prims_pow((float*)args[0], (float*)args[1], (float*)args[2], (int32_t)0, (int32_t)0);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

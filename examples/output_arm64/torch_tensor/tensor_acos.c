@@ -1,9 +1,45 @@
 // PTO Program: tensor_acos
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_acos
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     10
+//   Total capacity (no reuse): 2,560 bytes (2.5 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            1,536 bytes (60.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   asin_val             8x8        f32       256   [  7,   9]           <- x
+//   pi_half              8x8        f32       256   [  8,   9]           <- term1
+//   result               8x8        f32       256   [  9,  10]           <- term2
+//   temp                 8x8        f32       256   [  6,   7]           <- x5
+//   term1                8x8        f32       256   [  4,   6]           <- x2
+//   term2                8x8        f32       256   [  5,   7]           <- x3
+//   x                    8x8        f32       256   [  0,   6]           -
+//   x2                   8x8        f32       256   [  1,   3]           -
+//   x3                   8x8        f32       256   [  2,   4]           -
+//   x5                   8x8        f32       256   [  3,   5]           -
+//
+// BUFFER REUSE MAP:
+//   term1 reuses buffer of x2
+//   term2 reuses buffer of x3
+//   temp reuses buffer of x5
+//   asin_val reuses buffer of x
+//   pi_half reuses buffer of term1
+//   result reuses buffer of term2
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void tensor_acos(float* input, float* output) {
     float x[8][8];
@@ -80,3 +116,54 @@ void tensor_acos(float* input, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "tensor_acos"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    tensor_acos((float*)args[0], (float*)args[1]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

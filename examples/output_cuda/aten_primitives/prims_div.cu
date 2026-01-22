@@ -1,4 +1,24 @@
 // PTO Program: prims_div
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: prims_div
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     3
+//   Total capacity (no reuse): 49,152 bytes (48.0 KB)
+//   Total capacity (w/ reuse): 49,152 bytes (48.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               1x4096     f32     16384   [  5,  13]           -
+//   x                    1x4096     f32     16384   [  3,  12]           -
+//   y                    1x4096     f32     16384   [  4,  12]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -15,7 +35,7 @@ __device__ float x[1][4096];
 __device__ float y[1][4096];
 __device__ float result[1][4096];
 
-__global__ void prims_div_kernel(float* input_x, float* input_y, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+__global__ void prims_div_kernel(float* input_x, float* input_y, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -53,7 +73,7 @@ __global__ void prims_div_kernel(float* input_x, float* input_y, float* output, 
 
 }
 
-void prims_div(float* input_x, float* input_y, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+void prims_div(float* input_x, float* input_y, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     dim3 block(8, 8);
     dim3 grid(1, 1);
     prims_div_kernel<<<grid, block>>>(input_x, input_y, output, num_full_tiles, tail_elements, zero, tile_size);

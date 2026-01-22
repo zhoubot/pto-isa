@@ -18,7 +18,7 @@ TASK TABLE (pend_task)
 TASK 0
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -42,13 +42,13 @@ TASK 0
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -58,7 +58,7 @@ TASK 0
 TASK 1
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -82,19 +82,19 @@ TASK 1
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -104,7 +104,7 @@ TASK 1
 TASK 2
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -129,13 +129,13 @@ TASK 2
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -145,7 +145,7 @@ TASK 2
 TASK 3
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -169,13 +169,13 @@ TASK 3
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -185,7 +185,7 @@ TASK 3
 TASK 4
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -207,19 +207,19 @@ TASK 4
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -229,7 +229,7 @@ TASK 4
 TASK 5
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -253,13 +253,13 @@ TASK 5
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -269,7 +269,7 @@ TASK 5
 TASK 6
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -293,19 +293,19 @@ TASK 6
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -315,7 +315,7 @@ TASK 6
 TASK 7
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -340,13 +340,13 @@ TASK 7
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -356,7 +356,7 @@ TASK 7
 TASK 8
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -380,13 +380,13 @@ TASK 8
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -396,7 +396,7 @@ TASK 8
 TASK 9
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -418,19 +418,19 @@ TASK 9
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -440,7 +440,7 @@ TASK 9
 TASK 10
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -464,13 +464,13 @@ TASK 10
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -480,7 +480,7 @@ TASK 10
 TASK 11
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -504,19 +504,19 @@ TASK 11
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -526,7 +526,7 @@ TASK 11
 TASK 12
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -551,13 +551,13 @@ TASK 12
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -567,7 +567,7 @@ TASK 12
 TASK 13
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -591,13 +591,13 @@ TASK 13
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -607,7 +607,7 @@ TASK 13
 TASK 14
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -629,19 +629,19 @@ TASK 14
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -651,7 +651,7 @@ TASK 14
 TASK 15
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -675,13 +675,13 @@ TASK 15
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -691,7 +691,7 @@ TASK 15
 TASK 16
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -715,19 +715,19 @@ TASK 16
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -737,7 +737,7 @@ TASK 16
 TASK 17
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -762,13 +762,13 @@ TASK 17
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -778,7 +778,7 @@ TASK 17
 TASK 18
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -802,13 +802,13 @@ TASK 18
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -818,7 +818,7 @@ TASK 18
 TASK 19
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -840,19 +840,19 @@ TASK 19
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -862,7 +862,7 @@ TASK 19
 TASK 20
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -886,13 +886,13 @@ TASK 20
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -902,7 +902,7 @@ TASK 20
 TASK 21
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -926,19 +926,19 @@ TASK 21
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -948,7 +948,7 @@ TASK 21
 TASK 22
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -973,13 +973,13 @@ TASK 22
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -989,7 +989,7 @@ TASK 22
 TASK 23
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1013,13 +1013,13 @@ TASK 23
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1029,7 +1029,7 @@ TASK 23
 TASK 24
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1051,19 +1051,19 @@ TASK 24
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1073,7 +1073,7 @@ TASK 24
 TASK 25
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1097,13 +1097,13 @@ TASK 25
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1113,7 +1113,7 @@ TASK 25
 TASK 26
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1137,19 +1137,19 @@ TASK 26
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1159,7 +1159,7 @@ TASK 26
 TASK 27
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1184,13 +1184,13 @@ TASK 27
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1200,7 +1200,7 @@ TASK 27
 TASK 28
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1224,13 +1224,13 @@ TASK 28
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1240,7 +1240,7 @@ TASK 28
 TASK 29
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1262,19 +1262,19 @@ TASK 29
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1284,7 +1284,7 @@ TASK 29
 TASK 30
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1308,13 +1308,13 @@ TASK 30
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1324,7 +1324,7 @@ TASK 30
 TASK 31
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1348,19 +1348,19 @@ TASK 31
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1370,7 +1370,7 @@ TASK 31
 TASK 32
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1395,13 +1395,13 @@ TASK 32
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1411,7 +1411,7 @@ TASK 32
 TASK 33
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1435,13 +1435,13 @@ TASK 33
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1451,7 +1451,7 @@ TASK 33
 TASK 34
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1473,19 +1473,19 @@ TASK 34
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1495,7 +1495,7 @@ TASK 34
 TASK 35
 --------------------------------------------------------------------------------
   Function:     rowmax
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1519,13 +1519,13 @@ TASK 35
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1535,7 +1535,7 @@ TASK 35
 TASK 36
 --------------------------------------------------------------------------------
   Function:     rowexpandsub
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1559,19 +1559,19 @@ TASK 36
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da65f38
+        tensor:     0xffffeee381d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da63f38
+        tensor:     0xffffeee3a1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1581,7 +1581,7 @@ TASK 36
 TASK 37
 --------------------------------------------------------------------------------
   Function:     elem_exp
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1606,13 +1606,13 @@ TASK 37
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da62f38
+        tensor:     0xffffeee3b1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1622,7 +1622,7 @@ TASK 37
 TASK 38
 --------------------------------------------------------------------------------
   Function:     rowsum
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1646,13 +1646,13 @@ TASK 38
   ARGUMENTS (num_args = 2)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] OUTPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1662,7 +1662,7 @@ TASK 38
 TASK 39
 --------------------------------------------------------------------------------
   Function:     rowexpanddiv
-  Func Ptr:     0x0
+  Func Ptr:     (nil)
   Is Active:    true
   Is Complete:  false
 
@@ -1684,19 +1684,19 @@ TASK 39
   ARGUMENTS (num_args = 3)
   -------------------------
     [0] INPUT:
-        tensor:     0x16da61f38
+        tensor:     0xffffeee3c1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       128
     [1] INPUT:
-        tensor:     0x16da60f38
+        tensor:     0xffffeee3d1d0
         row_offset: 0
         col_offset: 0
         rows:       32
         cols:       1
     [2] OUTPUT:
-        tensor:     0x16da64f38
+        tensor:     0xffffeee391d0
         row_offset: 0
         col_offset: 0
         rows:       32
@@ -1715,11 +1715,11 @@ READY QUEUE
 TENSOR MAP (non-empty buckets)
 ================================================================================
 
-  [bucket 3353] tensor=0x16da64f38, offset=[0,0], shape=[32,128] -> producer: Task 39
-  [bucket 3742] tensor=0x16da60f38, offset=[0,0], shape=[32,1] -> producer: Task 38
-  [bucket 7449] tensor=0x16da61f38, offset=[0,0], shape=[32,128] -> producer: Task 37
-  [bucket 11545] tensor=0x16da62f38, offset=[0,0], shape=[32,128] -> producer: Task 36
-  [bucket 16030] tensor=0x16da63f38, offset=[0,0], shape=[32,1] -> producer: Task 35
+  [bucket 3087] tensor=0xffffeee3b1d0, offset=[0,0], shape=[32,128] -> producer: Task 36
+  [bucket 8072] tensor=0xffffeee3a1d0, offset=[0,0], shape=[32,1] -> producer: Task 35
+  [bucket 11279] tensor=0xffffeee391d0, offset=[0,0], shape=[32,128] -> producer: Task 39
+  [bucket 12168] tensor=0xffffeee3d1d0, offset=[0,0], shape=[32,1] -> producer: Task 38
+  [bucket 15375] tensor=0xffffeee3c1d0, offset=[0,0], shape=[32,128] -> producer: Task 37
 
   Total tensor entries: 5
 

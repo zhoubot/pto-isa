@@ -1,4 +1,31 @@
 // PTO Program: nn_Sigmoid
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_Sigmoid
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 1,280 bytes (1.2 KB)
+//   Total capacity (w/ reuse): 512 bytes (0.5 KB)
+//   Reuse savings:            768 bytes (60.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_neg              8x8        f32       256   [  2,   3]           <- x
+//   neg_x                8x8        f32       256   [  1,   2]           -
+//   one_plus             8x8        f32       256   [  3,   4]           <- neg_x
+//   result               8x8        f32       256   [  4,   5]           <- exp_neg
+//   x                    8x8        f32       256   [  0,   1]           -
+//
+// BUFFER REUSE MAP:
+//   exp_neg reuses buffer of x
+//   one_plus reuses buffer of neg_x
+//   result reuses buffer of exp_neg
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

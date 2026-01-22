@@ -1,4 +1,27 @@
 // PTO Program: F_batch_norm
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_batch_norm
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 864 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 864 bytes (0.8 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   centered             8x8        f32       256   [  3,  -1]           -
+//   mean                 1x8        f32        32   [  1,  -1]           -
+//   result               8x8        f32       256   [  6,   7]           -
+//   std                  1x8        f32        32   [  5,   6]           -
+//   var                  1x8        f32        32   [  2,   5]           -
+//   x                    8x8        f32       256   [  0,   6]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

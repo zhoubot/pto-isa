@@ -1,4 +1,34 @@
 // PTO Program: F_hardswish
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_hardswish
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     8
+//   Total capacity (no reuse): 2,048 bytes (2.0 KB)
+//   Total capacity (w/ reuse): 1,280 bytes (1.2 KB)
+//   Reuse savings:            768 bytes (37.5%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   clamp_low            8x8        f32       256   [  5,   6]           -
+//   hardsig              8x8        f32       256   [  6,   7]           <- scaled
+//   ones                 8x8        f32       256   [  4,   6]           -
+//   result               8x8        f32       256   [  7,   8]           <- zeros
+//   scaled               8x8        f32       256   [  2,   5]           -
+//   x                    8x8        f32       256   [  0,   7]           -
+//   x_plus_3             8x8        f32       256   [  1,   2]           -
+//   zeros                8x8        f32       256   [  3,   5]           <- x_plus_3
+//
+// BUFFER REUSE MAP:
+//   zeros reuses buffer of x_plus_3
+//   hardsig reuses buffer of scaled
+//   result reuses buffer of zeros
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

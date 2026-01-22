@@ -1,9 +1,43 @@
 // PTO Program: F_selu
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_selu
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     9
+//   Total capacity (no reuse): 2,304 bytes (2.2 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            1,280 bytes (55.6%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   alpha_scaled         8x8        f32       256   [  4,   6]           <- exp_x
+//   elu_result           8x8        f32       256   [  7,   8]           <- alpha_scaled
+//   exp_minus_one        8x8        f32       256   [  3,   4]           <- x
+//   exp_x                8x8        f32       256   [  2,   3]           -
+//   neg_part             8x8        f32       256   [  6,   7]           -
+//   pos_part             8x8        f32       256   [  1,   7]           -
+//   result               8x8        f32       256   [  8,   9]           <- pos_part
+//   x                    8x8        f32       256   [  0,   2]           -
+//   zeros                8x8        f32       256   [  5,   6]           <- exp_minus_one
+//
+// BUFFER REUSE MAP:
+//   exp_minus_one reuses buffer of x
+//   alpha_scaled reuses buffer of exp_x
+//   zeros reuses buffer of exp_minus_one
+//   elu_result reuses buffer of alpha_scaled
+//   result reuses buffer of pos_part
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void F_selu(float* input, float* output) {
     float x[8][8];
@@ -72,3 +106,54 @@ void F_selu(float* input, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "F_selu"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    F_selu((float*)args[0], (float*)args[1]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

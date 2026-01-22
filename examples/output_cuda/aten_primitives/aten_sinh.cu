@@ -1,4 +1,25 @@
 // PTO Program: aten_sinh
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: aten_sinh
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 65,536 bytes (64.0 KB)
+//   Total capacity (w/ reuse): 65,536 bytes (64.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               1x4096     f32     16384   [  4,  39]           -
+//   term                 1x4096     f32     16384   [  6,  38]           -
+//   x                    1x4096     f32     16384   [  3,  26]           -
+//   x_squared            1x4096     f32     16384   [  5,  36]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -16,7 +37,7 @@ __device__ float x_squared[1][4096];
 __device__ float term[1][4096];
 __device__ float result[1][4096];
 
-__global__ void aten_sinh_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+__global__ void aten_sinh_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -80,7 +101,7 @@ __global__ void aten_sinh_kernel(float* input, float* output, int32_t num_full_t
 
 }
 
-void aten_sinh(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+void aten_sinh(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     dim3 block(8, 8);
     dim3 grid(1, 1);
     aten_sinh_kernel<<<grid, block>>>(input, output, num_full_tiles, tail_elements, zero, tile_size);

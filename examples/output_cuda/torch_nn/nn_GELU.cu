@@ -1,4 +1,34 @@
 // PTO Program: nn_GELU
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_GELU
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 1,792 bytes (1.8 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            1,024 bytes (57.1%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_neg              8x8        f32       256   [  3,   4]           <- scaled_x
+//   neg_scaled           8x8        f32       256   [  2,   3]           -
+//   one_plus             8x8        f32       256   [  4,   5]           <- neg_scaled
+//   result               8x8        f32       256   [  6,   7]           <- one_plus
+//   scaled_x             8x8        f32       256   [  1,   2]           -
+//   sigmoid_out          8x8        f32       256   [  5,   6]           <- exp_neg
+//   x                    8x8        f32       256   [  0,   6]           -
+//
+// BUFFER REUSE MAP:
+//   exp_neg reuses buffer of scaled_x
+//   one_plus reuses buffer of neg_scaled
+//   sigmoid_out reuses buffer of exp_neg
+//   result reuses buffer of one_plus
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

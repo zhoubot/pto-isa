@@ -1,4 +1,32 @@
 // PTO Program: nn_Hardsigmoid
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_Hardsigmoid
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            768 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   relu6_out            8x8        f32       256   [  4,   5]           -
+//   relu_out             8x8        f32       256   [  2,   4]           <- x
+//   result               8x8        f32       256   [  5,   6]           <- relu_out
+//   six                  8x8        f32       256   [  3,   4]           <- x_plus_3
+//   x                    8x8        f32       256   [  0,   1]           -
+//   x_plus_3             8x8        f32       256   [  1,   2]           -
+//
+// BUFFER REUSE MAP:
+//   relu_out reuses buffer of x
+//   six reuses buffer of x_plus_3
+//   result reuses buffer of relu_out
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

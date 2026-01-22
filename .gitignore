@@ -10,3 +10,10 @@ build/
 .venv/
 venv/
 
+# Generated example outputs (Ascend header backends)
+examples/output_ascend_a2a3/
+examples/output_ascend_a5/
+
+# Ascend simulator debug dumps
+core*_*.dump
+profile_*_log*.toml

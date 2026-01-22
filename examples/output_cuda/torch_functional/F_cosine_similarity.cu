@@ -1,4 +1,40 @@
 // PTO Program: F_cosine_similarity
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_cosine_similarity
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     12
+//   Total capacity (no reuse): 1,504 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 896 bytes (0.9 KB)
+//   Reuse savings:            608 bytes (40.4%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   dot_prod             8x8        f32       256   [  2,   3]           -
+//   dot_sum              8x1        f32        32   [  3,  12]           -
+//   norm_prod            8x1        f32        32   [ 10,  12]           <- x2_norm_sq
+//   result               8x1        f32        32   [ 12,  13]           <- x1_norm
+//   x1                   8x8        f32       256   [  0,   4]           -
+//   x1_norm              8x1        f32        32   [  8,  10]           -
+//   x1_norm_sq           8x1        f32        32   [  6,   8]           -
+//   x1_sq                8x8        f32       256   [  4,   6]           <- dot_prod
+//   x2                   8x8        f32       256   [  1,   5]           -
+//   x2_norm              8x1        f32        32   [  9,  10]           <- x1_norm_sq
+//   x2_norm_sq           8x1        f32        32   [  7,   9]           -
+//   x2_sq                8x8        f32       256   [  5,   7]           <- x1
+//
+// BUFFER REUSE MAP:
+//   x1_sq reuses buffer of dot_prod
+//   x2_sq reuses buffer of x1
+//   x2_norm reuses buffer of x1_norm_sq
+//   norm_prod reuses buffer of x2_norm_sq
+//   result reuses buffer of x1_norm
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

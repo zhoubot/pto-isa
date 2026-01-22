@@ -1,9 +1,37 @@
 // PTO Program: F_kl_div
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_kl_div
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 1,316 bytes (1.3 KB)
+//   Total capacity (w/ reuse): 1,060 bytes (1.0 KB)
+//   Reuse savings:            256 bytes (19.5%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   diff                 8x8        f32       256   [  3,   4]           -
+//   kl                   8x8        f32       256   [  4,   5]           <- log_pred
+//   log_pred             8x8        f32       256   [  0,   3]           -
+//   log_target           8x8        f32       256   [  2,   3]           -
+//   result               1x1        f32         4   [  6,   8]           -
+//   row_sum              8x1        f32        32   [  5,   6]           -
+//   target               8x8        f32       256   [  1,   4]           -
+//
+// BUFFER REUSE MAP:
+//   kl reuses buffer of log_pred
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void F_kl_div(float* input, float* target_mem, float* output) {
     float log_pred[8][8];
@@ -83,3 +111,59 @@ void F_kl_div(float* input, float* target_mem, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "F_kl_div"; }
+enum { kPtoNumMemrefs = 3 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "target_mem",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(4),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    F_kl_div((float*)args[0], (float*)args[1], (float*)args[2]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

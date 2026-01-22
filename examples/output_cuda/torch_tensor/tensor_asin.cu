@@ -1,4 +1,35 @@
 // PTO Program: tensor_asin
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_asin
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     8
+//   Total capacity (no reuse): 2,048 bytes (2.0 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            1,024 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               8x8        f32       256   [  7,   8]           <- x
+//   temp                 8x8        f32       256   [  6,   7]           <- x5
+//   term1                8x8        f32       256   [  4,   6]           <- x2
+//   term2                8x8        f32       256   [  5,   7]           <- x3
+//   x                    8x8        f32       256   [  0,   6]           -
+//   x2                   8x8        f32       256   [  1,   3]           -
+//   x3                   8x8        f32       256   [  2,   4]           -
+//   x5                   8x8        f32       256   [  3,   5]           -
+//
+// BUFFER REUSE MAP:
+//   term1 reuses buffer of x2
+//   term2 reuses buffer of x3
+//   temp reuses buffer of x5
+//   result reuses buffer of x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

@@ -1,9 +1,35 @@
 // PTO Program: tensor_pow
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_pow
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 1,024 bytes (1.0 KB)
+//   Total capacity (w/ reuse): 512 bytes (0.5 KB)
+//   Reuse savings:            512 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   log_self             8x8        f32       256   [  1,   2]           -
+//   result               8x8        f32       256   [  3,   4]           <- log_self
+//   scaled               8x8        f32       256   [  2,   3]           <- self
+//   self                 8x8        f32       256   [  0,   1]           -
+//
+// BUFFER REUSE MAP:
+//   scaled reuses buffer of self
+//   result reuses buffer of log_self
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void tensor_pow(float* input, float* output) {
     float self[8][8];
@@ -44,3 +70,54 @@ void tensor_pow(float* input, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "tensor_pow"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    tensor_pow((float*)args[0], (float*)args[1]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

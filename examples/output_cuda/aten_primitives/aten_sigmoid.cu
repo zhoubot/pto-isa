@@ -1,4 +1,26 @@
 // PTO Program: aten_sigmoid
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: aten_sigmoid
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 81,920 bytes (80.0 KB)
+//   Total capacity (w/ reuse): 81,920 bytes (80.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               1x4096     f32     16384   [  7,  17]           -
+//   t1                   1x4096     f32     16384   [  4,  14]           -
+//   t2                   1x4096     f32     16384   [  5,  15]           -
+//   t3                   1x4096     f32     16384   [  6,  16]           -
+//   x                    1x4096     f32     16384   [  3,  13]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -17,7 +39,7 @@ __device__ float t2[1][4096];
 __device__ float t3[1][4096];
 __device__ float result[1][4096];
 
-__global__ void aten_sigmoid_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+__global__ void aten_sigmoid_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -59,7 +81,7 @@ __global__ void aten_sigmoid_kernel(float* input, float* output, int32_t num_ful
 
 }
 
-void aten_sigmoid(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+void aten_sigmoid(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     dim3 block(8, 8);
     dim3 grid(1, 1);
     aten_sigmoid_kernel<<<grid, block>>>(input, output, num_full_tiles, tail_elements, zero, tile_size);

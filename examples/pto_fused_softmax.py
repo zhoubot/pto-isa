@@ -311,7 +311,7 @@ def main():
     
     # Create output directories
     arm64_dir = os.path.join(output_base, "output_arm64", "fused_softmax")
-    ascend_dir = os.path.join(output_base, "output_ascend910b", "fused_softmax")
+    ascend_dir = os.path.join(output_base, "output_ascend_a2a3", "fused_softmax")
     cuda_dir = os.path.join(output_base, "output_cuda", "fused_softmax")
     os.makedirs(arm64_dir, exist_ok=True)
     os.makedirs(ascend_dir, exist_ok=True)
@@ -332,13 +332,13 @@ def main():
             f.write(arm64_code)
         print(f"  [ARM64] {func_name} ({func_type}) -> {func_file}")
         
-        # Ascend 910B (only for InCore functions)
+        # Ascend A2/A3 (A3 = Ascend 910B) - only for InCore functions
         if func.is_in_core:
-            ascend_code = gen.generate_ascend(func)
+            ascend_code = gen.generate_ascend_a2a3(func)
             func_file = os.path.join(ascend_dir, f"{func_name}.cpp")
             with open(func_file, "w") as f:
                 f.write(ascend_code)
-            print(f"  [Ascend910B] {func_name} ({func_type}) -> {func_file}")
+            print(f"  [Ascend A2/A3] {func_name} ({func_type}) -> {func_file}")
             
             # CUDA
             cuda_code = gen.generate_cuda(func)

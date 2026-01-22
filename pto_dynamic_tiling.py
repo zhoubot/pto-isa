@@ -72,7 +72,7 @@ def compute_tile_shape(dtype: ElementType = ElementType.F32,
     
     Args:
         dtype: Element data type
-        target_isa: Target ISA ("arm64", "cuda", "ascend910b")
+        target_isa: Target ISA ("arm64", "cuda", "ascend_a2a3", "ascend_a5")
     
     Returns:
         (rows, cols) tuple
@@ -86,7 +86,7 @@ def compute_tile_shape(dtype: ElementType = ElementType.F32,
     elif target_isa == "cuda":
         vector_lanes = CUDA_VECTOR_LANES.get(dtype_str, 4)
         physical_row_size = CUDA_PHYSICAL_ROW_SIZE
-    elif target_isa == "ascend910b":
+    elif target_isa in ("ascend_a2a3", "ascend_a5", "ascend910b"):
         vector_lanes = ASCEND_VECTOR_LANES.get(dtype_str, 8)
         physical_row_size = ASCEND_PHYSICAL_ROW_SIZE
     else:
@@ -431,7 +431,7 @@ def print_tile_shapes():
     print("Tile Shape Summary for Different ISAs and Data Types")
     print("=" * 70)
     
-    for isa in ["arm64", "cuda", "ascend910b"]:
+    for isa in ["arm64", "cuda", "ascend_a2a3", "ascend_a5"]:
         print(f"\n{isa.upper()}:")
         for dtype in [ElementType.F32, ElementType.F16, ElementType.F64]:
             info = get_tile_info(dtype, isa)

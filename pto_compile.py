@@ -1,7 +1,7 @@
 """
 PTO ISA Compiler
 
-This module provides the compiler infrastructure for the PTO (Programmable Tensor Operations)
+This module provides the compiler infrastructure for the PTO (Parallel Tile Operations)
 Domain Specific Language. It handles parsing, validation, optimization, and code generation
 for PTO programs.
 
@@ -1109,9 +1109,10 @@ class TypeChecker:
     
     def _check_instruction(self, instr: PTOInstruction):
         """Type check a single instruction."""
-        if isinstance(instr, TADD) or isinstance(instr, TSUB) or isinstance(instr, TMUL):
+        opcode = getattr(instr, "opcode", instr.__class__.__name__)
+        if opcode in ("TADD", "TSUB", "TMUL"):
             self._check_binary_tile_op(instr)
-        elif isinstance(instr, TMATMUL):
+        elif opcode == "TMATMUL":
             self._check_matmul(instr)
     
     def _check_binary_tile_op(self, instr):
@@ -2498,13 +2499,24 @@ BACKENDS = {
         "header_func": cuda_generate_header,
         "type_map": CUDA_TYPE_MAP,
     },
-    "ascend910b": {
-        "name": "Huawei Ascend 910B",
-        "suffix": "_ascend910b",
+    # Header-based NPU backends (PTO C++ headers).
+    # On Ascend 910B (A3), use `ascend_a2a3`.
+    "ascend_a2a3": {
+        "name": "Huawei Ascend A2/A3 (PTO headers)",
+        "suffix": "_ascend_a2a3",
         "extension": ".cpp",
-        "header_func": ascend_generate_header,
-        "type_map": ASCEND_TYPE_MAP,
+        "header_func": lambda: "// Auto-generated Ascend A2/A3 code from PTO ISA Compiler\n",
+        "type_map": {},  # C++ header-based; not type-mapped like C/CUDA
     },
+    "ascend_a5": {
+        "name": "Huawei Ascend A5 (PTO headers)",
+        "suffix": "_ascend_a5",
+        "extension": ".cpp",
+        "header_func": lambda: "// Auto-generated Ascend A5 code from PTO ISA Compiler\n",
+        "type_map": {},  # C++ header-based; not type-mapped like C/CUDA
+    },
+    # NOTE: The older Ascend-C (AscendC) backend remains available via code, but is not
+    # exposed as a default backend key here because this repo is switching naming to A2/A3 and A5.
 }
 
 
@@ -3943,7 +3955,8 @@ class MultiBackendCodeGenerator:
     Generates optimized code for multiple target architectures:
     - ARM64 NEON (Apple Silicon, ARM servers)
     - NVIDIA CUDA (GPU computing)
-    - Huawei Ascend 910B (NPU/AI accelerator)
+    - Huawei Ascend A2/A3 (PTO header backend)
+    - Huawei Ascend A5 (PTO header backend)
     
     If a module is provided, buffer analysis results are stored in the module
     for later use by orchestration code generators.
@@ -4084,7 +4097,142 @@ class MultiBackendCodeGenerator:
                     lines.append("")
         
         lines.append("}")
-        
+
+        # Optional smoke-test metadata + launch wrapper for CPU execution.
+        #
+        # Build usage:
+        #   gcc -shared -fPIC -O2 -std=c11 -DPTO_CPU_SMOKE_RUNNER <program>.c -o <program>_cpu.so
+        #
+        # Runtime usage (host-side runner, dlopen):
+        #   - dlsym `pto_launch`, `pto_num_memrefs`, `pto_memref_bytes`, ...
+        if is_in_core:
+            # Infer memref shapes from load/store tile usage (same heuristic as NPU header backend).
+            memref_shape = {}
+            written_memrefs = set()
+            for instr in program.instructions:
+                op = getattr(instr, "opcode", "")
+                if op in ("TSTORE", "TSTORE_FP"):
+                    written_memrefs.add(instr.dst_mem.name)
+                if op == "TLOAD":
+                    tile_t = program.tile_declarations.get(instr.dst.name)
+                    if tile_t is not None:
+                        memref_shape.setdefault(instr.src_mem.name, (tile_t.shape.rows, tile_t.shape.cols))
+                elif op in ("TSTORE", "TSTORE_FP"):
+                    tile_t = program.tile_declarations.get(instr.src.name)
+                    if tile_t is not None:
+                        memref_shape.setdefault(instr.dst_mem.name, (tile_t.shape.rows, tile_t.shape.cols))
+
+            def _bytes_per_element_arm64(et: 'ElementType') -> int:
+                m = {
+                    "u1": 1,
+                    "u8": 1,
+                    "i8": 1,
+                    "u16": 2,
+                    "i16": 2,
+                    "f16": 2,
+                    "bf16": 2,
+                    "u32": 4,
+                    "i32": 4,
+                    "f32": 4,
+                    "u64": 8,
+                    "i64": 8,
+                    "f64": 8,
+                    "index": 4,
+                }
+                return m.get(et.value, 4)
+
+            memref_names = list(program.memref_declarations.keys())
+            memref_bytes = []
+            memref_is_output = []
+            memref_dtypes = []
+            memref_elem_bytes = []
+            for name, memref_type in program.memref_declarations.items():
+                rows, cols = memref_shape.get(name, (1, 1))
+                eb = _bytes_per_element_arm64(memref_type.element_type)
+                memref_dtypes.append(memref_type.element_type.value)
+                memref_elem_bytes.append(eb)
+                memref_bytes.append(rows * cols * eb)
+                memref_is_output.append(1 if name in written_memrefs else 0)
+
+            # Scalars passed as function parameters (skip INDEX/U1 and SLI-initialized scalars).
+            scalar_defaults = []
+            for name, scalar_type in program.scalar_declarations.items():
+                if scalar_type in (ElementType.U1, ElementType.INDEX):
+                    continue
+                if name in sli_initialized_scalars:
+                    continue
+                c_type = ARM64_TYPE_MAP.get(scalar_type.value, "int")
+                if c_type in ("float", "double"):
+                    scalar_defaults.append(f"({c_type})1.0")
+                else:
+                    scalar_defaults.append(f"({c_type})0")
+
+            kernel_arg_exprs = []
+            for name, memref_type in program.memref_declarations.items():
+                c_type = ARM64_TYPE_MAP.get(memref_type.element_type.value, "float")
+                kernel_arg_exprs.append(f"({c_type}*)args[{memref_names.index(name)}]")
+            kernel_arg_exprs.extend(scalar_defaults)
+            kernel_arg_list = ", ".join(kernel_arg_exprs)
+
+            lines.append("")
+            lines.append("#ifdef PTO_CPU_SMOKE_RUNNER")
+            lines.append("#include <stddef.h>")
+            lines.append(f'const char* pto_program_name() {{ return "{program.name}"; }}')
+            lines.append(f"enum {{ kPtoNumMemrefs = {len(memref_names)} }};")
+            if memref_names:
+                lines.append("static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {")
+                for n in memref_names:
+                    lines.append(f'    "{n}",')
+                lines.append("};")
+                lines.append("static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {")
+                for b in memref_bytes:
+                    lines.append(f"    (size_t)({b}),")
+                lines.append("};")
+                lines.append("static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {")
+                for dt in memref_dtypes:
+                    lines.append(f'    "{dt}",')
+                lines.append("};")
+                lines.append("static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {")
+                for eb in memref_elem_bytes:
+                    lines.append(f"    (size_t)({eb}),")
+                lines.append("};")
+                lines.append("static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {")
+                for o in memref_is_output:
+                    lines.append(f"    {o},")
+                lines.append("};")
+            else:
+                lines.append('static const char* const kPtoMemrefNames[1] = {""};')
+                lines.append("static const size_t kPtoMemrefBytes[1] = {(size_t)0};")
+                lines.append('static const char* const kPtoMemrefDtypes[1] = {""};')
+                lines.append("static const size_t kPtoMemrefElemBytes[1] = {(size_t)0};")
+                lines.append("static const int kPtoMemrefIsOutput[1] = {0};")
+            lines.append("int pto_num_memrefs() { return kPtoNumMemrefs; }")
+            lines.append("const char* pto_memref_name(int idx) {")
+            lines.append("    if (idx < 0 || idx >= kPtoNumMemrefs) return \"\";")
+            lines.append("    return kPtoMemrefNames[idx];")
+            lines.append("}")
+            lines.append("size_t pto_memref_bytes(int idx) {")
+            lines.append("    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;")
+            lines.append("    return kPtoMemrefBytes[idx];")
+            lines.append("}")
+            lines.append("const char* pto_memref_dtype(int idx) {")
+            lines.append("    if (idx < 0 || idx >= kPtoNumMemrefs) return \"\";")
+            lines.append("    return kPtoMemrefDtypes[idx];")
+            lines.append("}")
+            lines.append("size_t pto_memref_elem_bytes(int idx) {")
+            lines.append("    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;")
+            lines.append("    return kPtoMemrefElemBytes[idx];")
+            lines.append("}")
+            lines.append("int pto_memref_is_output(int idx) {")
+            lines.append("    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;")
+            lines.append("    return kPtoMemrefIsOutput[idx];")
+            lines.append("}")
+            lines.append("void pto_launch(void **args, void *stream) {")
+            lines.append("    (void)stream;")
+            lines.append(f"    {program.name}({kernel_arg_list});")
+            lines.append("}")
+            lines.append("#endif  // PTO_CPU_SMOKE_RUNNER")
+
         code = "\n".join(lines)
         # Apply binary expansion if any loops have @BINARY_EXPAND markers
         if "@BINARY_EXPAND" in code:
@@ -4225,7 +4373,7 @@ class MultiBackendCodeGenerator:
     
     def generate_ascend(self, program) -> str:
         """
-        Generate Huawei Ascend 910B (Ascend C) code from a PTO program.
+        Generate Huawei Ascend A2/A3 (Ascend C / AscendC) code from a PTO program.
         
         IMPORTANT: InCore functions are generated as SINGLE-CORE (SPSD) functions,
         NOT as SPMD kernels. They are designed to be:
@@ -4418,6 +4566,630 @@ class MultiBackendCodeGenerator:
         lines.append("#endif  // PTO_GENERATE_SPMD_KERNEL")
         
         return "\n".join(lines)
+
+    def generate_ascend_a2a3(self, program) -> str:
+        """Generate Huawei Ascend A2/A3 code using the copied `include/pto` header backend."""
+        return self._generate_pto_header_npu(program, soc="a2a3")
+
+    def generate_ascend_a5(self, program) -> str:
+        """Generate Huawei Ascend A5 code using the copied `include/pto` header backend."""
+        return self._generate_pto_header_npu(program, soc="a5")
+
+    # Backward-compatible aliases
+    def generate_a2a3(self, program) -> str:
+        return self.generate_ascend_a2a3(program)
+
+    def generate_a5(self, program) -> str:
+        return self.generate_ascend_a5(program)
+
+    def _generate_pto_header_npu(self, program, soc: str) -> str:
+        """
+        Generate NPU kernel code that uses `include/pto` header implementations.
+
+        Notes:
+        - This backend targets Ascend A2/A3 (`MEMORY_BASE`) and A5 (`REGISTER_BASE`) style PTO kernels.
+        - It is intended for InCore functions. Orchestration functions remain host-only and are not supported here.
+        - The current PTO DSL does not encode all required low-level tile locations (e.g., Left/Right/Acc for matmul);
+          for such ops, this generator emits a TODO comment.
+        """
+        is_in_core = getattr(program, 'is_in_core', True)
+        if not is_in_core:
+            return "\n".join([
+                f"// PTO Program: {program.name}",
+                "// Backend: Ascend PTO headers",
+                "// ERROR: Orchestration functions are not supported for this backend (host-only).",
+            ])
+
+        if soc not in ("a2a3", "a5"):
+            raise ValueError(f"Unknown NPU SoC: {soc}")
+
+        def _cpp_type_for_element_type(et: 'ElementType') -> str:
+            m = {
+                "f32": "float",
+                "f16": "half",
+                "bf16": "bfloat16_t",
+                "f64": "double",
+                "i8": "int8_t",
+                "i16": "int16_t",
+                "i32": "int32_t",
+                "i64": "int64_t",
+                "u1": "uint8_t",
+                "u8": "uint8_t",
+                "u16": "uint16_t",
+                "u32": "uint32_t",
+                "u64": "uint64_t",
+                "index": "int32_t",
+            }
+            return m.get(et.value, "float")
+
+        def _bytes_per_element(et: 'ElementType') -> int:
+            m = {
+                "u1": 1,
+                "i8": 1,
+                "u8": 1,
+                "i16": 2,
+                "u16": 2,
+                "f16": 2,
+                "bf16": 2,
+                "i32": 4,
+                "u32": 4,
+                "f32": 4,
+                "i64": 8,
+                "u64": 8,
+                "f64": 8,
+            }
+            return m.get(et.value, 4)
+
+        def _align_cols_for_vec(et: 'ElementType', cols: int) -> int:
+            """
+            Ascend tile buffers require 32-byte alignment for row-major Vec tiles in common layouts.
+
+            This helper rounds the template column count up to a multiple of (32 / sizeof(dtype)),
+            while keeping the runtime validCols as the logical `cols`.
+            """
+            b = _bytes_per_element(et)
+            align_elems = max(1, 32 // b)
+            return ((cols + align_elems - 1) // align_elems) * align_elems
+
+        def _pipe_for_opcode(op: str) -> str:
+            if op == "TLOAD":
+                return "PIPE_MTE2"
+            if op == "TSTORE" or op == "TSTORE_FP":
+                return "PIPE_MTE3"
+            if op.startswith("TMATMUL"):
+                return "PIPE_M"
+            if op in ("TRESHAPE", "TCI") or op.startswith("S"):
+                return "PIPE_S"
+            if op in ("TMOV", "TMOV_FP", "TEXTRACT", "TINSERT"):
+                return "PIPE_FIX"
+            if op in (
+                "LI", "MOV", "ADD", "SUB", "MUL", "DIV", "CMP",
+                "LOAD", "STORE",
+                "SHL", "SHR", "AND", "OR", "XOR", "NOT",
+                "MIN", "MAX",
+            ):
+                return "PIPE_S"
+            return "PIPE_V"
+
+        def _emit_barrier(prev_pipe: str, cur_pipe: str) -> List[str]:
+            if prev_pipe == cur_pipe:
+                return []
+            return [
+                f"    set_flag({prev_pipe}, {cur_pipe}, EVENT_ID0);",
+                f"    wait_flag({prev_pipe}, {cur_pipe}, EVENT_ID0);",
+            ]
+
+        # Track which memrefs are written (heuristic for __out__/__in__)
+        written_memrefs = set()
+        for instr in program.instructions:
+            if getattr(instr, "opcode", None) == "TSTORE":
+                written_memrefs.add(instr.dst_mem.name)
+            if getattr(instr, "opcode", None) == "TSTORE_FP":
+                written_memrefs.add(instr.dst_mem.name)
+
+        # Kernel parameters: memrefs (+ scalars as plain args)
+        memref_params = []
+        for name, memref_type in program.memref_declarations.items():
+            c_type = _cpp_type_for_element_type(memref_type.element_type)
+            qualifier = "__out__" if name in written_memrefs else "__in__"
+            memref_params.append(f"__gm__ {c_type} {qualifier} *{name}")
+
+        scalar_params = []
+        for name, scalar_type in program.scalar_declarations.items():
+            if scalar_type in (ElementType.U1, ElementType.INDEX):
+                continue
+            c_type = _cpp_type_for_element_type(scalar_type)
+            scalar_params.append(f"{c_type} {name}")
+
+        # Determine per-memref logical (rows, cols) from first associated tile in load/store.
+        memref_shape = {}
+        for instr in program.instructions:
+            op = getattr(instr, "opcode", "")
+            if op == "TLOAD":
+                tile_t = program.tile_declarations.get(instr.dst.name)
+                if tile_t is not None:
+                    memref_shape.setdefault(instr.src_mem.name, (tile_t.shape.rows, tile_t.shape.cols))
+            elif op in ("TSTORE", "TSTORE_FP"):
+                tile_t = program.tile_declarations.get(instr.src.name)
+                if tile_t is not None:
+                    memref_shape.setdefault(instr.dst_mem.name, (tile_t.shape.rows, tile_t.shape.cols))
+
+        # Collect tiles (declared + generated scratch tiles).
+        tile_meta: Dict[str, Tuple[int, int, 'ElementType']] = {}
+        for tile_name, tile_type in program.tile_declarations.items():
+            tile_meta[tile_name] = (tile_type.shape.rows, tile_type.shape.cols, tile_type.element_type)
+
+        # Scratch tiles required by some ops in `pto/common/pto_instr.hpp`.
+        scratch_for_instr: Dict[int, str] = {}
+        scratch_count = 0
+        for idx, instr in enumerate(program.instructions):
+            op = getattr(instr, "opcode", "")
+            if op in ("TROWSUM", "TROWMAX", "TROWMIN", "TTRANS"):
+                src_name = getattr(instr, "src", None).name if getattr(instr, "src", None) is not None else None
+                if src_name and src_name in tile_meta:
+                    rows, cols, et = tile_meta[src_name]
+                    scratch_name = f"pto_tmp_{scratch_count}"
+                    scratch_count += 1
+                    tile_meta[scratch_name] = (rows, cols, et)
+                    scratch_for_instr[idx] = scratch_name
+            elif op in ("TCOLSUM",):
+                src_name = getattr(instr, "src", None).name if getattr(instr, "src", None) is not None else None
+                if src_name and src_name in tile_meta:
+                    rows, cols, et = tile_meta[src_name]
+                    scratch_name = f"pto_tmp_{scratch_count}"
+                    scratch_count += 1
+                    tile_meta[scratch_name] = (rows, cols, et)
+                    scratch_for_instr[idx] = scratch_name
+            elif op in ("TREM", "TREMS", "TXOR"):
+                dst_name = getattr(instr, "dst", None).name if getattr(instr, "dst", None) is not None else None
+                if dst_name and dst_name in tile_meta:
+                    rows, cols, et = tile_meta[dst_name]
+                    scratch_name = f"pto_tmp_{scratch_count}"
+                    scratch_count += 1
+                    tile_meta[scratch_name] = (rows, cols, et)
+                    scratch_for_instr[idx] = scratch_name
+            elif op == "TXORS":
+                dst_name = getattr(instr, "dst", None).name if getattr(instr, "dst", None) is not None else None
+                if dst_name and dst_name in tile_meta:
+                    rows, cols, et = tile_meta[dst_name]
+                    scratch_name = f"pto_tmp_{scratch_count}"
+                    scratch_count += 1
+                    tile_meta[scratch_name] = (rows, cols, et)
+                    scratch_for_instr[idx] = scratch_name
+
+        # Header
+        soc_define = "MEMORY_BASE" if soc == "a2a3" else "REGISTER_BASE"
+        import os
+        a3_strict_barrier = bool(int(os.environ.get("PTO_A3_STRICT_BARRIER", "0"))) if soc == "a2a3" else False
+        a3_use_tpush_tpop = bool(int(os.environ.get("PTO_A3_USE_TPUSH_TPOP", "0"))) if soc == "a2a3" else False
+        lines = [
+            f"// PTO Program: {program.name}",
+            f"// Backend: Ascend {soc.upper()} via PTO header implementations",
+            f"#ifndef {soc_define}",
+            f"#define {soc_define}",
+            f"#endif",
+            "#include <stdint.h>",
+            "#include <pto/pto-inst.hpp>",
+            "#include <pto/common/constants.hpp>",
+            "",
+            "using namespace pto;",
+            "",
+            "#ifndef TPUSH",
+            "#define TPUSH(src_pipe, dst_pipe) set_flag((src_pipe), (dst_pipe), EVENT_ID0)",
+            "#endif",
+            "#ifndef TPOP",
+            "#define TPOP(src_pipe, dst_pipe) wait_flag((src_pipe), (dst_pipe), EVENT_ID0)",
+            "#endif",
+            "",
+        ]
+
+        # Emit a single-core kernel (SPSD style). Multi-core mapping is left to the runtime/build system.
+        params = ", ".join(memref_params + scalar_params)
+        lines.append(f'extern "C" __global__ AICORE void {program.name}_kernel({params}) {{')
+
+        # Declare memref GlobalTensor aliases (2D packed as dim3/dim4)
+        for memref_name, memref_type in program.memref_declarations.items():
+            rows, cols = memref_shape.get(memref_name, (1, 1))
+            c_type = _cpp_type_for_element_type(memref_type.element_type)
+            lines.append(f"    using Shape_{memref_name} = Shape<1, 1, 1, {rows}, {cols}>;")
+            lines.append(f"    using Stride_{memref_name} = Stride<1, 1, 1, {cols}, 1>;")
+            lines.append(f"    using Global_{memref_name} = GlobalTensor<{c_type}, Shape_{memref_name}, Stride_{memref_name}>;")
+        if program.memref_declarations:
+            lines.append("")
+
+        # Declare tiles
+        for tile_name, (rows, cols, et) in tile_meta.items():
+            c_type = _cpp_type_for_element_type(et)
+            tmpl_cols = _align_cols_for_vec(et, cols)
+            type_name = f"Tile_{tile_name}"
+            lines.append(
+                f"    using {type_name} = Tile<TileType::Vec, {c_type}, {rows}, {tmpl_cols}, BLayout::RowMajor, -1, -1>;"
+            )
+        if tile_meta:
+            lines.append("")
+        for tile_name, (rows, cols, _et) in tile_meta.items():
+            lines.append(f"    Tile_{tile_name} {tile_name}({rows}, {cols});")
+
+        # Assign tile addresses in local memory
+        lines.append("")
+        offset_bytes = 0
+        for tile_name, (rows, cols, et) in tile_meta.items():
+            tmpl_cols = _align_cols_for_vec(et, cols)
+            size_bytes = rows * tmpl_cols * _bytes_per_element(et)
+            lines.append(f"    TASSIGN({tile_name}, 0x{offset_bytes:x});")
+            offset_bytes += size_bytes
+            # Keep a conservative alignment for subsequent tiles
+            offset_bytes = (offset_bytes + 127) & ~127
+
+        lines.append("")
+
+        # Local-only scalars (U1/INDEX) are not passed as kernel args; declare them here.
+        local_scalar_decls = []
+        for sname, stype in program.scalar_declarations.items():
+            if stype in (ElementType.U1, ElementType.INDEX):
+                local_scalar_decls.append((sname, _cpp_type_for_element_type(stype)))
+        if local_scalar_decls:
+            lines.append("    // Local scalar temporaries")
+            for sname, c_type in local_scalar_decls:
+                lines.append(f"    {c_type} {sname} = 0;")
+            lines.append("")
+
+        # Emit instructions (tiles + scalar/control-flow) with simple pipeline barriers.
+        indent_level = 1
+
+        def _indent() -> str:
+            return "    " * indent_level
+
+        def _emit(line: str) -> None:
+            lines.append(f"{_indent()}{line}" if line else "")
+
+        def _emit_barrier_at(prev_pipe: str, cur_pipe: str) -> None:
+            # A3 bring-up mode already inserts `pipe_barrier(PIPE_ALL)` after every instruction,
+            # which is more conservative than any per-pipe sync. Avoid emitting invalid
+            # set_flag/wait_flag pairs (e.g., src_pipe == dst_pipe) in this mode.
+            if a3_strict_barrier:
+                return
+            if prev_pipe == cur_pipe:
+                return
+            if a3_use_tpush_tpop:
+                _emit(f"TPUSH({prev_pipe}, {cur_pipe});")
+                _emit(f"TPOP({prev_pipe}, {cur_pipe});")
+            else:
+                _emit(f"set_flag({prev_pipe}, {cur_pipe}, EVENT_ID0);")
+                _emit(f"wait_flag({prev_pipe}, {cur_pipe}, EVENT_ID0);")
+
+        prev_pipe = None
+        for idx, instr in enumerate(program.instructions):
+            op = getattr(instr, "opcode", "")
+
+            # Structured control-flow.
+            if op == "FOR":
+                iv = instr.iv.name
+                lb = _get_operand_str(instr.lb)
+                ub = _get_operand_str(instr.ub)
+                step = _get_operand_str(instr.step)
+                _emit(f"for (int32_t {iv} = ({lb}); {iv} < ({ub}); {iv} += ({step})) {{")
+                indent_level += 1
+                prev_pipe = None
+                continue
+            if op == "ENDFOR":
+                indent_level = max(1, indent_level - 1)
+                _emit("}")
+                prev_pipe = None
+                continue
+            if op == "IF":
+                cond = _get_operand_str(instr.cond)
+                bit_test = getattr(instr, "bit_test", None)
+                if bit_test is not None:
+                    cond_expr = f"(({cond}) & ({bit_test})) != 0"
+                else:
+                    cond_expr = f"({cond})"
+                _emit(f"if ({cond_expr}) {{")
+                indent_level += 1
+                prev_pipe = None
+                continue
+            if op == "ELSE":
+                indent_level = max(1, indent_level - 1)
+                _emit("} else {")
+                indent_level += 1
+                prev_pipe = None
+                continue
+            if op == "ENDIF":
+                indent_level = max(1, indent_level - 1)
+                _emit("}")
+                prev_pipe = None
+                continue
+            if op == "BREAK":
+                _emit("break;")
+                prev_pipe = None
+                continue
+            if op == "CONTINUE":
+                _emit("continue;")
+                prev_pipe = None
+                continue
+            if op in ("WHILE", "DO", "ENDWHILE", "CALL", "RETURN"):
+                _emit(f"// TODO({soc}): control-flow opcode not lowered: {op}")
+                prev_pipe = None
+                continue
+
+            cur_pipe = _pipe_for_opcode(op)
+            if prev_pipe is not None:
+                _emit_barrier_at(prev_pipe, cur_pipe)
+
+            # Scalar ops.
+            if op == "LI":
+                dst = instr.dst.name
+                c_type = _cpp_type_for_element_type(instr.dst.element_type)
+                imm = _get_operand_str(instr.imm)
+                _emit(f"{dst} = ({c_type})({imm});")
+            elif op == "MOV":
+                dst = instr.dst.name
+                c_type = _cpp_type_for_element_type(instr.dst.element_type)
+                src = _get_operand_str(instr.src)
+                _emit(f"{dst} = ({c_type})({src});")
+            elif op in ("ADD", "SUB", "MUL", "DIV"):
+                dst = instr.dst.name
+                c_type = _cpp_type_for_element_type(instr.dst.element_type)
+                src0 = _get_operand_str(instr.src0)
+                src1 = _get_operand_str(instr.src1)
+                op_map = {"ADD": "+", "SUB": "-", "MUL": "*", "DIV": "/"}
+                _emit(f"{dst} = ({c_type})(({src0}) {op_map[op]} ({src1}));")
+            elif op == "CMP":
+                dst = instr.dst.name
+                src0 = _get_operand_str(instr.src0)
+                src1 = _get_operand_str(instr.src1)
+                mode = getattr(instr.cmp_mode, "value", str(instr.cmp_mode))
+                cmp_map = {"EQ": "==", "NE": "!=", "LT": "<", "LE": "<=", "GT": ">", "GE": ">="}
+                cmp_op = cmp_map.get(mode, "!=")
+                _emit(f"{dst} = (uint8_t)((({src0}) {cmp_op} ({src1})) ? 1 : 0);")
+
+            # Tile ops.
+            elif op == "TLOAD":
+                dst = instr.dst.name
+                src = instr.src_mem.name
+                tile_t = program.tile_declarations.get(dst)
+                tile_cols = tile_t.shape.cols if tile_t is not None else 1
+                row_off = _get_operand_str(instr.row_offset)
+                col_off = _get_operand_str(instr.col_offset)
+                gname = f"g_{src}_{idx}"
+                _emit(f"Global_{src} {gname}({src} + ({row_off}) * {tile_cols} + ({col_off}));")
+                _emit(f"TLOAD({dst}, {gname});")
+            elif op == "TSTORE":
+                dst_mem = instr.dst_mem.name
+                src_tile = instr.src.name
+                tile_t = program.tile_declarations.get(src_tile)
+                tile_cols = tile_t.shape.cols if tile_t is not None else 1
+                row_off = _get_operand_str(instr.row_offset)
+                col_off = _get_operand_str(instr.col_offset)
+                gname = f"g_{dst_mem}_{idx}"
+                _emit(f"Global_{dst_mem} {gname}({dst_mem} + ({row_off}) * {tile_cols} + ({col_off}));")
+                _emit(f"TSTORE({gname}, {src_tile});")
+            elif op == "TSTORE_FP":
+                dst_mem = instr.dst_mem.name
+                src_tile = instr.src.name
+                fp_tile = instr.fp.name
+                tile_t = program.tile_declarations.get(src_tile)
+                tile_cols = tile_t.shape.cols if tile_t is not None else 1
+                row_off = _get_operand_str(instr.row_offset)
+                col_off = _get_operand_str(instr.col_offset)
+                gname = f"g_{dst_mem}_{idx}"
+                _emit(f"Global_{dst_mem} {gname}({dst_mem} + ({row_off}) * {tile_cols} + ({col_off}));")
+                _emit(f"TSTORE_FP({gname}, {src_tile}, {fp_tile});")
+            elif op in ("TADD", "TSUB", "TMUL", "TDIV", "TMAX", "TMIN", "TAND", "TOR"):
+                _emit(f"{op}({instr.dst.name}, {instr.src0.name}, {instr.src1.name});")
+            elif op in ("TSHL", "TSHR"):
+                _emit(f"{op}({instr.dst.name}, {instr.src0.name}, {instr.src1.name});")
+            elif op == "TXOR":
+                tmp = scratch_for_instr.get(idx)
+                _emit(f"TXOR({instr.dst.name}, {instr.src0.name}, {instr.src1.name}, {tmp});")
+            elif op in ("TABS", "TNEG", "TNOT", "TEXP", "TLOG", "TSQRT", "TRSQRT", "TRECIP", "TRELU"):
+                _emit(f"{op}({instr.dst.name}, {instr.src.name});")
+            elif op == "TLRELU":
+                slope = _get_operand_str(instr.slope)
+                _emit(f"TLRELU({instr.dst.name}, {instr.src.name}, {slope});")
+            elif op == "TPRELU":
+                _emit(f"TPRELU({instr.dst.name}, {instr.src0.name}, {instr.src1.name});")
+            elif op == "TEXPANDS":
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"TEXPANDS({instr.dst.name}, {scalar_val});")
+            elif op in ("TADDS", "TSUBS", "TMULS", "TDIVS", "TMAXS", "TMINS", "TANDS", "TORS"):
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"{op}({instr.dst.name}, {instr.src.name}, {scalar_val});")
+            elif op == "TXORS":
+                tmp = scratch_for_instr.get(idx)
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"TXORS({instr.dst.name}, {instr.src.name}, {scalar_val}, {tmp});")
+            elif op == "TREMS":
+                tmp = scratch_for_instr.get(idx)
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"TREMS({instr.dst.name}, {instr.src.name}, {scalar_val}, {tmp});")
+            elif op == "TREM":
+                tmp = scratch_for_instr.get(idx)
+                _emit(f"TREM({instr.dst.name}, {instr.src0.name}, {instr.src1.name}, {tmp});")
+            elif op == "TADDC":
+                _emit(f"TADDC({instr.dst.name}, {instr.src0.name}, {instr.src1.name}, {instr.src2.name});")
+            elif op == "TSUBC":
+                _emit(f"TSUBC({instr.dst.name}, {instr.src0.name}, {instr.src1.name}, {instr.src2.name});")
+            elif op == "TADDSC":
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"TADDSC({instr.dst.name}, {instr.src0.name}, {scalar_val}, {instr.src1.name});")
+            elif op == "TSUBSC":
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"TSUBSC({instr.dst.name}, {instr.src0.name}, {scalar_val}, {instr.src1.name});")
+            elif op == "TCMP":
+                mode = f"CmpMode::{instr.cmp_mode.name}"
+                _emit(f"TCMP({instr.dst.name}, {instr.src0.name}, {instr.src1.name}, {mode});")
+            elif op == "TCMPS":
+                mode = f"CmpMode::{instr.cmp_mode.name}"
+                scalar_val = _get_operand_str(instr.scalar)
+                _emit(f"TCMPS({instr.dst.name}, {instr.src.name}, {scalar_val}, {mode});")
+            elif op == "TSEL":
+                _emit(f"TSEL({instr.dst.name}, {instr.mask.name}, {instr.src0.name}, {instr.src1.name});")
+            elif op == "TSELS":
+                sel = _get_operand_str(instr.select_mode)
+                _emit(f"TSELS({instr.dst.name}, {instr.src0.name}, {instr.src1.name}, (uint8_t)({sel}));")
+            elif op in ("TROWSUM", "TROWMAX", "TROWMIN"):
+                tmp = scratch_for_instr.get(idx)
+                _emit(f"{op}({instr.dst.name}, {instr.src.name}, {tmp});")
+            elif op == "TCOLSUM":
+                tmp = scratch_for_instr.get(idx)
+                _emit(f"TCOLSUM({instr.dst.name}, {instr.src.name}, {tmp}, false);")
+            elif op in ("TCOLMAX", "TCOLMIN"):
+                _emit(f"{op}({instr.dst.name}, {instr.src.name});")
+            elif op.startswith("TROWEXPAND") or op.startswith("TCOLEXPAND"):
+                if hasattr(instr, "src0") and hasattr(instr, "src1"):
+                    _emit(f"{op}({instr.dst.name}, {instr.src0.name}, {instr.src1.name});")
+                else:
+                    _emit(f"{op}({instr.dst.name}, {instr.src.name});")
+            elif op == "TTRANS":
+                tmp = scratch_for_instr.get(idx)
+                _emit(f"TTRANS({instr.dst.name}, {instr.src.name}, {tmp});")
+            elif op == "TRESHAPE":
+                _emit(f"TRESHAPE({instr.dst.name}, {instr.src.name});")
+            elif op == "TEXTRACT":
+                r0 = _get_operand_str(instr.r0)
+                r1 = _get_operand_str(instr.r1)
+                _emit(f"TEXTRACT({instr.dst.name}, {instr.src.name}, (uint16_t)({r0}), (uint16_t)({r1}));")
+            elif op in ("TGATHER", "TGATHERB", "TSCATTER"):
+                if op == "TGATHER":
+                    _emit(f"TGATHER({instr.dst.name}, {instr.src.name}, {instr.indices.name});")
+                elif op == "TGATHERB":
+                    _emit(f"TGATHERB({instr.dst.name}, {instr.src.name}, {instr.offsets.name});")
+                else:
+                    _emit(f"TSCATTER({instr.dst.name}, {instr.src.name}, {instr.idx.name});")
+            elif op == "TCVT":
+                mode = getattr(instr, "rmode", None)
+                round_map = {
+                    "CAST_RINT": "RoundMode::CAST_RINT",
+                    "ROUND_NEAREST": "RoundMode::CAST_ROUND",
+                    "ROUND_DOWN": "RoundMode::CAST_FLOOR",
+                    "ROUND_UP": "RoundMode::CAST_CEIL",
+                    "ROUND_ZERO": "RoundMode::CAST_TRUNC",
+                }
+                mode_expr = round_map.get(getattr(mode, "name", ""), "RoundMode::CAST_RINT")
+                _emit(f"TCVT({instr.dst.name}, {instr.src.name}, {mode_expr});")
+            elif op == "TSORT32":
+                _emit(f"TSORT32({instr.dst.name}, {instr.src.name});")
+            elif op == "TMRGSORT":
+                _emit(f"// TODO({soc}): TMRGSORT lowering requires additional operands (tmp, blockLen, ...)")
+            elif op.startswith("TMATMUL"):
+                _emit(f"// TODO({soc}): {op} requires Left/Right/Acc tile locations not encoded in current DSL")
+            else:
+                _emit(f"// TODO({soc}): opcode not lowered: {op}")
+
+            # A3 bring-up mode: force a global pipe barrier after every instruction.
+            if a3_strict_barrier:
+                _emit("pipe_barrier(PIPE_ALL);")
+
+            prev_pipe = cur_pipe
+
+        lines.append("}")
+
+        # Optional smoke-test metadata + launch wrapper for NPU execution.
+        #
+        # Build usage:
+        #   ccec/bisheng -xcce ... -DPTO_NPU_SMOKE_RUNNER <program>.cpp -shared --cce-fatobj-link -o <program>.so
+        #
+        # Runtime usage (host-side runner, dlopen):
+        #   - dlsym `pto_launch`, `pto_num_memrefs`, `pto_memref_bytes`, ...
+        lines.append("")
+        lines.append("#ifdef PTO_NPU_SMOKE_RUNNER")
+        lines.append("#include <stddef.h>")
+        lines.append("typedef void* aclrtStream;")
+        lines.append("")
+        lines.append(f'extern "C" const char* pto_program_name() {{ return "{program.name}"; }}')
+
+        memref_names = list(program.memref_declarations.keys())
+        memref_bytes = []
+        memref_is_output = []
+        memref_dtypes = []
+        memref_elem_bytes = []
+        for name, memref_type in program.memref_declarations.items():
+            rows, cols = memref_shape.get(name, (1, 1))
+            memref_dtypes.append(memref_type.element_type.value)
+            memref_elem_bytes.append(_bytes_per_element(memref_type.element_type))
+            memref_bytes.append(rows * cols * _bytes_per_element(memref_type.element_type))
+            memref_is_output.append(1 if name in written_memrefs else 0)
+
+        lines.append(f"static const int kPtoNumMemrefs = {len(memref_names)};")
+        if memref_names:
+            lines.append("static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {")
+            for n in memref_names:
+                lines.append(f'    "{n}",')
+            lines.append("};")
+            lines.append("static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {")
+            for b in memref_bytes:
+                lines.append(f"    (size_t)({b}),")
+            lines.append("};")
+            lines.append("static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {")
+            for dt in memref_dtypes:
+                lines.append(f'    "{dt}",')
+            lines.append("};")
+            lines.append("static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {")
+            for eb in memref_elem_bytes:
+                lines.append(f"    (size_t)({eb}),")
+            lines.append("};")
+            lines.append("static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {")
+            for o in memref_is_output:
+                lines.append(f"    {o},")
+            lines.append("};")
+        else:
+            lines.append('static const char* const kPtoMemrefNames[1] = {""};')
+            lines.append("static const size_t kPtoMemrefBytes[1] = {(size_t)0};")
+            lines.append('static const char* const kPtoMemrefDtypes[1] = {""};')
+            lines.append("static const size_t kPtoMemrefElemBytes[1] = {(size_t)0};")
+            lines.append("static const int kPtoMemrefIsOutput[1] = {0};")
+        lines.append("")
+        lines.append('extern "C" int pto_num_memrefs() { return kPtoNumMemrefs; }')
+        lines.append('extern "C" const char* pto_memref_name(int idx) {')
+        lines.append('    if (idx < 0 || idx >= kPtoNumMemrefs) return "";')
+        lines.append('    return kPtoMemrefNames[idx];')
+        lines.append('}')
+        lines.append('extern "C" size_t pto_memref_bytes(int idx) {')
+        lines.append('    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;')
+        lines.append('    return kPtoMemrefBytes[idx];')
+        lines.append('}')
+        lines.append('extern "C" const char* pto_memref_dtype(int idx) {')
+        lines.append('    if (idx < 0 || idx >= kPtoNumMemrefs) return "";')
+        lines.append('    return kPtoMemrefDtypes[idx];')
+        lines.append('}')
+        lines.append('extern "C" size_t pto_memref_elem_bytes(int idx) {')
+        lines.append('    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;')
+        lines.append('    return kPtoMemrefElemBytes[idx];')
+        lines.append('}')
+        lines.append('extern "C" int pto_memref_is_output(int idx) {')
+        lines.append('    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;')
+        lines.append('    return kPtoMemrefIsOutput[idx];')
+        lines.append('}')
+        lines.append("")
+
+        # Provide a uniform launch entry-point so the host runner does not need to know the kernel signature.
+        #
+        # Args layout:
+        #   args[i] is the device pointer for memref i, in the declaration order.
+        # Scalars (if any) are embedded as conservative defaults.
+        scalar_defaults = []
+        for name, scalar_type in program.scalar_declarations.items():
+            if scalar_type in (ElementType.U1, ElementType.INDEX):
+                continue
+            c_type = _cpp_type_for_element_type(scalar_type)
+            if c_type in ("float", "double"):
+                scalar_defaults.append(f"({c_type})1.0")
+            else:
+                scalar_defaults.append(f"({c_type})0")
+
+        kernel_arg_exprs = []
+        for name, memref_type in program.memref_declarations.items():
+            c_type = _cpp_type_for_element_type(memref_type.element_type)
+            kernel_arg_exprs.append(f"({c_type}*)args[{memref_names.index(name)}]")
+        kernel_arg_exprs.extend(scalar_defaults)
+        kernel_arg_list = ", ".join(kernel_arg_exprs)
+        lines.append('extern "C" void pto_launch(void **args, aclrtStream stream) {')
+        lines.append(f"    {program.name}_kernel<<<1, nullptr, stream>>>({kernel_arg_list});")
+        lines.append("}")
+        lines.append("#endif  // PTO_NPU_SMOKE_RUNNER")
+
+        return "\n".join(lines)
     
     def generate_all(self, program, output_prefix: str, output_base_dir: str = ".") -> Dict[str, str]:
         """
@@ -4432,7 +5204,8 @@ class MultiBackendCodeGenerator:
             output_base_dir/
             ├── output_arm64/{output_prefix}/{program.name}.c
             ├── output_cuda/{output_prefix}/{program.name}.cu
-            ├── output_ascend910b/{output_prefix}/{program.name}.cpp
+            ├── output_ascend_a2a3/{output_prefix}/{program.name}.cpp
+            ├── output_ascend_a5/{output_prefix}/{program.name}.cpp
             └── output_pto/{output_prefix}/{program.name}.pto
         
         Output structure (for non-InCore functions):
@@ -4449,7 +5222,8 @@ class MultiBackendCodeGenerator:
         generators = {
             "arm64": self.generate_arm64,
             "cuda": self.generate_cuda,
-            "ascend910b": self.generate_ascend,
+            "ascend_a2a3": self.generate_ascend_a2a3,
+            "ascend_a5": self.generate_ascend_a5,
         }
         
         # Determine which backends to generate
@@ -4811,7 +5585,7 @@ class RuntimeCodeGenerator:
     
     def _infer_shape_from_callee(self, callee_name: str, param_name: str, is_output: bool) -> Tuple[int, int]:
         """Infer tensor shape based on callee function and parameter name."""
-        # Default tile dimensions (standard for Ascend 910B F32)
+        # Default tile dimensions (standard for Ascend A2/A3 F32)
         default_rows, default_cols = 32, 128
         
         # Reduction functions output row vectors
@@ -5284,6 +6058,7 @@ def parse_pto_directory(input_dir: str, output_dir: Optional[str] = None):
 def main_cli():
     """Command-line interface for PTO compiler."""
     import argparse
+    import importlib
     
     parser = argparse.ArgumentParser(
         description='PTO ISA Compiler - Compile PTO programs to backend code',
@@ -5295,6 +6070,9 @@ Examples:
   
   # Specify output directory
   python pto_compile.py parse examples/output_pto/llama7b/ -o ./generated/
+
+  # Dump C++ for Ascend A2/A3 (A3 = Ascend 910B)
+  python pto_compile.py codegen --entry examples.pto_fused_softmax:create_rowmax_func --backend ascend_a2a3 --output-prefix fused_softmax
   
   # Run demo
   python pto_compile.py demo
@@ -5322,6 +6100,41 @@ Examples:
         'demo',
         help='Run demo examples'
     )
+
+    # Codegen command (dump backend code to files)
+    codegen_parser = subparsers.add_parser(
+        'codegen',
+        help='Generate backend code for a Python entry function'
+    )
+    codegen_parser.add_argument(
+        '--entry', required=True,
+        help='Python entry in the form module:function returning PTOProgram or PTOModule'
+    )
+    codegen_parser.add_argument(
+        '--backend', default='ascend_a2a3',
+        choices=['arm64', 'cuda', 'ascend_a2a3', 'ascend_a5', 'all'],
+        help='Backend to generate (default: ascend_a2a3)'
+    )
+    codegen_parser.add_argument(
+        '--output-prefix', default='generated',
+        help='Category name for output subdirectory'
+    )
+    codegen_parser.add_argument(
+        '--output-base-dir', default='.',
+        help='Base output directory'
+    )
+    codegen_parser.add_argument(
+        '--kwargs', nargs='*', default=[],
+        help='Optional key=value kwargs passed to entry function (supports int/float/bool/str)'
+    )
+    codegen_parser.add_argument(
+        '--enable-fusion', action='store_true',
+        help='Enable loop fusion where applicable'
+    )
+    codegen_parser.add_argument(
+        '--module-func', default='__all__',
+        help='When entry returns PTOModule: "__all__" (default) or a single function name'
+    )
     
     args = parser.parse_args()
     
@@ -5330,6 +6143,95 @@ Examples:
             print(f"Error: {args.input_dir} is not a directory")
             return 1
         parse_pto_directory(args.input_dir, args.output_dir)
+        return 0
+    elif args.command == 'codegen':
+        def _parse_kv(kv: str):
+            if '=' not in kv:
+                raise ValueError(f"Invalid --kwargs item (expected key=value): {kv}")
+            k, v = kv.split('=', 1)
+            v = v.strip()
+            if v.lower() in ('true', 'false'):
+                return k, (v.lower() == 'true')
+            try:
+                if '.' in v:
+                    return k, float(v)
+                return k, int(v)
+            except ValueError:
+                # Strip optional quotes
+                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                return k, v
+
+        if ':' not in args.entry:
+            print("Error: --entry must be in the form module:function")
+            return 1
+        mod_name, fn_name = args.entry.split(':', 1)
+        mod = importlib.import_module(mod_name)
+        fn = getattr(mod, fn_name, None)
+        if fn is None or not callable(fn):
+            print(f"Error: entry function not found/callable: {args.entry}")
+            return 1
+
+        kwargs = dict(_parse_kv(kv) for kv in args.kwargs)
+        obj = fn(**kwargs)
+
+        gen = MultiBackendCodeGenerator(enable_fusion=args.enable_fusion)
+
+        def _emit_one(prog, backend_key: str):
+            backend_info = BACKENDS[backend_key]
+            out_dir = os.path.join(args.output_base_dir, f"output{backend_info['suffix']}", args.output_prefix)
+            os.makedirs(out_dir, exist_ok=True)
+            if backend_key == 'arm64':
+                code = gen.generate_arm64(prog)
+            elif backend_key == 'cuda':
+                code = gen.generate_cuda(prog)
+            elif backend_key == 'ascend_a2a3':
+                code = gen.generate_ascend_a2a3(prog)
+            elif backend_key == 'ascend_a5':
+                code = gen.generate_ascend_a5(prog)
+            else:
+                raise ValueError(f"Unsupported backend: {backend_key}")
+            out_file = os.path.join(out_dir, f"{prog.name}{backend_info['extension']}")
+            with open(out_file, 'w') as f:
+                f.write(code)
+            print(f"  [{backend_info['name']}] -> {out_file}")
+            return out_file
+
+        def _emit_pto(prog):
+            compiler = PTOCompiler()
+            pto_asm = compiler.compile(prog)
+            pto_dir = os.path.join(args.output_base_dir, "output_pto", args.output_prefix)
+            os.makedirs(pto_dir, exist_ok=True)
+            pto_file = os.path.join(pto_dir, f"{prog.name}.pto")
+            with open(pto_file, 'w') as f:
+                f.write(pto_asm)
+            print(f"  [PTO-AS] -> {pto_file}")
+            return pto_file
+
+        # Entry may return a single program or a module.
+        if isinstance(obj, PTOModule):
+            fn_names = obj.get_function_names() if args.module_func == '__all__' else [args.module_func]
+            for name in fn_names:
+                prog = obj.get_function(name)
+                if prog is None:
+                    print(f"Error: module function not found: {name}")
+                    return 1
+                if args.backend == 'all':
+                    for bk in ('arm64', 'cuda', 'ascend_a2a3', 'ascend_a5'):
+                        _emit_one(prog, bk)
+                    _emit_pto(prog)
+                else:
+                    _emit_one(prog, args.backend)
+                    _emit_pto(prog)
+        else:
+            prog = obj
+            if args.backend == 'all':
+                for bk in ('arm64', 'cuda', 'ascend_a2a3', 'ascend_a5'):
+                    _emit_one(prog, bk)
+                _emit_pto(prog)
+            else:
+                _emit_one(prog, args.backend)
+                _emit_pto(prog)
         return 0
     elif args.command == 'demo':
         run_demo()

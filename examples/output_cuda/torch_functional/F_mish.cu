@@ -1,4 +1,39 @@
 // PTO Program: F_mish
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_mish
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     10
+//   Total capacity (no reuse): 2,560 bytes (2.5 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            1,536 bytes (60.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_2sp              8x8        f32       256   [  5,   7]           <- softplus
+//   exp_x                8x8        f32       256   [  1,   2]           -
+//   one_plus_exp         8x8        f32       256   [  2,   3]           -
+//   result               8x8        f32       256   [  9,  10]           <- tanh_num
+//   softplus             8x8        f32       256   [  3,   4]           <- exp_x
+//   sp_2                 8x8        f32       256   [  4,   5]           <- one_plus_exp
+//   tanh_den             8x8        f32       256   [  7,   8]           -
+//   tanh_num             8x8        f32       256   [  6,   8]           <- sp_2
+//   tanh_out             8x8        f32       256   [  8,   9]           <- exp_2sp
+//   x                    8x8        f32       256   [  0,   9]           -
+//
+// BUFFER REUSE MAP:
+//   softplus reuses buffer of exp_x
+//   sp_2 reuses buffer of one_plus_exp
+//   exp_2sp reuses buffer of softplus
+//   tanh_num reuses buffer of sp_2
+//   tanh_out reuses buffer of exp_2sp
+//   result reuses buffer of tanh_num
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

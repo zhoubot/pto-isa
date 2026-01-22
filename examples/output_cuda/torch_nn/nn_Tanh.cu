@@ -1,4 +1,33 @@
 // PTO Program: nn_Tanh
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_Tanh
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 1,792 bytes (1.8 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            768 bytes (42.9%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   denominator          8x8        f32       256   [  5,   6]           -
+//   exp_neg_x            8x8        f32       256   [  3,   5]           <- x
+//   exp_x                8x8        f32       256   [  1,   5]           -
+//   neg_x                8x8        f32       256   [  2,   3]           -
+//   numerator            8x8        f32       256   [  4,   6]           <- neg_x
+//   result               8x8        f32       256   [  6,   7]           <- exp_x
+//   x                    8x8        f32       256   [  0,   2]           -
+//
+// BUFFER REUSE MAP:
+//   exp_neg_x reuses buffer of x
+//   numerator reuses buffer of neg_x
+//   result reuses buffer of exp_x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

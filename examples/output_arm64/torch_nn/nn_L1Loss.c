@@ -1,9 +1,37 @@
 // PTO Program: nn_L1Loss
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_L1Loss
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 1,064 bytes (1.0 KB)
+//   Total capacity (w/ reuse): 808 bytes (0.8 KB)
+//   Reuse savings:            256 bytes (24.1%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   abs_diff             8x8        f32       256   [  3,   4]           <- pred
+//   diff                 8x8        f32       256   [  2,   3]           -
+//   pred                 8x8        f32       256   [  0,   2]           -
+//   result               1x1        f32         4   [  6,   7]           -
+//   row_sum              8x1        f32        32   [  4,   5]           -
+//   target               8x8        f32       256   [  1,   2]           -
+//   total_sum            1x1        f32         4   [  5,   6]           -
+//
+// BUFFER REUSE MAP:
+//   abs_diff reuses buffer of pred
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void nn_L1Loss(float* pred_mem, float* target_mem, float* output) {
     float pred[8][8];
@@ -78,3 +106,59 @@ void nn_L1Loss(float* pred_mem, float* target_mem, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "nn_L1Loss"; }
+enum { kPtoNumMemrefs = 3 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "pred_mem",
+    "target_mem",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(4),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    nn_L1Loss((float*)args[0], (float*)args[1], (float*)args[2]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

@@ -1,4 +1,34 @@
 // PTO Program: nn_LeakyReLU
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_LeakyReLU
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 1,792 bytes (1.8 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            1,024 bytes (57.1%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   neg_part             8x8        f32       256   [  4,   5]           <- neg_x
+//   neg_relu             8x8        f32       256   [  3,   4]           <- x
+//   neg_x                8x8        f32       256   [  2,   3]           -
+//   pos_part             8x8        f32       256   [  1,   6]           -
+//   result               8x8        f32       256   [  6,   7]           <- neg_part
+//   scaled_neg           8x8        f32       256   [  5,   6]           <- neg_relu
+//   x                    8x8        f32       256   [  0,   2]           -
+//
+// BUFFER REUSE MAP:
+//   neg_relu reuses buffer of x
+//   neg_part reuses buffer of neg_x
+//   scaled_neg reuses buffer of neg_relu
+//   result reuses buffer of neg_part
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

@@ -217,3 +217,79 @@ void flash_attn_softmax_update(float* input_s, float* input_m_prev, float* input
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "flash_attn_softmax_update"; }
+enum { kPtoNumMemrefs = 7 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input_s",
+    "input_m_prev",
+    "input_l_prev",
+    "output_m_new",
+    "output_l_new",
+    "output_p",
+    "output_scale_old",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(16384),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(16384),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    flash_attn_softmax_update((float*)args[0], (float*)args[1], (float*)args[2], (float*)args[3], (float*)args[4], (float*)args[5], (float*)args[6]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

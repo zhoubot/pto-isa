@@ -1,4 +1,24 @@
 // PTO Program: tensor_mv
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_mv
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     3
+//   Total capacity (no reuse): 320 bytes (0.3 KB)
+//   Total capacity (w/ reuse): 320 bytes (0.3 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               8x1        f32        32   [  2,   3]           -
+//   self                 8x8        f32       256   [  0,  -1]           -
+//   vec                  8x1        f32        32   [  1,  -1]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

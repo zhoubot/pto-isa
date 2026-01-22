@@ -1,9 +1,46 @@
 // PTO Program: F_cosine_similarity
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_cosine_similarity
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     12
+//   Total capacity (no reuse): 1,504 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 896 bytes (0.9 KB)
+//   Reuse savings:            608 bytes (40.4%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   dot_prod             8x8        f32       256   [  2,   3]           -
+//   dot_sum              8x1        f32        32   [  3,  12]           -
+//   norm_prod            8x1        f32        32   [ 10,  12]           <- x2_norm_sq
+//   result               8x1        f32        32   [ 12,  13]           <- x1_norm
+//   x1                   8x8        f32       256   [  0,   4]           -
+//   x1_norm              8x1        f32        32   [  8,  10]           -
+//   x1_norm_sq           8x1        f32        32   [  6,   8]           -
+//   x1_sq                8x8        f32       256   [  4,   6]           <- dot_prod
+//   x2                   8x8        f32       256   [  1,   5]           -
+//   x2_norm              8x1        f32        32   [  9,  10]           <- x1_norm_sq
+//   x2_norm_sq           8x1        f32        32   [  7,   9]           -
+//   x2_sq                8x8        f32       256   [  5,   7]           <- x1
+//
+// BUFFER REUSE MAP:
+//   x1_sq reuses buffer of dot_prod
+//   x2_sq reuses buffer of x1
+//   x2_norm reuses buffer of x1_norm_sq
+//   norm_prod reuses buffer of x2_norm_sq
+//   result reuses buffer of x1_norm
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void F_cosine_similarity(float* input1, float* input2, float* output) {
     float x1[8][8];
@@ -126,3 +163,59 @@ void F_cosine_similarity(float* input1, float* input2, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "F_cosine_similarity"; }
+enum { kPtoNumMemrefs = 3 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input1",
+    "input2",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(32),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    F_cosine_similarity((float*)args[0], (float*)args[1], (float*)args[2]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

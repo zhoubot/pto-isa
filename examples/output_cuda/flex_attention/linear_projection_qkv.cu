@@ -1,4 +1,28 @@
 // PTO Program: linear_projection_qkv
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: linear_projection_qkv
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 8,960 bytes (8.8 KB)
+//   Total capacity (w/ reuse): 8,960 bytes (8.8 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  5,   8]           -
+//   Q                    8x8        f32       256   [  4,   7]           -
+//   V                    8x8        f32       256   [  6,   9]           -
+//   W_K                  64x8       f32      2048   [  2,  -1]           -
+//   W_Q                  64x8       f32      2048   [  1,  -1]           -
+//   W_V                  64x8       f32      2048   [  3,  -1]           -
+//   X                    8x64       f32      2048   [  0,  -1]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

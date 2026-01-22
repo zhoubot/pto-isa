@@ -1,9 +1,45 @@
 // PTO Program: nn_SmoothL1Loss
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_SmoothL1Loss
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     11
+//   Total capacity (no reuse): 2,088 bytes (2.0 KB)
+//   Total capacity (w/ reuse): 808 bytes (0.8 KB)
+//   Reuse savings:            1,280 bytes (61.3%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   abs_diff             8x8        f32       256   [  3,   6]           <- pred
+//   diff                 8x8        f32       256   [  2,   4]           -
+//   l1_term              8x8        f32       256   [  6,   7]           <- squared
+//   l2_term              8x8        f32       256   [  5,   7]           <- diff
+//   pred                 8x8        f32       256   [  0,   2]           -
+//   result               1x1        f32         4   [ 10,  11]           -
+//   row_sum              8x1        f32        32   [  8,   9]           -
+//   smooth               8x8        f32       256   [  7,   8]           <- abs_diff
+//   squared              8x8        f32       256   [  4,   5]           <- target
+//   target               8x8        f32       256   [  1,   2]           -
+//   total_sum            1x1        f32         4   [  9,  10]           -
+//
+// BUFFER REUSE MAP:
+//   abs_diff reuses buffer of pred
+//   squared reuses buffer of target
+//   l2_term reuses buffer of diff
+//   l1_term reuses buffer of squared
+//   smooth reuses buffer of abs_diff
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void nn_SmoothL1Loss(float* pred_mem, float* target_mem, float* output) {
     float pred[8][8];
@@ -102,3 +138,59 @@ void nn_SmoothL1Loss(float* pred_mem, float* target_mem, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "nn_SmoothL1Loss"; }
+enum { kPtoNumMemrefs = 3 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "pred_mem",
+    "target_mem",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(4),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    nn_SmoothL1Loss((float*)args[0], (float*)args[1], (float*)args[2]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

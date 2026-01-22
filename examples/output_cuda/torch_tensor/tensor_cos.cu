@@ -1,4 +1,35 @@
 // PTO Program: tensor_cos
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_cos
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     8
+//   Total capacity (no reuse): 2,048 bytes (2.0 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            1,024 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   ones                 8x8        f32       256   [  5,   6]           <- x4
+//   result               8x8        f32       256   [  7,   8]           <- term1
+//   temp                 8x8        f32       256   [  6,   7]           -
+//   term1                8x8        f32       256   [  3,   6]           -
+//   term2                8x8        f32       256   [  4,   7]           <- x2
+//   x                    8x8        f32       256   [  0,   1]           -
+//   x2                   8x8        f32       256   [  1,   3]           -
+//   x4                   8x8        f32       256   [  2,   4]           <- x
+//
+// BUFFER REUSE MAP:
+//   x4 reuses buffer of x
+//   term2 reuses buffer of x2
+//   ones reuses buffer of x4
+//   result reuses buffer of term1
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

@@ -65,7 +65,7 @@ MAX_SEQ_LEN = 131072    # Maximum sequence length (128K)
 # Hardware Constraints for Ascend 910B
 # =============================================================================
 DTYPE = ElementType.F32
-TARGET_ISA = "ascend910b"
+TARGET_ISA = "ascend_a2a3"
 ELEMENT_BYTES = 4       # f32 = 4 bytes
 
 # SRAM constraint: 256KB total for InCore function
@@ -1624,7 +1624,7 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
     # Create output directories for all backends
     arm64_dir = os.path.join(output_base, "output_arm64", folder_name)
     cuda_dir = os.path.join(output_base, "output_cuda", folder_name)
-    ascend_dir = os.path.join(output_base, "output_ascend910b", folder_name)
+    ascend_dir = os.path.join(output_base, "output_ascend_a2a3", folder_name)
     pto_dir = os.path.join(output_base, "output_pto", folder_name)
     
     os.makedirs(arm64_dir, exist_ok=True)
@@ -1664,7 +1664,7 @@ def generate_for_seq_len(module, seq_len: int, output_base: str, incore_funcs: l
     print(f"\n  --- Ascend 910B (Priority) ---")
     for name in incore_funcs:
         func = module.get_function(name)
-        ascend_code = gen.generate_ascend(func)
+        ascend_code = gen.generate_ascend_a2a3(func)
         func_file = os.path.join(ascend_dir, f"{name}.cpp")
         with open(func_file, "w") as f:
             f.write(ascend_code)

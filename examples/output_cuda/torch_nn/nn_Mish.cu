@@ -1,4 +1,40 @@
 // PTO Program: nn_Mish
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_Mish
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     11
+//   Total capacity (no reuse): 2,816 bytes (2.8 KB)
+//   Total capacity (w/ reuse): 1,280 bytes (1.2 KB)
+//   Reuse savings:            1,536 bytes (54.5%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_neg_sp           8x8        f32       256   [  6,   8]           <- softplus
+//   exp_sp               8x8        f32       256   [  4,   8]           <- one_plus_exp
+//   exp_x                8x8        f32       256   [  1,   2]           -
+//   neg_sp               8x8        f32       256   [  5,   6]           -
+//   one_plus_exp         8x8        f32       256   [  2,   3]           -
+//   result               8x8        f32       256   [ 10,  11]           <- exp_neg_sp
+//   softplus             8x8        f32       256   [  3,   5]           <- exp_x
+//   tanh_den             8x8        f32       256   [  8,   9]           -
+//   tanh_num             8x8        f32       256   [  7,   9]           <- neg_sp
+//   tanh_out             8x8        f32       256   [  9,  10]           <- exp_sp
+//   x                    8x8        f32       256   [  0,  10]           -
+//
+// BUFFER REUSE MAP:
+//   softplus reuses buffer of exp_x
+//   exp_sp reuses buffer of one_plus_exp
+//   exp_neg_sp reuses buffer of softplus
+//   tanh_num reuses buffer of neg_sp
+//   tanh_out reuses buffer of exp_sp
+//   result reuses buffer of exp_neg_sp
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

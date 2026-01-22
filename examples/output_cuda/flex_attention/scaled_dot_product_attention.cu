@@ -1,4 +1,40 @@
 // PTO Program: scaled_dot_product_attention
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: scaled_dot_product_attention
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     12
+//   Total capacity (no reuse): 2,624 bytes (2.6 KB)
+//   Total capacity (w/ reuse): 1,568 bytes (1.5 KB)
+//   Reuse savings:            1,056 bytes (40.2%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  1,  -1]           -
+//   K_T                  8x8        f32       256   [-, -]               -
+//   Q                    8x8        f32       256   [  0,  -1]           -
+//   V                    8x8        f32       256   [  2,  -1]           -
+//   attention_weights    8x8        f32       256   [ 10,  -1]           <- shifted
+//   exp_scores           8x8        f32       256   [  8,  10]           <- scaled_scores
+//   output               8x8        f32       256   [ 11,  12]           <- exp_scores
+//   row_max              8x1        f32        32   [  5,   7]           -
+//   row_sum              8x1        f32        32   [  9,  10]           <- row_max
+//   scaled_scores        8x8        f32       256   [  4,   7]           -
+//   scores               8x8        f32       256   [  3,   4]           -
+//   shifted              8x8        f32       256   [  7,   8]           <- scores
+//
+// BUFFER REUSE MAP:
+//   shifted reuses buffer of scores
+//   exp_scores reuses buffer of scaled_scores
+//   row_sum reuses buffer of row_max
+//   attention_weights reuses buffer of shifted
+//   output reuses buffer of exp_scores
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -28,7 +64,7 @@ __global__ void scaled_dot_product_attention_kernel(float* Q_mem, float* K_mem, 
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 2 loop overheads saved
+    // Loop fusion: 3 loop overheads saved
 
     // FUSED (3 ops): Q=TLOAD(...); K=TLOAD(...); V=TLOAD(...)
     if (_row < 8 && _col < 8) {
@@ -59,10 +95,9 @@ __global__ void scaled_dot_product_attention_kernel(float* Q_mem, float* K_mem, 
         row_max[_row][_col] = row_max[_row][_col] / 8.0f;
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): exp_scores=TEXP(...)
+    // FUSED (2 ops): shifted=TROWEXPANDSUB(...); exp_scores=TEXP(...)
     if (_row < 8 && _col < 8) {
+        shifted[_row][_col] = scaled_scores[_row][_col] - row_max[_row][0];
         exp_scores[_row][_col] = __expf(shifted[_row][_col]);
     }
 
@@ -72,7 +107,10 @@ __global__ void scaled_dot_product_attention_kernel(float* Q_mem, float* K_mem, 
         for (int _c = 0; _c < 8; _c++) _sum += exp_scores[_row][_c];
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: Not implemented
+    // FUSED (1 ops): attention_weights=TROWEXPANDDIV(...)
+    if (_row < 8 && _col < 8) {
+        attention_weights[_row][_col] = exp_scores[_row][_col] / row_sum[_row][0];
+    }
 
     // TMATMUL: output = attention_weights @ V
     if (_row < 8 && _col < 8) {

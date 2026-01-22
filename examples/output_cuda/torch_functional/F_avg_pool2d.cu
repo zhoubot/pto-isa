@@ -1,4 +1,24 @@
 // PTO Program: F_avg_pool2d
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_avg_pool2d
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     3
+//   Total capacity (no reuse): 292 bytes (0.3 KB)
+//   Total capacity (w/ reuse): 292 bytes (0.3 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               1x1        f32         4   [  2,   4]           -
+//   row_sum              8x1        f32        32   [  1,   2]           -
+//   x                    8x8        f32       256   [  0,   1]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

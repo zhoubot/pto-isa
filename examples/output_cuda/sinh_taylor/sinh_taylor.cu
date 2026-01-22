@@ -1,4 +1,25 @@
 // PTO Program: sinh_taylor
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: sinh_taylor
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 65,536 bytes (64.0 KB)
+//   Total capacity (w/ reuse): 65,536 bytes (64.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               32x128     f32     16384   [  4,  51]           -
+//   term                 32x128     f32     16384   [  6,  50]           -
+//   x                    32x128     f32     16384   [  3,  32]           -
+//   x_squared            32x128     f32     16384   [  5,  48]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -16,7 +37,7 @@ __device__ float x_squared[32][128];
 __device__ float term[32][128];
 __device__ float result[32][128];
 
-__global__ void sinh_taylor_kernel(float* input, float* output, int32_t total_elements, int32_t tile_size, int32_t num_full_tiles, int32_t tail_elements, int32_t offset, int32_t zero) {
+__global__ void sinh_taylor_kernel(float* input, float* output, int32_t total_elements, int32_t num_full_tiles, int32_t tail_elements, int32_t offset) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -92,7 +113,7 @@ __global__ void sinh_taylor_kernel(float* input, float* output, int32_t total_el
 
 }
 
-void sinh_taylor(float* input, float* output, int32_t total_elements, int32_t tile_size, int32_t num_full_tiles, int32_t tail_elements, int32_t offset, int32_t zero) {
+void sinh_taylor(float* input, float* output, int32_t total_elements, int32_t num_full_tiles, int32_t tail_elements, int32_t offset) {
     dim3 block(8, 8);
     dim3 grid(1, 1);
     sinh_taylor_kernel<<<grid, block>>>(input, output, total_elements, tile_size, num_full_tiles, tail_elements, offset, zero);

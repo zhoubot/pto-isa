@@ -34,7 +34,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);
         
                 // Task 0: rmsnorm_tile
-                int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+                int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t0, input, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t0, attn_norm_weights, 0, 0, 64, 128);
                 pto_task_add_output(rt, t0, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -42,7 +42,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 1: tile_matmul
-                int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t1, temp_norm, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t1, wq, 0, 0, 64, 128);
                 pto_task_add_output(rt, t1, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -50,7 +50,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 2: tile_matmul
-                int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t2, temp_norm, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t2, wk, 0, 0, 64, 128);
                 pto_task_add_output(rt, t2, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -58,7 +58,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 3: tile_matmul
-                int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t3, temp_norm, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t3, wv, 0, 0, 64, 128);
                 pto_task_add_output(rt, t3, all_v_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -66,7 +66,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 4: rope_tile
-                int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+                int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t4, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t4, cos_cache, 0, 0, 64, 128);
                 pto_task_add_input(rt, t4, sin_cache, 0, 0, 64, 128);
@@ -75,7 +75,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 5: rope_tile
-                int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+                int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t5, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t5, cos_cache, 0, 0, 64, 128);
                 pto_task_add_input(rt, t5, sin_cache, 0, 0, 64, 128);
@@ -97,7 +97,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);  // Offset in base-tile units
     
             // Task 0: rmsnorm_tile
-            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t0, input, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t0, attn_norm_weights, 0, 0, 64, 128);
             pto_task_add_output(rt, t0, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -105,7 +105,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 1: tile_matmul
-            int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t1, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t1, wq, 0, 0, 64, 128);
             pto_task_add_output(rt, t1, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -113,7 +113,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 2: tile_matmul
-            int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t2, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t2, wk, 0, 0, 64, 128);
             pto_task_add_output(rt, t2, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -121,7 +121,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 3: tile_matmul
-            int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t3, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t3, wv, 0, 0, 64, 128);
             pto_task_add_output(rt, t3, all_v_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -129,7 +129,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 4: rope_tile
-            int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+            int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t4, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t4, cos_cache, 0, 0, 64, 128);
             pto_task_add_input(rt, t4, sin_cache, 0, 0, 64, 128);
@@ -138,7 +138,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 5: rope_tile
-            int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+            int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t5, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t5, cos_cache, 0, 0, 64, 128);
             pto_task_add_input(rt, t5, sin_cache, 0, 0, 64, 128);
@@ -155,7 +155,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);  // Offset in base-tile units
     
             // Task 0: rmsnorm_tile
-            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t0, input, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t0, attn_norm_weights, 0, 0, 64, 128);
             pto_task_add_output(rt, t0, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -163,7 +163,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 1: tile_matmul
-            int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t1, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t1, wq, 0, 0, 64, 128);
             pto_task_add_output(rt, t1, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -171,7 +171,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 2: tile_matmul
-            int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t2, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t2, wk, 0, 0, 64, 128);
             pto_task_add_output(rt, t2, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -179,7 +179,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 3: tile_matmul
-            int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t3, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t3, wv, 0, 0, 64, 128);
             pto_task_add_output(rt, t3, all_v_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -187,7 +187,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 4: rope_tile
-            int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+            int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t4, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t4, cos_cache, 0, 0, 64, 128);
             pto_task_add_input(rt, t4, sin_cache, 0, 0, 64, 128);
@@ -196,7 +196,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 5: rope_tile
-            int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+            int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t5, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t5, cos_cache, 0, 0, 64, 128);
             pto_task_add_input(rt, t5, sin_cache, 0, 0, 64, 128);
@@ -213,7 +213,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);  // Offset in base-tile units
     
             // Task 0: rmsnorm_tile
-            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t0, input, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t0, attn_norm_weights, 0, 0, 64, 128);
             pto_task_add_output(rt, t0, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -221,7 +221,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 1: tile_matmul
-            int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t1 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t1, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t1, wq, 0, 0, 64, 128);
             pto_task_add_output(rt, t1, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -229,7 +229,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 2: tile_matmul
-            int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t2 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t2, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t2, wk, 0, 0, 64, 128);
             pto_task_add_output(rt, t2, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -237,7 +237,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 3: tile_matmul
-            int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t3 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t3, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t3, wv, 0, 0, 64, 128);
             pto_task_add_output(rt, t3, all_v_tiles, _tile_i_row_offset, 0, 64, 128);
@@ -245,7 +245,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 4: rope_tile
-            int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+            int32_t t4 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t4, all_q_tiles, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t4, cos_cache, 0, 0, 64, 128);
             pto_task_add_input(rt, t4, sin_cache, 0, 0, 64, 128);
@@ -254,7 +254,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 5: rope_tile
-            int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 100663296, 67108864);
+            int32_t t5 = pto_task_alloc(rt, "rope_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t5, all_k_tiles, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t5, cos_cache, 0, 0, 64, 128);
             pto_task_add_input(rt, t5, sin_cache, 0, 0, 64, 128);
@@ -272,7 +272,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + tile_i;  // Offset in base-tile units
     
             // Task 0: rmsnorm_tile
-            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile", NULL, 84279296, 50593792);
+            int32_t t0 = pto_task_alloc(rt, "rmsnorm_tile", NULL, 0, 0);
             pto_task_add_input(rt, t0, input, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t0, attn_norm_weights, 0, 0, 32, 128);
             pto_task_add_output(rt, t0, temp_norm, _tile_i_row_offset, 0, 32, 128);
@@ -280,7 +280,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 1: tile_matmul
-            int32_t t1 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t1 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t1, temp_norm, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t1, wq, 0, 0, 32, 128);
             pto_task_add_output(rt, t1, all_q_tiles, _tile_i_row_offset, 0, 32, 128);
@@ -288,7 +288,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 2: tile_matmul
-            int32_t t2 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t2 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t2, temp_norm, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t2, wk, 0, 0, 32, 128);
             pto_task_add_output(rt, t2, all_k_tiles, _tile_i_row_offset, 0, 32, 128);
@@ -296,7 +296,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 3: tile_matmul
-            int32_t t3 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t3 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t3, temp_norm, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t3, wv, 0, 0, 32, 128);
             pto_task_add_output(rt, t3, all_v_tiles, _tile_i_row_offset, 0, 32, 128);
@@ -304,7 +304,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 4: rope_tile
-            int32_t t4 = pto_task_alloc(rt, "rope_tile", NULL, 100663296, 67108864);
+            int32_t t4 = pto_task_alloc(rt, "rope_tile", NULL, 0, 0);
             pto_task_add_input(rt, t4, all_q_tiles, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t4, cos_cache, 0, 0, 32, 128);
             pto_task_add_input(rt, t4, sin_cache, 0, 0, 32, 128);
@@ -313,7 +313,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 5: rope_tile
-            int32_t t5 = pto_task_alloc(rt, "rope_tile", NULL, 100663296, 67108864);
+            int32_t t5 = pto_task_alloc(rt, "rope_tile", NULL, 0, 0);
             pto_task_add_input(rt, t5, all_k_tiles, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t5, cos_cache, 0, 0, 32, 128);
             pto_task_add_input(rt, t5, sin_cache, 0, 0, 32, 128);
@@ -340,7 +340,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _q_tile_row_offset = _q_tile_base_rows + (q_tile * 2);
         
                 // Task 6: flash_attn_init_state
-                int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 34078720, 34078720);
+                int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 0, 0);
                 pto_task_add_input(rt, t6, const_zeros_large, 0, 0, 64, 128);
                 pto_task_add_input(rt, t6, const_zeros_small, 0, 0, 64, 128);
                 pto_task_add_input(rt, t6, const_neg_inf, 0, 0, 64, 128);
@@ -365,7 +365,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                             int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);
                 
                             // Task 7: flash_attn_score_block
-                            int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                            int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                             pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                             pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                             pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -373,7 +373,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 
                 
                             // Task 8: flash_attn_softmax_update
-                            int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                            int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                             pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                             pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                             pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -385,7 +385,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 
                 
                             // Task 9: flash_attn_output_update
-                            int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                            int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                             pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                             pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                             pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -408,7 +408,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                             int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -416,7 +416,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -428,7 +428,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -446,7 +446,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                             int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -454,7 +454,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -466,7 +466,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -484,7 +484,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                             int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -492,7 +492,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -504,7 +504,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -523,7 +523,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                             int _kv_tile_row_offset = _kv_tile_base_rows + kv_tile;  // Offset in base-tile units
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -531,7 +531,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -543,7 +543,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -557,7 +557,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 }
         
                 // Task 10: flash_attn_normalize
-                int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 67371008, 67371008);
+                int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 0, 0);
                 pto_task_add_input(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t10, all_l_vec, _q_tile_row_offset, 0, 64, 128);
                 pto_task_add_output(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
@@ -578,7 +578,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _q_tile_row_offset = _q_tile_base_rows + (q_tile * 2);  // Offset in base-tile units
     
             // Task 6: flash_attn_init_state
-            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 34078720, 34078720);
+            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 0, 0);
             pto_task_add_input(rt, t6, const_zeros_large, 0, 0, 64, 128);
             pto_task_add_input(rt, t6, const_zeros_small, 0, 0, 64, 128);
             pto_task_add_input(rt, t6, const_neg_inf, 0, 0, 64, 128);
@@ -603,7 +603,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -611,7 +611,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -623,7 +623,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -646,7 +646,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -654,7 +654,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -666,7 +666,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -684,7 +684,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -692,7 +692,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -704,7 +704,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -722,7 +722,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -730,7 +730,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -742,7 +742,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -761,7 +761,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + kv_tile;  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -769,7 +769,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -781,7 +781,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -795,7 +795,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             }
     
             // Task 10: flash_attn_normalize
-            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 67371008, 67371008);
+            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 0, 0);
             pto_task_add_input(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t10, all_l_vec, _q_tile_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
@@ -811,7 +811,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _q_tile_row_offset = _q_tile_base_rows + (q_tile * 2);  // Offset in base-tile units
     
             // Task 6: flash_attn_init_state
-            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 34078720, 34078720);
+            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 0, 0);
             pto_task_add_input(rt, t6, const_zeros_large, 0, 0, 64, 128);
             pto_task_add_input(rt, t6, const_zeros_small, 0, 0, 64, 128);
             pto_task_add_input(rt, t6, const_neg_inf, 0, 0, 64, 128);
@@ -836,7 +836,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -844,7 +844,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -856,7 +856,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -879,7 +879,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -887,7 +887,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -899,7 +899,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -917,7 +917,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -925,7 +925,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -937,7 +937,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -955,7 +955,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -963,7 +963,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -975,7 +975,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -994,7 +994,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + kv_tile;  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1002,7 +1002,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1014,7 +1014,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1028,7 +1028,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             }
     
             // Task 10: flash_attn_normalize
-            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 67371008, 67371008);
+            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 0, 0);
             pto_task_add_input(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t10, all_l_vec, _q_tile_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
@@ -1044,7 +1044,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _q_tile_row_offset = _q_tile_base_rows + (q_tile * 2);  // Offset in base-tile units
     
             // Task 6: flash_attn_init_state
-            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 34078720, 34078720);
+            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 0, 0);
             pto_task_add_input(rt, t6, const_zeros_large, 0, 0, 64, 128);
             pto_task_add_input(rt, t6, const_zeros_small, 0, 0, 64, 128);
             pto_task_add_input(rt, t6, const_neg_inf, 0, 0, 64, 128);
@@ -1069,7 +1069,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1077,7 +1077,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1089,7 +1089,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1112,7 +1112,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1120,7 +1120,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1132,7 +1132,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1150,7 +1150,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1158,7 +1158,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1170,7 +1170,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1188,7 +1188,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1196,7 +1196,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1208,7 +1208,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1227,7 +1227,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + kv_tile;  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1235,7 +1235,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1247,7 +1247,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1261,7 +1261,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             }
     
             // Task 10: flash_attn_normalize
-            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 67371008, 67371008);
+            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 0, 0);
             pto_task_add_input(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t10, all_l_vec, _q_tile_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t10, all_attn_out, _q_tile_row_offset, 0, 64, 128);
@@ -1278,7 +1278,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _q_tile_row_offset = _q_tile_base_rows + q_tile;  // Offset in base-tile units
     
             // Task 6: flash_attn_init_state
-            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 34078720, 34078720);
+            int32_t t6 = pto_task_alloc(rt, "flash_attn_init_state", NULL, 0, 0);
             pto_task_add_input(rt, t6, const_zeros_large, 0, 0, 32, 128);
             pto_task_add_input(rt, t6, const_zeros_small, 0, 0, 32, 128);
             pto_task_add_input(rt, t6, const_neg_inf, 0, 0, 32, 128);
@@ -1303,7 +1303,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);
             
                         // Task 7: flash_attn_score_block
-                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                        int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                         pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                         pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1311,7 +1311,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 8: flash_attn_softmax_update
-                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                        int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                         pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1323,7 +1323,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             
             
                         // Task 9: flash_attn_output_update
-                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                        int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                         pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                         pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1346,7 +1346,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1354,7 +1354,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1366,7 +1366,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1384,7 +1384,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1392,7 +1392,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1404,7 +1404,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1422,7 +1422,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + (kv_tile * 2);  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 64, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 64, 128);
@@ -1430,7 +1430,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 64, 128);
@@ -1442,7 +1442,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 64, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 64, 128);
@@ -1461,7 +1461,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                         int _kv_tile_row_offset = _kv_tile_base_rows + kv_tile;  // Offset in base-tile units
         
                     // Task 7: flash_attn_score_block
-                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 100663296, 100663296);
+                    int32_t t7 = pto_task_alloc(rt, "flash_attn_score_block", NULL, 0, 0);
                     pto_task_add_input(rt, t7, all_q_rope, _q_tile_row_offset, 0, 32, 128);
                     pto_task_add_input(rt, t7, all_k_rope, _kv_tile_row_offset, 0, 32, 128);
                     pto_task_add_output(rt, t7, temp_scores, _q_tile_row_offset, 0, 32, 128);
@@ -1469,7 +1469,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 8: flash_attn_softmax_update
-                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 52690944, 34865152);
+                    int32_t t8 = pto_task_alloc(rt, "flash_attn_softmax_update", NULL, 0, 0);
                     pto_task_add_input(rt, t8, temp_scores, _q_tile_row_offset, 0, 32, 128);
                     pto_task_add_input(rt, t8, all_m_vec, _q_tile_row_offset, 0, 32, 128);
                     pto_task_add_input(rt, t8, all_l_vec, _q_tile_row_offset, 0, 32, 128);
@@ -1481,7 +1481,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                     // Task 9: flash_attn_output_update
-                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 184811520, 151257088);
+                    int32_t t9 = pto_task_alloc(rt, "flash_attn_output_update", NULL, 0, 0);
                     pto_task_add_input(rt, t9, all_attn_out, _q_tile_row_offset, 0, 32, 128);
                     pto_task_add_input(rt, t9, temp_attn_weights, _q_tile_row_offset, 0, 32, 128);
                     pto_task_add_input(rt, t9, all_v_tiles, _kv_tile_row_offset, 0, 32, 128);
@@ -1495,7 +1495,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
             }
     
             // Task 10: flash_attn_normalize
-            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 67371008, 67371008);
+            int32_t t10 = pto_task_alloc(rt, "flash_attn_normalize", NULL, 0, 0);
             pto_task_add_input(rt, t10, all_attn_out, _q_tile_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t10, all_l_vec, _q_tile_row_offset, 0, 32, 128);
             pto_task_add_output(rt, t10, all_attn_out, _q_tile_row_offset, 0, 32, 128);
@@ -1521,7 +1521,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);
         
                 // Task 11: tile_matmul
-                int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t11, all_attn_out, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t11, wo, 0, 0, 64, 128);
                 pto_task_add_output(rt, t11, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1529,7 +1529,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 12: residual_add_tile
-                int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+                int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t12, temp_norm, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t12, input, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_output(rt, t12, all_hidden, _tile_i_row_offset, 0, 64, 128);
@@ -1537,7 +1537,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 13: rmsnorm_tile
-                int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+                int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t13, all_hidden, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t13, mlp_norm_weights, 0, 0, 64, 128);
                 pto_task_add_output(rt, t13, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1545,7 +1545,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 14: tile_matmul
-                int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t14, temp_norm, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t14, w_gate, 0, 0, 64, 128);
                 pto_task_add_output(rt, t14, temp_gate, _tile_i_row_offset, 0, 64, 128);
@@ -1553,7 +1553,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 15: tile_matmul
-                int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t15, temp_norm, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t15, w_up, 0, 0, 64, 128);
                 pto_task_add_output(rt, t15, temp_up, _tile_i_row_offset, 0, 64, 128);
@@ -1561,7 +1561,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 16: swiglu_tile
-                int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 134217728, 67108864);
+                int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t16, temp_gate, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t16, temp_up, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_output(rt, t16, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
@@ -1569,7 +1569,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 17: tile_matmul
-                int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+                int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
                 pto_task_add_input(rt, t17, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t17, w_down, 0, 0, 64, 128);
                 pto_task_add_output(rt, t17, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
@@ -1577,7 +1577,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
         
         
                 // Task 18: residual_add_tile
-                int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+                int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
                 pto_task_add_input(rt, t18, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_input(rt, t18, all_hidden, _tile_i_row_offset, 0, 64, 128);
                 pto_task_add_output(rt, t18, output, _tile_i_row_offset, 0, 64, 128);
@@ -1598,7 +1598,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);  // Offset in base-tile units
     
             // Task 11: tile_matmul
-            int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t11, all_attn_out, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t11, wo, 0, 0, 64, 128);
             pto_task_add_output(rt, t11, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1606,7 +1606,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 12: residual_add_tile
-            int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+            int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t12, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t12, input, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t12, all_hidden, _tile_i_row_offset, 0, 64, 128);
@@ -1614,7 +1614,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 13: rmsnorm_tile
-            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t13, all_hidden, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t13, mlp_norm_weights, 0, 0, 64, 128);
             pto_task_add_output(rt, t13, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1622,7 +1622,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 14: tile_matmul
-            int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t14, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t14, w_gate, 0, 0, 64, 128);
             pto_task_add_output(rt, t14, temp_gate, _tile_i_row_offset, 0, 64, 128);
@@ -1630,7 +1630,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 15: tile_matmul
-            int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t15, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t15, w_up, 0, 0, 64, 128);
             pto_task_add_output(rt, t15, temp_up, _tile_i_row_offset, 0, 64, 128);
@@ -1638,7 +1638,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 16: swiglu_tile
-            int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 134217728, 67108864);
+            int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t16, temp_gate, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t16, temp_up, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t16, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
@@ -1646,7 +1646,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 17: tile_matmul
-            int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t17, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t17, w_down, 0, 0, 64, 128);
             pto_task_add_output(rt, t17, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
@@ -1654,7 +1654,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 18: residual_add_tile
-            int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+            int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t18, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t18, all_hidden, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t18, output, _tile_i_row_offset, 0, 64, 128);
@@ -1670,7 +1670,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);  // Offset in base-tile units
     
             // Task 11: tile_matmul
-            int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t11, all_attn_out, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t11, wo, 0, 0, 64, 128);
             pto_task_add_output(rt, t11, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1678,7 +1678,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 12: residual_add_tile
-            int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+            int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t12, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t12, input, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t12, all_hidden, _tile_i_row_offset, 0, 64, 128);
@@ -1686,7 +1686,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 13: rmsnorm_tile
-            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t13, all_hidden, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t13, mlp_norm_weights, 0, 0, 64, 128);
             pto_task_add_output(rt, t13, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1694,7 +1694,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 14: tile_matmul
-            int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t14, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t14, w_gate, 0, 0, 64, 128);
             pto_task_add_output(rt, t14, temp_gate, _tile_i_row_offset, 0, 64, 128);
@@ -1702,7 +1702,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 15: tile_matmul
-            int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t15, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t15, w_up, 0, 0, 64, 128);
             pto_task_add_output(rt, t15, temp_up, _tile_i_row_offset, 0, 64, 128);
@@ -1710,7 +1710,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 16: swiglu_tile
-            int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 134217728, 67108864);
+            int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t16, temp_gate, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t16, temp_up, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t16, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
@@ -1718,7 +1718,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 17: tile_matmul
-            int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t17, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t17, w_down, 0, 0, 64, 128);
             pto_task_add_output(rt, t17, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
@@ -1726,7 +1726,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 18: residual_add_tile
-            int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+            int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t18, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t18, all_hidden, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t18, output, _tile_i_row_offset, 0, 64, 128);
@@ -1742,7 +1742,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + (tile_i * 2);  // Offset in base-tile units
     
             // Task 11: tile_matmul
-            int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t11 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t11, all_attn_out, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t11, wo, 0, 0, 64, 128);
             pto_task_add_output(rt, t11, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1750,7 +1750,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 12: residual_add_tile
-            int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+            int32_t t12 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t12, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t12, input, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t12, all_hidden, _tile_i_row_offset, 0, 64, 128);
@@ -1758,7 +1758,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 13: rmsnorm_tile
-            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 84279296, 50593792);
+            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t13, all_hidden, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t13, mlp_norm_weights, 0, 0, 64, 128);
             pto_task_add_output(rt, t13, temp_norm, _tile_i_row_offset, 0, 64, 128);
@@ -1766,7 +1766,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 14: tile_matmul
-            int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t14 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t14, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t14, w_gate, 0, 0, 64, 128);
             pto_task_add_output(rt, t14, temp_gate, _tile_i_row_offset, 0, 64, 128);
@@ -1774,7 +1774,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 15: tile_matmul
-            int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t15 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t15, temp_norm, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t15, w_up, 0, 0, 64, 128);
             pto_task_add_output(rt, t15, temp_up, _tile_i_row_offset, 0, 64, 128);
@@ -1782,7 +1782,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 16: swiglu_tile
-            int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 134217728, 67108864);
+            int32_t t16 = pto_task_alloc(rt, "swiglu_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t16, temp_gate, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t16, temp_up, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t16, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
@@ -1790,7 +1790,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 17: tile_matmul
-            int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 100663296, 100663296);
+            int32_t t17 = pto_task_alloc(rt, "tile_matmul_64", NULL, 0, 0);
             pto_task_add_input(rt, t17, temp_swiglu, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t17, w_down, 0, 0, 64, 128);
             pto_task_add_output(rt, t17, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
@@ -1798,7 +1798,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 18: residual_add_tile
-            int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 50331648, 50331648);
+            int32_t t18 = pto_task_alloc(rt, "residual_add_tile_64", NULL, 0, 0);
             pto_task_add_input(rt, t18, temp_mlp_out, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_input(rt, t18, all_hidden, _tile_i_row_offset, 0, 64, 128);
             pto_task_add_output(rt, t18, output, _tile_i_row_offset, 0, 64, 128);
@@ -1815,7 +1815,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
                 int _tile_i_row_offset = _tile_i_base_rows + tile_i;  // Offset in base-tile units
     
             // Task 11: tile_matmul
-            int32_t t11 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t11 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t11, all_attn_out, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t11, wo, 0, 0, 32, 128);
             pto_task_add_output(rt, t11, temp_norm, _tile_i_row_offset, 0, 32, 128);
@@ -1823,7 +1823,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 12: residual_add_tile
-            int32_t t12 = pto_task_alloc(rt, "residual_add_tile", NULL, 50331648, 50331648);
+            int32_t t12 = pto_task_alloc(rt, "residual_add_tile", NULL, 0, 0);
             pto_task_add_input(rt, t12, temp_norm, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t12, input, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_output(rt, t12, all_hidden, _tile_i_row_offset, 0, 32, 128);
@@ -1831,7 +1831,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 13: rmsnorm_tile
-            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile", NULL, 84279296, 50593792);
+            int32_t t13 = pto_task_alloc(rt, "rmsnorm_tile", NULL, 0, 0);
             pto_task_add_input(rt, t13, all_hidden, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t13, mlp_norm_weights, 0, 0, 32, 128);
             pto_task_add_output(rt, t13, temp_norm, _tile_i_row_offset, 0, 32, 128);
@@ -1839,7 +1839,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 14: tile_matmul
-            int32_t t14 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t14 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t14, temp_norm, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t14, w_gate, 0, 0, 32, 128);
             pto_task_add_output(rt, t14, temp_gate, _tile_i_row_offset, 0, 32, 128);
@@ -1847,7 +1847,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 15: tile_matmul
-            int32_t t15 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t15 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t15, temp_norm, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t15, w_up, 0, 0, 32, 128);
             pto_task_add_output(rt, t15, temp_up, _tile_i_row_offset, 0, 32, 128);
@@ -1855,7 +1855,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 16: swiglu_tile
-            int32_t t16 = pto_task_alloc(rt, "swiglu_tile", NULL, 134217728, 67108864);
+            int32_t t16 = pto_task_alloc(rt, "swiglu_tile", NULL, 0, 0);
             pto_task_add_input(rt, t16, temp_gate, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t16, temp_up, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_output(rt, t16, temp_swiglu, _tile_i_row_offset, 0, 32, 128);
@@ -1863,7 +1863,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 17: tile_matmul
-            int32_t t17 = pto_task_alloc(rt, "tile_matmul", NULL, 100663296, 100663296);
+            int32_t t17 = pto_task_alloc(rt, "tile_matmul", NULL, 0, 0);
             pto_task_add_input(rt, t17, temp_swiglu, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t17, w_down, 0, 0, 32, 128);
             pto_task_add_output(rt, t17, temp_mlp_out, _tile_i_row_offset, 0, 32, 128);
@@ -1871,7 +1871,7 @@ void llama_layer_dynamic(PTORuntime* rt, float* input, float* output, float* att
     
     
             // Task 18: residual_add_tile
-            int32_t t18 = pto_task_alloc(rt, "residual_add_tile", NULL, 50331648, 50331648);
+            int32_t t18 = pto_task_alloc(rt, "residual_add_tile", NULL, 0, 0);
             pto_task_add_input(rt, t18, temp_mlp_out, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_input(rt, t18, all_hidden, _tile_i_row_offset, 0, 32, 128);
             pto_task_add_output(rt, t18, output, _tile_i_row_offset, 0, 32, 128);

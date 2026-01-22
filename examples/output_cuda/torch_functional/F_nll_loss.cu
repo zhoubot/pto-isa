@@ -1,4 +1,26 @@
 // PTO Program: F_nll_loss
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_nll_loss
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 804 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 804 bytes (0.8 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   log_probs            8x8        f32       256   [  0,   2]           -
+//   result               1x1        f32         4   [  4,   7]           -
+//   row_sum              8x1        f32        32   [  3,   4]           -
+//   target               8x8        f32       256   [  1,   2]           -
+//   weighted             8x8        f32       256   [  2,   3]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

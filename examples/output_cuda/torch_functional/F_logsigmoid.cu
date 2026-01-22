@@ -1,4 +1,33 @@
 // PTO Program: F_logsigmoid
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_logsigmoid
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 512 bytes (0.5 KB)
+//   Reuse savings:            1,024 bytes (66.7%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_neg_x            8x8        f32       256   [  2,   3]           <- x
+//   neg_x                8x8        f32       256   [  1,   2]           -
+//   one_plus             8x8        f32       256   [  3,   4]           <- neg_x
+//   result               8x8        f32       256   [  5,   6]           <- one_plus
+//   softplus             8x8        f32       256   [  4,   5]           <- exp_neg_x
+//   x                    8x8        f32       256   [  0,   1]           -
+//
+// BUFFER REUSE MAP:
+//   exp_neg_x reuses buffer of x
+//   one_plus reuses buffer of neg_x
+//   softplus reuses buffer of exp_neg_x
+//   result reuses buffer of one_plus
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

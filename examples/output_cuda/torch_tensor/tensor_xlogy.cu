@@ -1,4 +1,28 @@
 // PTO Program: tensor_xlogy
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_xlogy
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 1,024 bytes (1.0 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            256 bytes (25.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   log_other            8x8        f32       256   [  2,   3]           -
+//   other                8x8        f32       256   [  1,   2]           -
+//   result               8x8        f32       256   [  3,   4]           <- other
+//   self                 8x8        f32       256   [  0,   3]           -
+//
+// BUFFER REUSE MAP:
+//   result reuses buffer of other
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

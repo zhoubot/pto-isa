@@ -1,4 +1,28 @@
 // PTO Program: nn_Softmax
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_Softmax
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 800 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 544 bytes (0.5 KB)
+//   Reuse savings:            256 bytes (32.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_x                8x8        f32       256   [  1,   3]           -
+//   result               8x8        f32       256   [  3,   4]           <- x
+//   sum_exp              8x1        f32        32   [  2,   3]           -
+//   x                    8x8        f32       256   [  0,   1]           -
+//
+// BUFFER REUSE MAP:
+//   result reuses buffer of x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

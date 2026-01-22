@@ -1,4 +1,38 @@
 // PTO Program: F_binary_cross_entropy
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_binary_cross_entropy
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     11
+//   Total capacity (no reuse): 2,340 bytes (2.3 KB)
+//   Total capacity (w/ reuse): 1,316 bytes (1.3 KB)
+//   Reuse savings:            1,024 bytes (43.8%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   bce                  8x8        f32       256   [ 10,  12]           <- log_pred
+//   log_one_minus        8x8        f32       256   [  5,   9]           <- pred
+//   log_pred             8x8        f32       256   [  2,   8]           -
+//   one_minus_pred       8x8        f32       256   [  3,   5]           -
+//   one_minus_target     8x8        f32       256   [  6,   9]           <- one_minus_pred
+//   pred                 8x8        f32       256   [  0,   3]           -
+//   result               1x1        f32         4   [ 13,  15]           -
+//   row_sum              8x1        f32        32   [ 12,  13]           -
+//   target               8x8        f32       256   [  1,   8]           -
+//   term1                8x8        f32       256   [  8,  10]           -
+//   term2                8x8        f32       256   [  9,  10]           <- target
+//
+// BUFFER REUSE MAP:
+//   log_one_minus reuses buffer of pred
+//   one_minus_target reuses buffer of one_minus_pred
+//   term2 reuses buffer of target
+//   bce reuses buffer of log_pred
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

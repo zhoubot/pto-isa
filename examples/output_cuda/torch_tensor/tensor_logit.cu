@@ -1,4 +1,28 @@
 // PTO Program: tensor_logit
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_logit
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 1,024 bytes (1.0 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            256 bytes (25.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   one_minus            8x8        f32       256   [  1,   4]           -
+//   ratio                8x8        f32       256   [  4,   5]           -
+//   result               8x8        f32       256   [  5,   6]           <- self
+//   self                 8x8        f32       256   [  0,   4]           -
+//
+// BUFFER REUSE MAP:
+//   result reuses buffer of self
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

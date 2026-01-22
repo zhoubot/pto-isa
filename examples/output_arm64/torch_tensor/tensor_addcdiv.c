@@ -1,9 +1,37 @@
 // PTO Program: tensor_addcdiv
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_addcdiv
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            512 bytes (33.3%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   quot                 8x8        f32       256   [  3,   4]           -
+//   result               8x8        f32       256   [  5,   6]           <- tensor2
+//   scaled               8x8        f32       256   [  4,   5]           <- tensor1
+//   self                 8x8        f32       256   [  0,   5]           -
+//   tensor1              8x8        f32       256   [  1,   3]           -
+//   tensor2              8x8        f32       256   [  2,   3]           -
+//
+// BUFFER REUSE MAP:
+//   scaled reuses buffer of tensor1
+//   result reuses buffer of tensor2
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void tensor_addcdiv(float* input_self, float* input_t1, float* input_t2, float* output) {
     float self[8][8];
@@ -54,3 +82,64 @@ void tensor_addcdiv(float* input_self, float* input_t1, float* input_t2, float* 
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "tensor_addcdiv"; }
+enum { kPtoNumMemrefs = 4 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input_self",
+    "input_t1",
+    "input_t2",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    tensor_addcdiv((float*)args[0], (float*)args[1], (float*)args[2], (float*)args[3]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

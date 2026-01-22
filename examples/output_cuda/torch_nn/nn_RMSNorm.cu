@@ -1,4 +1,33 @@
 // PTO Program: nn_RMSNorm
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_RMSNorm
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 896 bytes (0.9 KB)
+//   Total capacity (w/ reuse): 576 bytes (0.6 KB)
+//   Reuse savings:            320 bytes (35.7%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   mean_sq              8x1        f32        32   [  3,   4]           -
+//   mean_sq_eps          8x1        f32        32   [  4,   5]           <- mean_sq_sum
+//   mean_sq_sum          8x1        f32        32   [  2,   3]           -
+//   result               8x8        f32       256   [  6,   7]           <- x_squared
+//   rms                  8x1        f32        32   [  5,   6]           <- mean_sq
+//   x                    8x8        f32       256   [  0,   6]           -
+//   x_squared            8x8        f32       256   [  1,   2]           -
+//
+// BUFFER REUSE MAP:
+//   mean_sq_eps reuses buffer of mean_sq_sum
+//   rms reuses buffer of mean_sq
+//   result reuses buffer of x_squared
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

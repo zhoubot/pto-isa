@@ -1,4 +1,25 @@
 // PTO Program: tensor_mean
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_mean
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 296 bytes (0.3 KB)
+//   Total capacity (w/ reuse): 296 bytes (0.3 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               1x1        f32         4   [  3,   4]           -
+//   row_sum              8x1        f32        32   [  1,   2]           -
+//   self                 8x8        f32       256   [  0,   1]           -
+//   total                1x1        f32         4   [  2,   3]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

@@ -1,7 +1,7 @@
 """
-PTO ISA Definition - DSL for Programmable Tensor Operations
+PTO ISA Definition - DSL for Parallel Tile Operations
 
-This module defines the complete PTO (Programmable Tensor Operations) Instruction Set Architecture
+This module defines the complete PTO (Parallel Tile Operations) Instruction Set Architecture
 as a Python-based Domain Specific Language (DSL). The PTO ISA operates on Tiles - 2D blocks of data.
 
 Key Concepts:
@@ -283,7 +283,7 @@ def cuda_get_intrinsic(op: str, dtype: str) -> str:
 
 
 # =============================================================================
-# Huawei Ascend 910B Code Generation Infrastructure (Ascend C)
+# Huawei Ascend A2/A3 Code Generation Infrastructure (Ascend C / AscendC)
 # =============================================================================
 
 # Ascend C scalar type mappings
@@ -341,17 +341,17 @@ ASCEND_VECTOR_OPS = {
     "relu": "Relu",
 }
 
-# Ascend 910B Physical Tile Size
+# Ascend A2/A3 Physical Tile Size
 # Physical_Row_Size: Optimal repeat count for vector pipeline performance
-ASCEND_PHYSICAL_ROW_SIZE = 32         # Optimal repeat count for Ascend 910B pipeline
+ASCEND_PHYSICAL_ROW_SIZE = 32         # Optimal repeat count for Ascend A2/A3 pipeline
 
 
 @dataclass
 class AscendCodeGenContext:
     """
-    Context for Huawei Ascend 910B code generation (Ascend C).
+    Context for Huawei Ascend A2/A3 code generation (Ascend C).
     
-    Ascend 910B uses Ascend C programming model with:
+    Ascend A2/A3 uses Ascend C programming model with:
     - DataCopy for memory transfers
     - Vector operations for elementwise ops
     - Cube operations for matrix multiplication
@@ -396,7 +396,7 @@ class AscendCodeGenContext:
 def ascend_generate_header() -> str:
     """Generate standard Ascend C header includes."""
     return """// Auto-generated Ascend C code from PTO ISA Compiler
-// Target: Huawei Ascend 910B (Da Vinci Architecture)
+// Target: Huawei Ascend A2/A3 (Da Vinci Architecture)
 #include "kernel_operator.h"
 
 using namespace AscendC;
@@ -956,7 +956,7 @@ class CUDATileLoopCodeGen:
 
 
 # =============================================================================
-# Loop IR for Ascend 910B - Code Generator
+# Loop IR for Ascend A2/A3 - Code Generator
 # =============================================================================
 
 class AscendTileLoopCodeGen:
@@ -1344,7 +1344,7 @@ class PTOInstruction(ABC):
     
     def codegen_ascend_910b_ir(self, ctx: AscendCodeGenContext) -> CodeGenIR:
         """
-        Generate Ascend 910B intermediate representation for this instruction.
+        Generate Ascend A2/A3 intermediate representation for this instruction.
         
         Returns a TileLoopIR for elementwise operations that can be fused,
         or NonLoopIR/List[str] for other operations.
@@ -1358,13 +1358,13 @@ class PTOInstruction(ABC):
         # Default: return non-loop IR with a comment
         return NonLoopIR(
             op_type="unknown",
-            code_lines=[f"{ctx.indent()}// Ascend 910B: {self.opcode}: Not implemented"],
+            code_lines=[f"{ctx.indent()}// Ascend A2/A3: {self.opcode}: Not implemented"],
             comment=self.opcode
         )
     
     def codegen_ascend_910b(self, ctx: AscendCodeGenContext) -> List[str]:
         """
-        Generate Huawei Ascend 910B (Ascend C) code for this instruction.
+        Generate Huawei Ascend A2/A3 (Ascend C) code for this instruction.
         
         This method generates IR first, then converts to Ascend C code.
         Uses Ascend C vector operations and DataCopy primitives.
@@ -1592,7 +1592,7 @@ class TABS(TileInstruction):
         return self._make_ir()
     
     def codegen_ascend_910b_ir(self, ctx: AscendCodeGenContext) -> TileLoopIR:
-        """Generate TileLoopIR for TABS (Ascend 910B)."""
+        """Generate TileLoopIR for TABS (Ascend A2/A3)."""
         return self._make_ir()
 
 

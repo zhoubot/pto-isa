@@ -1,4 +1,28 @@
 // PTO Program: aten_gelu
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: aten_gelu
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 114,688 bytes (112.0 KB)
+//   Total capacity (w/ reuse): 114,688 bytes (112.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_neg              1x4096     f32     16384   [  6,  18]           -
+//   neg_scaled           1x4096     f32     16384   [  5,  17]           -
+//   one_plus             1x4096     f32     16384   [  7,  19]           -
+//   result               1x4096     f32     16384   [  9,  21]           -
+//   scaled_x             1x4096     f32     16384   [  4,  16]           -
+//   sigmoid_out          1x4096     f32     16384   [  8,  20]           -
+//   x                    1x4096     f32     16384   [  3,  20]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -19,7 +43,7 @@ __device__ float one_plus[1][4096];
 __device__ float sigmoid_out[1][4096];
 __device__ float result[1][4096];
 
-__global__ void aten_gelu_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+__global__ void aten_gelu_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -65,7 +89,7 @@ __global__ void aten_gelu_kernel(float* input, float* output, int32_t num_full_t
 
 }
 
-void aten_gelu(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+void aten_gelu(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     dim3 block(8, 8);
     dim3 grid(1, 1);
     aten_gelu_kernel<<<grid, block>>>(input, output, num_full_tiles, tail_elements, zero, tile_size);

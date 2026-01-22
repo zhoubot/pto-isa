@@ -1,4 +1,23 @@
 // PTO Program: prims_sum_row
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: prims_sum_row
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     2
+//   Total capacity (no reuse): 16,388 bytes (16.0 KB)
+//   Total capacity (w/ reuse): 16,388 bytes (16.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               1x1        f32         4   [  4,  11]           -
+//   x                    1x4096     f32     16384   [  3,  10]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -14,7 +33,7 @@ namespace cg = cooperative_groups;
 __device__ float x[1][4096];
 __device__ float result[1][1];
 
-__global__ void prims_sum_row_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+__global__ void prims_sum_row_kernel(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -68,7 +87,7 @@ __global__ void prims_sum_row_kernel(float* input, float* output, int32_t num_fu
 
 }
 
-void prims_sum_row(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements, int32_t zero, int32_t tile_size) {
+void prims_sum_row(float* input, float* output, int32_t num_full_tiles, int32_t tail_elements) {
     dim3 block(8, 8);
     dim3 grid(1, 1);
     prims_sum_row_kernel<<<grid, block>>>(input, output, num_full_tiles, tail_elements, zero, tile_size);

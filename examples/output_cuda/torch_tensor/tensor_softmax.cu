@@ -1,4 +1,32 @@
 // PTO Program: tensor_softmax
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_softmax
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,088 bytes (1.1 KB)
+//   Total capacity (w/ reuse): 544 bytes (0.5 KB)
+//   Reuse savings:            544 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_shifted          8x8        f32       256   [  4,   6]           <- self
+//   result               8x8        f32       256   [  6,   7]           <- shifted
+//   row_mean             8x1        f32        32   [  1,   3]           -
+//   row_sum              8x1        f32        32   [  5,   6]           <- row_mean
+//   self                 8x8        f32       256   [  0,   3]           -
+//   shifted              8x8        f32       256   [  3,   4]           -
+//
+// BUFFER REUSE MAP:
+//   exp_shifted reuses buffer of self
+//   row_sum reuses buffer of row_mean
+//   result reuses buffer of shifted
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -22,7 +50,7 @@ __global__ void tensor_softmax_kernel(float* input, float* output) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 0 loop overheads saved
+    // Loop fusion: 2 loop overheads saved
 
     // FUSED (1 ops): self=TLOAD(...)
     if (_row < 8 && _col < 8) {
@@ -40,10 +68,9 @@ __global__ void tensor_softmax_kernel(float* input, float* output) {
         row_mean[_row][_col] = row_mean[_row][_col] / 8.0f;
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): exp_shifted=TEXP(...)
+    // FUSED (2 ops): shifted=TROWEXPANDSUB(...); exp_shifted=TEXP(...)
     if (_row < 8 && _col < 8) {
+        shifted[_row][_col] = self[_row][_col] - row_mean[_row][0];
         exp_shifted[_row][_col] = __expf(shifted[_row][_col]);
     }
 
@@ -53,10 +80,9 @@ __global__ void tensor_softmax_kernel(float* input, float* output) {
         for (int _c = 0; _c < 8; _c++) _sum += exp_shifted[_row][_c];
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: Not implemented
-
-    // FUSED (1 ops): output=TSTORE(...)
+    // FUSED (2 ops): result=TROWEXPANDDIV(...); output=TSTORE(...)
     if (_row < 8 && _col < 8) {
+        result[_row][_col] = exp_shifted[_row][_col] / row_sum[_row][0];
         output[_row * 8 + _col] = result[_row][_col];
     }
 

@@ -1,4 +1,29 @@
 // PTO Program: F_normalize
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_normalize
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 832 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 576 bytes (0.6 KB)
+//   Reuse savings:            256 bytes (30.8%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   norm                 8x1        f32        32   [  3,   5]           -
+//   result               8x8        f32       256   [  5,   6]           <- x_sq
+//   row_sum              8x1        f32        32   [  2,   3]           -
+//   x                    8x8        f32       256   [  0,   5]           -
+//   x_sq                 8x8        f32       256   [  1,   2]           -
+//
+// BUFFER REUSE MAP:
+//   result reuses buffer of x_sq
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -21,7 +46,7 @@ __global__ void F_normalize_kernel(float* input, float* output) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 2 loop overheads saved
+    // Loop fusion: 3 loop overheads saved
 
     // FUSED (2 ops): x=TLOAD(...); x_sq=TMUL(...)
     if (_row < 8 && _col < 8) {
@@ -41,10 +66,9 @@ __global__ void F_normalize_kernel(float* input, float* output) {
         norm[_row][_col] = norm[_row][_col] + 1e-12f;
     }
 
-    // TROWEXPANDDIV: Not implemented
-
-    // FUSED (1 ops): output=TSTORE(...)
+    // FUSED (2 ops): result=TROWEXPANDDIV(...); output=TSTORE(...)
     if (_row < 8 && _col < 8) {
+        result[_row][_col] = x[_row][_col] / norm[_row][0];
         output[_row * 8 + _col] = result[_row][_col];
     }
 

@@ -1,6 +1,6 @@
 # PTO ISA Compiler
 
-**Programmable Tensor Operations (PTO)** 是一种面向张量计算的领域特定语言（DSL），提供统一的编程模型来描述深度学习算子，并支持编译到多种硬件后端。
+**Parallel Tile Operations (PTO)** 是一种面向张量计算的领域特定语言（DSL），提供统一的编程模型来描述深度学习算子，并支持编译到多种硬件后端。
 
 ## 目录
 
@@ -46,7 +46,7 @@ PTO 编译器支持将统一的 PTO ISA 编译到多种物理 ISA：
    ┌────┴────┐          │          ┌────┴────┐
    ▼         ▼          ▼          ▼         ▼
 ARM64     CUDA      纯 C 代码    Ascend    ...
-NEON      Kernels   (调用 PTO    910B
+NEON      Kernels   (调用 PTO    A2/A3
 (.c)      (.cu)     Runtime)     (.cpp)
                     (.c)
 ```
@@ -63,7 +63,7 @@ PTO ISA:          TADD %c, %a, %b
                        │
     ┌──────────────────┼──────────────────┐
     ▼                  ▼                  ▼
-ARM64 NEON:       CUDA:              Ascend 910B:
+ARM64 NEON:       CUDA:              Ascend A2/A3 (A3 = 910B):
 vaddq_f32(a,b)    c[i] = a[i]+b[i]   Add(c, a, b, n)
 ```
 
@@ -920,6 +920,15 @@ cd examples && gcc -O2 -I.. -o test_llama_performance test_llama_performance.c
 ./test_llama_performance
 ```
 
+### Ascend 910B (A3) 运行说明
+
+见 `docs/run_on_ascend_a3.md`。快速跑通（生成 -> 编译 -> NPU 运行）：
+
+```bash
+chmod +x scripts/a3/build_and_run_examples.sh
+scripts/a3/build_and_run_examples.sh
+```
+
 ### 生成的文件结构
 
 ```
@@ -935,11 +944,12 @@ examples/
 ├── output_cuda/          # CUDA 代码
 │   └── llama7b/
 │       └── *.cu
-└── output_ascend910b/    # Ascend 910B 代码
+├── output_ascend_a2a3/   # Ascend A2/A3 (A3 = Ascend 910B) C++ 代码
+│   └── llama7b/
+│       └── *.cpp
+└── output_ascend_a5/     # Ascend A5 C++ 代码
     └── llama7b/
-        ├── *.cpp
-        ├── llama_layer_dynamic_task_graph.txt
-        └── llama_layer_dynamic_task_graph.pdf
+        └── *.cpp
 ```
 
 ---

@@ -1,4 +1,30 @@
 // PTO Program: tensor_lerp
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_lerp
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 1,280 bytes (1.2 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            512 bytes (40.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   diff                 8x8        f32       256   [  2,   3]           -
+//   end                  8x8        f32       256   [  1,   2]           -
+//   result               8x8        f32       256   [  4,   5]           <- diff
+//   scaled               8x8        f32       256   [  3,   4]           <- end
+//   self                 8x8        f32       256   [  0,   4]           -
+//
+// BUFFER REUSE MAP:
+//   scaled reuses buffer of end
+//   result reuses buffer of diff
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

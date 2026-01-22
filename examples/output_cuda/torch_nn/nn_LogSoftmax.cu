@@ -1,4 +1,29 @@
 // PTO Program: nn_LogSoftmax
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_LogSoftmax
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 832 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 576 bytes (0.6 KB)
+//   Reuse savings:            256 bytes (30.8%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_x                8x8        f32       256   [  1,   2]           -
+//   log_sum              8x1        f32        32   [  3,   4]           -
+//   result               8x8        f32       256   [  4,   5]           <- exp_x
+//   sum_exp              8x1        f32        32   [  2,   3]           -
+//   x                    8x8        f32       256   [  0,   4]           -
+//
+// BUFFER REUSE MAP:
+//   result reuses buffer of exp_x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -21,7 +46,7 @@ __global__ void nn_LogSoftmax_kernel(float* input, float* output) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 1 loop overheads saved
+    // Loop fusion: 2 loop overheads saved
 
     // FUSED (2 ops): x=TLOAD(...); exp_x=TEXP(...)
     if (_row < 8 && _col < 8) {
@@ -40,10 +65,9 @@ __global__ void nn_LogSoftmax_kernel(float* input, float* output) {
         log_sum[_row][_col] = __logf(sum_exp[_row][_col]);
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): output=TSTORE(...)
+    // FUSED (2 ops): result=TROWEXPANDSUB(...); output=TSTORE(...)
     if (_row < 8 && _col < 8) {
+        result[_row][_col] = x[_row][_col] - log_sum[_row][0];
         output[_row * 8 + _col] = result[_row][_col];
     }
 

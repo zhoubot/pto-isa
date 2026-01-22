@@ -1,4 +1,46 @@
 // PTO Program: F_gelu
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_gelu
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     14
+//   Total capacity (no reuse): 3,584 bytes (3.5 KB)
+//   Total capacity (w/ reuse): 1,280 bytes (1.2 KB)
+//   Reuse savings:            2,304 bytes (64.3%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   coeff_x3             8x8        f32       256   [  3,   4]           <- x_sq
+//   cosh_approx          8x8        f32       256   [  9,  10]           -
+//   exp_neg              8x8        f32       256   [-, -]               -
+//   exp_pos              8x8        f32       256   [  7,   9]           <- inner
+//   half_x               8x8        f32       256   [ 12,  13]           <- cosh_approx
+//   inner                8x8        f32       256   [  4,   5]           <- x_cubed
+//   one_plus             8x8        f32       256   [ 11,  13]           <- sinh_approx
+//   result               8x8        f32       256   [ 13,  14]           <- x
+//   scaled               8x8        f32       256   [  5,   7]           <- coeff_x3
+//   sinh_approx          8x8        f32       256   [  8,  10]           <- scaled
+//   tanh_out             8x8        f32       256   [ 10,  11]           <- exp_pos
+//   x                    8x8        f32       256   [  0,  12]           -
+//   x_cubed              8x8        f32       256   [  2,   3]           -
+//   x_sq                 8x8        f32       256   [  1,   2]           -
+//
+// BUFFER REUSE MAP:
+//   coeff_x3 reuses buffer of x_sq
+//   inner reuses buffer of x_cubed
+//   scaled reuses buffer of coeff_x3
+//   tanh_out reuses buffer of exp_pos
+//   exp_pos reuses buffer of inner
+//   sinh_approx reuses buffer of scaled
+//   one_plus reuses buffer of sinh_approx
+//   half_x reuses buffer of cosh_approx
+//   result reuses buffer of x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

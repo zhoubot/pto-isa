@@ -1,4 +1,39 @@
 // PTO Program: F_smooth_l1_loss
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_smooth_l1_loss
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     11
+//   Total capacity (no reuse): 2,340 bytes (2.3 KB)
+//   Total capacity (w/ reuse): 1,060 bytes (1.0 KB)
+//   Reuse savings:            1,280 bytes (54.7%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   abs_diff             8x8        f32       256   [  3,   6]           <- pred
+//   beta_tile            8x8        f32       256   [-, -]               -
+//   diff                 8x8        f32       256   [  2,   4]           -
+//   l1_part              8x8        f32       256   [  6,   7]           <- sq_diff
+//   l2_part              8x8        f32       256   [  5,   7]           <- diff
+//   loss                 8x8        f32       256   [  7,   8]           <- abs_diff
+//   pred                 8x8        f32       256   [  0,   2]           -
+//   result               1x1        f32         4   [  9,  11]           -
+//   row_sum              8x1        f32        32   [  8,   9]           -
+//   sq_diff              8x8        f32       256   [  4,   5]           <- target
+//   target               8x8        f32       256   [  1,   2]           -
+//
+// BUFFER REUSE MAP:
+//   abs_diff reuses buffer of pred
+//   sq_diff reuses buffer of target
+//   l2_part reuses buffer of diff
+//   l1_part reuses buffer of sq_diff
+//   loss reuses buffer of abs_diff
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

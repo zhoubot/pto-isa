@@ -1,4 +1,31 @@
 // PTO Program: F_kl_div
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_kl_div
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     7
+//   Total capacity (no reuse): 1,316 bytes (1.3 KB)
+//   Total capacity (w/ reuse): 1,060 bytes (1.0 KB)
+//   Reuse savings:            256 bytes (19.5%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   diff                 8x8        f32       256   [  3,   4]           -
+//   kl                   8x8        f32       256   [  4,   5]           <- log_pred
+//   log_pred             8x8        f32       256   [  0,   3]           -
+//   log_target           8x8        f32       256   [  2,   3]           -
+//   result               1x1        f32         4   [  6,   8]           -
+//   row_sum              8x1        f32        32   [  5,   6]           -
+//   target               8x8        f32       256   [  1,   4]           -
+//
+// BUFFER REUSE MAP:
+//   kl reuses buffer of log_pred
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

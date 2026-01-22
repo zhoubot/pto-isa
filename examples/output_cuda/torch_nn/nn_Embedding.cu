@@ -1,4 +1,24 @@
 // PTO Program: nn_Embedding
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: nn_Embedding
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     3
+//   Total capacity (no reuse): 4,352 bytes (4.2 KB)
+//   Total capacity (w/ reuse): 4,352 bytes (4.2 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   indices_onehot       8x64       f32      2048   [  0,  -1]           -
+//   result               8x8        f32       256   [  2,   3]           -
+//   weight               64x8       f32      2048   [  1,  -1]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

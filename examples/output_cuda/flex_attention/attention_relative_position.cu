@@ -1,4 +1,40 @@
 // PTO Program: attention_relative_position
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: attention_relative_position
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     12
+//   Total capacity (no reuse): 2,848 bytes (2.8 KB)
+//   Total capacity (w/ reuse): 1,568 bytes (1.5 KB)
+//   Reuse savings:            1,280 bytes (44.9%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  1,  -1]           -
+//   Q                    8x8        f32       256   [  0,  -1]           -
+//   V                    8x8        f32       256   [  2,  -1]           -
+//   attn                 8x8        f32       256   [ 12,  -1]           <- biased_scores
+//   biased_scores        8x8        f32       256   [  6,   9]           <- scores
+//   exp_scores           8x8        f32       256   [ 10,  12]           <- scaled
+//   output               8x8        f32       256   [ 13,  14]           <- shifted
+//   rel_pos_bias         8x8        f32       256   [  3,   6]           -
+//   row_sum              8x1        f32        32   [  7,  12]           -
+//   scaled               8x8        f32       256   [  5,   6]           -
+//   scores               8x8        f32       256   [  4,   5]           -
+//   shifted              8x8        f32       256   [  9,  10]           <- rel_pos_bias
+//
+// BUFFER REUSE MAP:
+//   biased_scores reuses buffer of scores
+//   shifted reuses buffer of rel_pos_bias
+//   exp_scores reuses buffer of scaled
+//   attn reuses buffer of biased_scores
+//   output reuses buffer of shifted
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -28,7 +64,7 @@ __global__ void attention_relative_position_kernel(float* Q_mem, float* K_mem, f
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 4 loop overheads saved
+    // Loop fusion: 5 loop overheads saved
 
     // FUSED (4 ops): Q=TLOAD(...); K=TLOAD(...); V=TLOAD(...); rel_pos_bias=TLOAD(...)
     if (_row < 8 && _col < 8) {
@@ -61,10 +97,9 @@ __global__ void attention_relative_position_kernel(float* Q_mem, float* K_mem, f
         row_sum[_row][_col] = row_sum[_row][_col] / 8.0f;
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): exp_scores=TEXP(...)
+    // FUSED (2 ops): shifted=TROWEXPANDSUB(...); exp_scores=TEXP(...)
     if (_row < 8 && _col < 8) {
+        shifted[_row][_col] = biased_scores[_row][_col] - row_sum[_row][0];
         exp_scores[_row][_col] = __expf(shifted[_row][_col]);
     }
 
@@ -74,7 +109,10 @@ __global__ void attention_relative_position_kernel(float* Q_mem, float* K_mem, f
         for (int _c = 0; _c < 8; _c++) _sum += exp_scores[_row][_c];
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: Not implemented
+    // FUSED (1 ops): attn=TROWEXPANDDIV(...)
+    if (_row < 8 && _col < 8) {
+        attn[_row][_col] = exp_scores[_row][_col] / row_sum[_row][0];
+    }
 
     // TMATMUL: output = attn @ V
     if (_row < 8 && _col < 8) {

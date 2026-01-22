@@ -1,4 +1,37 @@
 // PTO Program: F_selu
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_selu
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     9
+//   Total capacity (no reuse): 2,304 bytes (2.2 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            1,280 bytes (55.6%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   alpha_scaled         8x8        f32       256   [  4,   6]           <- exp_x
+//   elu_result           8x8        f32       256   [  7,   8]           <- alpha_scaled
+//   exp_minus_one        8x8        f32       256   [  3,   4]           <- x
+//   exp_x                8x8        f32       256   [  2,   3]           -
+//   neg_part             8x8        f32       256   [  6,   7]           -
+//   pos_part             8x8        f32       256   [  1,   7]           -
+//   result               8x8        f32       256   [  8,   9]           <- pos_part
+//   x                    8x8        f32       256   [  0,   2]           -
+//   zeros                8x8        f32       256   [  5,   6]           <- exp_minus_one
+//
+// BUFFER REUSE MAP:
+//   exp_minus_one reuses buffer of x
+//   alpha_scaled reuses buffer of exp_x
+//   zeros reuses buffer of exp_minus_one
+//   elu_result reuses buffer of alpha_scaled
+//   result reuses buffer of pos_part
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

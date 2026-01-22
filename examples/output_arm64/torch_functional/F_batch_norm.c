@@ -1,9 +1,33 @@
 // PTO Program: F_batch_norm
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_batch_norm
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 864 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 864 bytes (0.8 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   centered             8x8        f32       256   [  3,  -1]           -
+//   mean                 1x8        f32        32   [  1,  -1]           -
+//   result               8x8        f32       256   [  6,   7]           -
+//   std                  1x8        f32        32   [  5,   6]           -
+//   var                  1x8        f32        32   [  2,   5]           -
+//   x                    8x8        f32       256   [  0,   6]           -
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void F_batch_norm(float* input, float* mean_mem, float* var_mem, float* output) {
     float x[8][8];
@@ -94,3 +118,64 @@ void F_batch_norm(float* input, float* mean_mem, float* var_mem, float* output) 
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "F_batch_norm"; }
+enum { kPtoNumMemrefs = 4 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "mean_mem",
+    "var_mem",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(32),
+    (size_t)(32),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    F_batch_norm((float*)args[0], (float*)args[1], (float*)args[2], (float*)args[3]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

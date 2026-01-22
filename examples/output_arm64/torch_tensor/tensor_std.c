@@ -1,9 +1,43 @@
 // PTO Program: tensor_std
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_std
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     10
+//   Total capacity (no reuse): 1,104 bytes (1.1 KB)
+//   Total capacity (w/ reuse): 808 bytes (0.8 KB)
+//   Reuse savings:            296 bytes (26.8%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   centered             8x8        f32       256   [  5,   6]           -
+//   mean_val             8x8        f32       256   [  4,   5]           -
+//   result               1x1        f32         4   [ 10,  11]           <- var_total
+//   row_sum              8x1        f32        32   [  1,   2]           -
+//   self                 8x8        f32       256   [  0,   5]           -
+//   sq_centered          8x8        f32       256   [  6,   7]           <- self
+//   sq_row_sum           8x1        f32        32   [  7,   8]           <- row_sum
+//   total                1x1        f32         4   [  2,   3]           -
+//   var                  1x1        f32         4   [  9,  10]           -
+//   var_total            1x1        f32         4   [  8,   9]           <- total
+//
+// BUFFER REUSE MAP:
+//   sq_centered reuses buffer of self
+//   sq_row_sum reuses buffer of row_sum
+//   var_total reuses buffer of total
+//   result reuses buffer of var_total
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void tensor_std(float* input, float* output) {
     float self[8][8];
@@ -129,3 +163,54 @@ void tensor_std(float* input, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "tensor_std"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(4),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    tensor_std((float*)args[0], (float*)args[1]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

@@ -1,4 +1,32 @@
 // PTO Program: tensor_sinh
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_sinh
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 768 bytes (0.8 KB)
+//   Reuse savings:            768 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   diff                 8x8        f32       256   [  4,   5]           <- neg_x
+//   exp_neg_x            8x8        f32       256   [  3,   4]           <- x
+//   exp_x                8x8        f32       256   [  2,   4]           -
+//   neg_x                8x8        f32       256   [  1,   3]           -
+//   result               8x8        f32       256   [  5,   6]           <- exp_x
+//   x                    8x8        f32       256   [  0,   2]           -
+//
+// BUFFER REUSE MAP:
+//   exp_neg_x reuses buffer of x
+//   diff reuses buffer of neg_x
+//   result reuses buffer of exp_x
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

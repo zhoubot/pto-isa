@@ -1,4 +1,33 @@
 // PTO Program: F_softplus
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_softplus
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 512 bytes (0.5 KB)
+//   Reuse savings:            1,024 bytes (66.7%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   beta_x               8x8        f32       256   [  1,   2]           -
+//   exp_bx               8x8        f32       256   [  2,   3]           <- x
+//   log_val              8x8        f32       256   [  4,   5]           <- exp_bx
+//   one_plus             8x8        f32       256   [  3,   4]           <- beta_x
+//   result               8x8        f32       256   [  5,   6]           <- one_plus
+//   x                    8x8        f32       256   [  0,   1]           -
+//
+// BUFFER REUSE MAP:
+//   exp_bx reuses buffer of x
+//   one_plus reuses buffer of beta_x
+//   log_val reuses buffer of exp_bx
+//   result reuses buffer of one_plus
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

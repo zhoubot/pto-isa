@@ -1,4 +1,50 @@
 // PTO Program: soft_capping_attention
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: soft_capping_attention
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     17
+//   Total capacity (no reuse): 4,128 bytes (4.0 KB)
+//   Total capacity (w/ reuse): 1,568 bytes (1.5 KB)
+//   Reuse savings:            2,560 bytes (62.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  1,  -1]           -
+//   Q                    8x8        f32       256   [  0,  -1]           -
+//   V                    8x8        f32       256   [  2,  -1]           -
+//   attn                 8x8        f32       256   [ 17,  -1]           <- capped_scores
+//   capped_scores        8x8        f32       256   [ 11,  14]           <- exp_minus_1
+//   exp_2x               8x8        f32       256   [  7,   9]           <- x_div_cap
+//   exp_minus_1          8x8        f32       256   [  8,  10]           <- two_x
+//   exp_plus_1           8x8        f32       256   [  9,  10]           -
+//   exp_scores           8x8        f32       256   [ 15,  17]           <- tanh_x
+//   output               8x8        f32       256   [ 18,  19]           <- shifted
+//   row_sum              8x1        f32        32   [ 12,  17]           -
+//   scaled               8x8        f32       256   [  4,   5]           -
+//   scores               8x8        f32       256   [  3,   4]           -
+//   shifted              8x8        f32       256   [ 14,  15]           <- exp_plus_1
+//   tanh_x               8x8        f32       256   [ 10,  11]           <- exp_2x
+//   two_x                8x8        f32       256   [  6,   7]           <- scaled
+//   x_div_cap            8x8        f32       256   [  5,   6]           <- scores
+//
+// BUFFER REUSE MAP:
+//   x_div_cap reuses buffer of scores
+//   two_x reuses buffer of scaled
+//   exp_2x reuses buffer of x_div_cap
+//   exp_minus_1 reuses buffer of two_x
+//   tanh_x reuses buffer of exp_2x
+//   capped_scores reuses buffer of exp_minus_1
+//   shifted reuses buffer of exp_plus_1
+//   exp_scores reuses buffer of tanh_x
+//   attn reuses buffer of capped_scores
+//   output reuses buffer of shifted
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -33,7 +79,7 @@ __global__ void soft_capping_attention_kernel(float* Q_mem, float* K_mem, float*
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 9 loop overheads saved
+    // Loop fusion: 10 loop overheads saved
 
     // FUSED (3 ops): Q=TLOAD(...); K=TLOAD(...); V=TLOAD(...)
     if (_row < 8 && _col < 8) {
@@ -71,10 +117,9 @@ __global__ void soft_capping_attention_kernel(float* Q_mem, float* K_mem, float*
         row_sum[_row][_col] = row_sum[_row][_col] / 8.0f;
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): exp_scores=TEXP(...)
+    // FUSED (2 ops): shifted=TROWEXPANDSUB(...); exp_scores=TEXP(...)
     if (_row < 8 && _col < 8) {
+        shifted[_row][_col] = capped_scores[_row][_col] - row_sum[_row][0];
         exp_scores[_row][_col] = __expf(shifted[_row][_col]);
     }
 
@@ -84,7 +129,10 @@ __global__ void soft_capping_attention_kernel(float* Q_mem, float* K_mem, float*
         for (int _c = 0; _c < 8; _c++) _sum += exp_scores[_row][_c];
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: Not implemented
+    // FUSED (1 ops): attn=TROWEXPANDDIV(...)
+    if (_row < 8 && _col < 8) {
+        attn[_row][_col] = exp_scores[_row][_col] / row_sum[_row][0];
+    }
 
     // TMATMUL: output = attn @ V
     if (_row < 8 && _col < 8) {

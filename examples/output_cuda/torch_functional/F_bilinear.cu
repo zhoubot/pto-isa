@@ -1,4 +1,26 @@
 // PTO Program: F_bilinear
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_bilinear
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     5
+//   Total capacity (no reuse): 1,280 bytes (1.2 KB)
+//   Total capacity (w/ reuse): 1,280 bytes (1.2 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   output               8x8        f32       256   [  4,   5]           -
+//   temp                 8x8        f32       256   [  3,   4]           -
+//   weight               8x8        f32       256   [  2,  -1]           -
+//   x1                   8x8        f32       256   [  0,  -1]           -
+//   x2                   8x8        f32       256   [  1,   4]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

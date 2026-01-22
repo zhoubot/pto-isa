@@ -1,9 +1,52 @@
 // PTO Program: F_gelu
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_gelu
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     14
+//   Total capacity (no reuse): 3,584 bytes (3.5 KB)
+//   Total capacity (w/ reuse): 1,280 bytes (1.2 KB)
+//   Reuse savings:            2,304 bytes (64.3%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   coeff_x3             8x8        f32       256   [  3,   4]           <- x_sq
+//   cosh_approx          8x8        f32       256   [  9,  10]           -
+//   exp_neg              8x8        f32       256   [-, -]               -
+//   exp_pos              8x8        f32       256   [  7,   9]           <- inner
+//   half_x               8x8        f32       256   [ 12,  13]           <- cosh_approx
+//   inner                8x8        f32       256   [  4,   5]           <- x_cubed
+//   one_plus             8x8        f32       256   [ 11,  13]           <- sinh_approx
+//   result               8x8        f32       256   [ 13,  14]           <- x
+//   scaled               8x8        f32       256   [  5,   7]           <- coeff_x3
+//   sinh_approx          8x8        f32       256   [  8,  10]           <- scaled
+//   tanh_out             8x8        f32       256   [ 10,  11]           <- exp_pos
+//   x                    8x8        f32       256   [  0,  12]           -
+//   x_cubed              8x8        f32       256   [  2,   3]           -
+//   x_sq                 8x8        f32       256   [  1,   2]           -
+//
+// BUFFER REUSE MAP:
+//   coeff_x3 reuses buffer of x_sq
+//   inner reuses buffer of x_cubed
+//   scaled reuses buffer of coeff_x3
+//   tanh_out reuses buffer of exp_pos
+//   exp_pos reuses buffer of inner
+//   sinh_approx reuses buffer of scaled
+//   one_plus reuses buffer of sinh_approx
+//   half_x reuses buffer of cosh_approx
+//   result reuses buffer of x
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void F_gelu(float* input, float* output) {
     float x[8][8];
@@ -104,3 +147,54 @@ void F_gelu(float* input, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "F_gelu"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    F_gelu((float*)args[0], (float*)args[1]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

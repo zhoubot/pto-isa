@@ -1,9 +1,46 @@
 // PTO Program: attention_causal_mask
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: attention_causal_mask
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     12
+//   Total capacity (no reuse): 2,848 bytes (2.8 KB)
+//   Total capacity (w/ reuse): 1,568 bytes (1.5 KB)
+//   Reuse savings:            1,280 bytes (44.9%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  1,  -1]           -
+//   Q                    8x8        f32       256   [  0,  -1]           -
+//   V                    8x8        f32       256   [  2,  -1]           -
+//   attn                 8x8        f32       256   [ 12,  -1]           <- masked_scores
+//   causal_mask          8x8        f32       256   [  3,   6]           -
+//   exp_scores           8x8        f32       256   [ 10,  12]           <- scaled
+//   masked_scores        8x8        f32       256   [  6,   9]           <- scores
+//   output               8x8        f32       256   [ 13,  14]           <- shifted
+//   row_sum              8x1        f32        32   [  7,  12]           -
+//   scaled               8x8        f32       256   [  5,   6]           -
+//   scores               8x8        f32       256   [  4,   5]           -
+//   shifted              8x8        f32       256   [  9,  10]           <- causal_mask
+//
+// BUFFER REUSE MAP:
+//   masked_scores reuses buffer of scores
+//   shifted reuses buffer of causal_mask
+//   exp_scores reuses buffer of scaled
+//   attn reuses buffer of masked_scores
+//   output reuses buffer of shifted
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void attention_causal_mask(float* Q_mem, float* K_mem, float* V_mem, float* mask_mem, float* output_mem) {
     float Q[8][8];
@@ -19,7 +56,7 @@ void attention_causal_mask(float* Q_mem, float* K_mem, float* V_mem, float* mask
     float attn[8][8];
     float output[8][8];
 
-    // Loop fusion: 4 loop overheads saved
+    // Loop fusion: 5 loop overheads saved
 
     // FUSED LOOP (4 ops): Q=TLOAD(Q_mem,0,0); K=TLOAD(K_mem,0,0); V=TLOAD(V_mem,0,0); causal_mask=TLOAD(mask_mem,0,0)
     for (int _row = 0; _row < 8; _row++) {
@@ -97,24 +134,22 @@ void attention_causal_mask(float* Q_mem, float* K_mem, float* V_mem, float* mask
         }
     }
 
-    // TROWEXPANDSUB: shifted = masked_scores - broadcast(row_sum)
-    for (int _row = 0; _row < 8; _row++) {
-        float _broadcast_val = row_sum[_row][0];
-        for (int _col = 0; _col < 8; _col++) {
-            shifted[_row][_col] = masked_scores[_row][_col] - _broadcast_val;
-        }}
-
-    // FUSED LOOP (1 ops): exp_scores=TEXP(shifted)
+    // FUSED LOOP (2 ops): shifted=TROWEXPANDSUB(masked_scores,row_sum); exp_scores=TEXP(shifted)
     for (int _row = 0; _row < 8; _row++) {
         int _col;
         // Vectorized loop
         for (_col = 0; _col + 4 <= 8; _col += 4) {
-            float32x4_t _v13 = vld1q_f32(&shifted[_row][_col]);
-            float32x4_t _vr14 = _v13;
-            vst1q_f32(&exp_scores[_row][_col], _vr14);
+            float32x4_t _v013 = vld1q_f32(&masked_scores[_row][_col]);
+            float32x4_t _vb15 = vdupq_n_f32(row_sum[_row][0]);
+            float32x4_t _vr14 = vsubq_f32(_v013, _vb15);
+            vst1q_f32(&shifted[_row][_col], _vr14);
+            float32x4_t _v16 = vld1q_f32(&shifted[_row][_col]);
+            float32x4_t _vr17 = _v16;
+            vst1q_f32(&exp_scores[_row][_col], _vr17);
         }
         // Scalar cleanup
         for (; _col < 8; _col++) {
+            shifted[_row][_col] = masked_scores[_row][_col] - row_sum[_row][0];
             exp_scores[_row][_col] = expf(shifted[_row][_col]);
         }
     }
@@ -127,12 +162,21 @@ void attention_causal_mask(float* Q_mem, float* K_mem, float* V_mem, float* mask
         }
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: attn = exp_scores / broadcast(row_sum)
+    // FUSED LOOP (1 ops): attn=TROWEXPANDDIV(exp_scores,row_sum)
     for (int _row = 0; _row < 8; _row++) {
-        float _broadcast_val = row_sum[_row][0];
-        for (int _col = 0; _col < 8; _col++) {
-            attn[_row][_col] = exp_scores[_row][_col] / _broadcast_val;
-        }}
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 8; _col += 4) {
+            float32x4_t _v018 = vld1q_f32(&exp_scores[_row][_col]);
+            float32x4_t _vb20 = vdupq_n_f32(row_sum[_row][0]);
+            float32x4_t _vr19 = vdivq_f32(_v018, _vb20);
+            vst1q_f32(&attn[_row][_col], _vr19);
+        }
+        // Scalar cleanup
+        for (; _col < 8; _col++) {
+            attn[_row][_col] = exp_scores[_row][_col] / row_sum[_row][0];
+        }
+    }
 
     // TMATMUL: output = attn @ V
     for (int _i = 0; _i < 8; _i++) {
@@ -147,8 +191,8 @@ void attention_causal_mask(float* Q_mem, float* K_mem, float* V_mem, float* mask
         int _col;
         // Vectorized loop
         for (_col = 0; _col + 4 <= 8; _col += 4) {
-            float32x4_t _vs15 = vld1q_f32(&output[_row][_col]);
-            vst1q_f32(&output_mem[_row * 8 + _col], _vs15);
+            float32x4_t _vs21 = vld1q_f32(&output[_row][_col]);
+            vst1q_f32(&output_mem[_row * 8 + _col], _vs21);
         }
         // Scalar cleanup
         for (; _col < 8; _col++) {
@@ -157,3 +201,69 @@ void attention_causal_mask(float* Q_mem, float* K_mem, float* V_mem, float* mask
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "attention_causal_mask"; }
+enum { kPtoNumMemrefs = 5 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "Q_mem",
+    "K_mem",
+    "V_mem",
+    "mask_mem",
+    "output_mem",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    attention_causal_mask((float*)args[0], (float*)args[1], (float*)args[2], (float*)args[3], (float*)args[4]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

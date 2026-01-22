@@ -1,4 +1,47 @@
 // PTO Program: tensor_tan
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_tan
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     15
+//   Total capacity (no reuse): 3,840 bytes (3.8 KB)
+//   Total capacity (w/ reuse): 1,536 bytes (1.5 KB)
+//   Reuse savings:            2,304 bytes (60.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   cos_t1               8x8        f32       256   [  9,  12]           <- sin_t1
+//   cos_t2               8x8        f32       256   [ 10,  13]           <- x2
+//   cos_temp             8x8        f32       256   [ 12,  13]           <- sin_t2
+//   cos_val              8x8        f32       256   [ 13,  14]           <- sin_temp
+//   ones                 8x8        f32       256   [ 11,  12]           <- x4
+//   result               8x8        f32       256   [ 14,  15]           <- cos_t1
+//   sin_t1               8x8        f32       256   [  5,   7]           -
+//   sin_t2               8x8        f32       256   [  6,   8]           <- x3
+//   sin_temp             8x8        f32       256   [  7,   8]           <- x5
+//   sin_val              8x8        f32       256   [  8,  14]           <- x
+//   x                    8x8        f32       256   [  0,   7]           -
+//   x2                   8x8        f32       256   [  1,   9]           -
+//   x3                   8x8        f32       256   [  2,   5]           -
+//   x4                   8x8        f32       256   [  3,  10]           -
+//   x5                   8x8        f32       256   [  4,   6]           -
+//
+// BUFFER REUSE MAP:
+//   sin_t2 reuses buffer of x3
+//   sin_temp reuses buffer of x5
+//   sin_val reuses buffer of x
+//   cos_t1 reuses buffer of sin_t1
+//   cos_t2 reuses buffer of x2
+//   ones reuses buffer of x4
+//   cos_temp reuses buffer of sin_t2
+//   cos_val reuses buffer of sin_temp
+//   result reuses buffer of cos_t1
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

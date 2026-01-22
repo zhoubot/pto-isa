@@ -1,4 +1,25 @@
 // PTO Program: tensor_dot
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_dot
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 772 bytes (0.8 KB)
+//   Total capacity (w/ reuse): 772 bytes (0.8 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   other                1x64       f32       256   [  1,   2]           -
+//   prod                 1x64       f32       256   [  2,   3]           -
+//   result               1x1        f32         4   [  3,   4]           -
+//   self                 1x64       f32       256   [  0,   2]           -
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

@@ -1,9 +1,53 @@
 // PTO Program: tensor_tan
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_tan
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     15
+//   Total capacity (no reuse): 3,840 bytes (3.8 KB)
+//   Total capacity (w/ reuse): 1,536 bytes (1.5 KB)
+//   Reuse savings:            2,304 bytes (60.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   cos_t1               8x8        f32       256   [  9,  12]           <- sin_t1
+//   cos_t2               8x8        f32       256   [ 10,  13]           <- x2
+//   cos_temp             8x8        f32       256   [ 12,  13]           <- sin_t2
+//   cos_val              8x8        f32       256   [ 13,  14]           <- sin_temp
+//   ones                 8x8        f32       256   [ 11,  12]           <- x4
+//   result               8x8        f32       256   [ 14,  15]           <- cos_t1
+//   sin_t1               8x8        f32       256   [  5,   7]           -
+//   sin_t2               8x8        f32       256   [  6,   8]           <- x3
+//   sin_temp             8x8        f32       256   [  7,   8]           <- x5
+//   sin_val              8x8        f32       256   [  8,  14]           <- x
+//   x                    8x8        f32       256   [  0,   7]           -
+//   x2                   8x8        f32       256   [  1,   9]           -
+//   x3                   8x8        f32       256   [  2,   5]           -
+//   x4                   8x8        f32       256   [  3,  10]           -
+//   x5                   8x8        f32       256   [  4,   6]           -
+//
+// BUFFER REUSE MAP:
+//   sin_t2 reuses buffer of x3
+//   sin_temp reuses buffer of x5
+//   sin_val reuses buffer of x
+//   cos_t1 reuses buffer of sin_t1
+//   cos_t2 reuses buffer of x2
+//   ones reuses buffer of x4
+//   cos_temp reuses buffer of sin_t2
+//   cos_val reuses buffer of sin_temp
+//   result reuses buffer of cos_t1
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void tensor_tan(float* input, float* output) {
     float x[8][8];
@@ -110,3 +154,54 @@ void tensor_tan(float* input, float* output) {
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "tensor_tan"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    tensor_tan((float*)args[0], (float*)args[1]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

@@ -1,4 +1,31 @@
 // PTO Program: tensor_addcmul
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: tensor_addcmul
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,536 bytes (1.5 KB)
+//   Total capacity (w/ reuse): 1,024 bytes (1.0 KB)
+//   Reuse savings:            512 bytes (33.3%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   prod                 8x8        f32       256   [  3,   4]           -
+//   result               8x8        f32       256   [  5,   6]           <- tensor2
+//   scaled               8x8        f32       256   [  4,   5]           <- tensor1
+//   self                 8x8        f32       256   [  0,   5]           -
+//   tensor1              8x8        f32       256   [  1,   3]           -
+//   tensor2              8x8        f32       256   [  2,   3]           -
+//
+// BUFFER REUSE MAP:
+//   scaled reuses buffer of tensor1
+//   result reuses buffer of tensor2
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

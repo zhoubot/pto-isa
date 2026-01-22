@@ -1,9 +1,43 @@
 // PTO Program: mha_single_head
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: mha_single_head
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     10
+//   Total capacity (no reuse): 2,336 bytes (2.3 KB)
+//   Total capacity (w/ reuse): 1,312 bytes (1.3 KB)
+//   Reuse savings:            1,024 bytes (43.8%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  1,  -1]           -
+//   Q                    8x8        f32       256   [  0,  -1]           -
+//   V                    8x8        f32       256   [  2,  -1]           -
+//   attn                 8x8        f32       256   [ 10,  -1]           <- shifted
+//   exp_scores           8x8        f32       256   [  8,  10]           <- scaled
+//   output               8x8        f32       256   [ 11,  12]           <- exp_scores
+//   row_sum              8x1        f32        32   [  5,  10]           -
+//   scaled               8x8        f32       256   [  4,   7]           -
+//   scores               8x8        f32       256   [  3,   4]           -
+//   shifted              8x8        f32       256   [  7,   8]           <- scores
+//
+// BUFFER REUSE MAP:
+//   shifted reuses buffer of scores
+//   exp_scores reuses buffer of scaled
+//   attn reuses buffer of shifted
+//   output reuses buffer of exp_scores
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void mha_single_head(float* Q_mem, float* K_mem, float* V_mem, float* output_mem) {
     float Q[8][8];
@@ -17,7 +51,7 @@ void mha_single_head(float* Q_mem, float* K_mem, float* V_mem, float* output_mem
     float attn[8][8];
     float output[8][8];
 
-    // Loop fusion: 2 loop overheads saved
+    // Loop fusion: 3 loop overheads saved
 
     // FUSED LOOP (3 ops): Q=TLOAD(Q_mem,0,0); K=TLOAD(K_mem,0,0); V=TLOAD(V_mem,0,0)
     for (int _row = 0; _row < 8; _row++) {
@@ -87,24 +121,22 @@ void mha_single_head(float* Q_mem, float* K_mem, float* V_mem, float* output_mem
         }
     }
 
-    // TROWEXPANDSUB: shifted = scaled - broadcast(row_sum)
-    for (int _row = 0; _row < 8; _row++) {
-        float _broadcast_val = row_sum[_row][0];
-        for (int _col = 0; _col < 8; _col++) {
-            shifted[_row][_col] = scaled[_row][_col] - _broadcast_val;
-        }}
-
-    // FUSED LOOP (1 ops): exp_scores=TEXP(shifted)
+    // FUSED LOOP (2 ops): shifted=TROWEXPANDSUB(scaled,row_sum); exp_scores=TEXP(shifted)
     for (int _row = 0; _row < 8; _row++) {
         int _col;
         // Vectorized loop
         for (_col = 0; _col + 4 <= 8; _col += 4) {
-            float32x4_t _v9 = vld1q_f32(&shifted[_row][_col]);
-            float32x4_t _vr10 = _v9;
-            vst1q_f32(&exp_scores[_row][_col], _vr10);
+            float32x4_t _v09 = vld1q_f32(&scaled[_row][_col]);
+            float32x4_t _vb11 = vdupq_n_f32(row_sum[_row][0]);
+            float32x4_t _vr10 = vsubq_f32(_v09, _vb11);
+            vst1q_f32(&shifted[_row][_col], _vr10);
+            float32x4_t _v12 = vld1q_f32(&shifted[_row][_col]);
+            float32x4_t _vr13 = _v12;
+            vst1q_f32(&exp_scores[_row][_col], _vr13);
         }
         // Scalar cleanup
         for (; _col < 8; _col++) {
+            shifted[_row][_col] = scaled[_row][_col] - row_sum[_row][0];
             exp_scores[_row][_col] = expf(shifted[_row][_col]);
         }
     }
@@ -117,12 +149,21 @@ void mha_single_head(float* Q_mem, float* K_mem, float* V_mem, float* output_mem
         }
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: attn = exp_scores / broadcast(row_sum)
+    // FUSED LOOP (1 ops): attn=TROWEXPANDDIV(exp_scores,row_sum)
     for (int _row = 0; _row < 8; _row++) {
-        float _broadcast_val = row_sum[_row][0];
-        for (int _col = 0; _col < 8; _col++) {
-            attn[_row][_col] = exp_scores[_row][_col] / _broadcast_val;
-        }}
+        int _col;
+        // Vectorized loop
+        for (_col = 0; _col + 4 <= 8; _col += 4) {
+            float32x4_t _v014 = vld1q_f32(&exp_scores[_row][_col]);
+            float32x4_t _vb16 = vdupq_n_f32(row_sum[_row][0]);
+            float32x4_t _vr15 = vdivq_f32(_v014, _vb16);
+            vst1q_f32(&attn[_row][_col], _vr15);
+        }
+        // Scalar cleanup
+        for (; _col < 8; _col++) {
+            attn[_row][_col] = exp_scores[_row][_col] / row_sum[_row][0];
+        }
+    }
 
     // TMATMUL: output = attn @ V
     for (int _i = 0; _i < 8; _i++) {
@@ -137,8 +178,8 @@ void mha_single_head(float* Q_mem, float* K_mem, float* V_mem, float* output_mem
         int _col;
         // Vectorized loop
         for (_col = 0; _col + 4 <= 8; _col += 4) {
-            float32x4_t _vs11 = vld1q_f32(&output[_row][_col]);
-            vst1q_f32(&output_mem[_row * 8 + _col], _vs11);
+            float32x4_t _vs17 = vld1q_f32(&output[_row][_col]);
+            vst1q_f32(&output_mem[_row * 8 + _col], _vs17);
         }
         // Scalar cleanup
         for (; _col < 8; _col++) {
@@ -147,3 +188,64 @@ void mha_single_head(float* Q_mem, float* K_mem, float* V_mem, float* output_mem
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "mha_single_head"; }
+enum { kPtoNumMemrefs = 4 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "Q_mem",
+    "K_mem",
+    "V_mem",
+    "output_mem",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+    (size_t)(256),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    0,
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    mha_single_head((float*)args[0], (float*)args[1], (float*)args[2], (float*)args[3]);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

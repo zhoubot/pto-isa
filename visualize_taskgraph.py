@@ -408,12 +408,10 @@ class TaskGraphVisualizer:
         try:
             import graphviz
         except ImportError:
-            print("Error: graphviz package not installed.")
-            print("Install with: pip install graphviz")
-            print("Also ensure graphviz is installed on your system:")
-            print("  macOS: brew install graphviz")
-            print("  Ubuntu: apt-get install graphviz")
-            sys.exit(1)
+            raise ImportError(
+                "graphviz package not installed. Install with `pip install graphviz` "
+                "and ensure Graphviz is available on your system."
+            )
         
         dot_source = self.generate_dot()
         

@@ -78,7 +78,7 @@ def compute_tile_shape(dtype: ElementType, target_isa: str = "arm64") -> tuple:
     elif target_isa == "cuda":
         vector_lanes = CUDA_VECTOR_LANES.get(dtype_str, 4)
         physical_row_size = CUDA_PHYSICAL_ROW_SIZE
-    elif target_isa == "ascend910b":
+    elif target_isa in ("ascend_a2a3", "ascend_a5", "ascend910b"):
         vector_lanes = ASCEND_VECTOR_LANES.get(dtype_str, 8)
         physical_row_size = ASCEND_PHYSICAL_ROW_SIZE
     else:
@@ -306,7 +306,7 @@ if __name__ == "__main__":
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     
     # Build programs for different ISAs
-    for isa in ["arm64", "cuda", "ascend910b"]:
+    for isa in ["arm64", "cuda", "ascend_a2a3", "ascend_a5"]:
         print(f"\n{'='*70}")
         print(f"Building sinh() program for {isa.upper()}")
         print(f"{'='*70}")
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     print("Tile Shape Summary for Different ISAs and Data Types")
     print("=" * 70)
     
-    for isa in ["arm64", "cuda", "ascend910b"]:
+    for isa in ["arm64", "cuda", "ascend_a2a3", "ascend_a5"]:
         print(f"\n{isa.upper()}:")
         for dtype in [ElementType.F32, ElementType.F16, ElementType.F64]:
             rows, cols = compute_tile_shape(dtype, isa)

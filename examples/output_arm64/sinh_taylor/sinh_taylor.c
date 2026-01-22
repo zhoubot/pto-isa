@@ -1,11 +1,33 @@
 // PTO Program: sinh_taylor
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: sinh_taylor
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 65,536 bytes (64.0 KB)
+//   Total capacity (w/ reuse): 65,536 bytes (64.0 KB)
+//   Reuse savings:            0 bytes (0.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   result               32x128     f32     16384   [  4,  51]           -
+//   term                 32x128     f32     16384   [  6,  50]           -
+//   x                    32x128     f32     16384   [  3,  32]           -
+//   x_squared            32x128     f32     16384   [  5,  48]           -
+//
+// ======================================================================
+
 // Auto-generated ARM64 NEON code from PTO ISA Compiler
 #include <arm_neon.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-void sinh_taylor(float* input, float* output, int32_t total_elements, int32_t tile_size, int32_t num_full_tiles, int32_t tail_elements, int32_t offset, int32_t zero) {
+void sinh_taylor(float* input, float* output, int32_t total_elements, int32_t num_full_tiles, int32_t tail_elements, int32_t offset) {
     float x[32][128];
     float x_squared[32][128];
     float term[32][128];
@@ -270,3 +292,54 @@ void sinh_taylor(float* input, float* output, int32_t total_elements, int32_t ti
     }
 
 }
+
+#ifdef PTO_CPU_SMOKE_RUNNER
+#include <stddef.h>
+const char* pto_program_name() { return "sinh_taylor"; }
+enum { kPtoNumMemrefs = 2 };
+static const char* const kPtoMemrefNames[kPtoNumMemrefs] = {
+    "input",
+    "output",
+};
+static const size_t kPtoMemrefBytes[kPtoNumMemrefs] = {
+    (size_t)(16384),
+    (size_t)(16384),
+};
+static const char* const kPtoMemrefDtypes[kPtoNumMemrefs] = {
+    "f32",
+    "f32",
+};
+static const size_t kPtoMemrefElemBytes[kPtoNumMemrefs] = {
+    (size_t)(4),
+    (size_t)(4),
+};
+static const int kPtoMemrefIsOutput[kPtoNumMemrefs] = {
+    0,
+    1,
+};
+int pto_num_memrefs() { return kPtoNumMemrefs; }
+const char* pto_memref_name(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefNames[idx];
+}
+size_t pto_memref_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefBytes[idx];
+}
+const char* pto_memref_dtype(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return "";
+    return kPtoMemrefDtypes[idx];
+}
+size_t pto_memref_elem_bytes(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefElemBytes[idx];
+}
+int pto_memref_is_output(int idx) {
+    if (idx < 0 || idx >= kPtoNumMemrefs) return 0;
+    return kPtoMemrefIsOutput[idx];
+}
+void pto_launch(void **args, void *stream) {
+    (void)stream;
+    sinh_taylor((float*)args[0], (float*)args[1], (int32_t)0, (int32_t)0, (int32_t)0, (int32_t)0);
+}
+#endif  // PTO_CPU_SMOKE_RUNNER

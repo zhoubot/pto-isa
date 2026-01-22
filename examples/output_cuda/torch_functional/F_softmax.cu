@@ -1,4 +1,32 @@
 // PTO Program: F_softmax
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: F_softmax
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     6
+//   Total capacity (no reuse): 1,088 bytes (1.1 KB)
+//   Total capacity (w/ reuse): 544 bytes (0.5 KB)
+//   Reuse savings:            544 bytes (50.0%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   exp_x                8x8        f32       256   [  4,   6]           <- x
+//   result               8x8        f32       256   [  6,   7]           <- x_shifted
+//   row_max              8x1        f32        32   [  1,   3]           -
+//   row_sum              8x1        f32        32   [  5,   6]           <- row_max
+//   x                    8x8        f32       256   [  0,   3]           -
+//   x_shifted            8x8        f32       256   [  3,   4]           -
+//
+// BUFFER REUSE MAP:
+//   exp_x reuses buffer of x
+//   row_sum reuses buffer of row_max
+//   result reuses buffer of x_shifted
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -22,7 +50,7 @@ __global__ void F_softmax_kernel(float* input, float* output) {
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 0 loop overheads saved
+    // Loop fusion: 2 loop overheads saved
 
     // FUSED (1 ops): x=TLOAD(...)
     if (_row < 8 && _col < 8) {
@@ -40,10 +68,9 @@ __global__ void F_softmax_kernel(float* input, float* output) {
         row_max[_row][_col] = row_max[_row][_col] / 8.0f;
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): exp_x=TEXP(...)
+    // FUSED (2 ops): x_shifted=TROWEXPANDSUB(...); exp_x=TEXP(...)
     if (_row < 8 && _col < 8) {
+        x_shifted[_row][_col] = x[_row][_col] - row_max[_row][0];
         exp_x[_row][_col] = __expf(x_shifted[_row][_col]);
     }
 
@@ -53,10 +80,9 @@ __global__ void F_softmax_kernel(float* input, float* output) {
         for (int _c = 0; _c < 8; _c++) _sum += exp_x[_row][_c];
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: Not implemented
-
-    // FUSED (1 ops): output=TSTORE(...)
+    // FUSED (2 ops): result=TROWEXPANDDIV(...); output=TSTORE(...)
     if (_row < 8 && _col < 8) {
+        result[_row][_col] = exp_x[_row][_col] / row_sum[_row][0];
         output[_row * 8 + _col] = result[_row][_col];
     }
 

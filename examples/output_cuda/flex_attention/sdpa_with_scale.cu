@@ -1,4 +1,37 @@
 // PTO Program: sdpa_with_scale
+// Function Type: InCore (tile-level computation)
+// ======================================================================
+// TILE BUFFER ANALYSIS: sdpa_with_scale
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     10
+//   Total capacity (no reuse): 2,336 bytes (2.3 KB)
+//   Total capacity (w/ reuse): 1,312 bytes (1.3 KB)
+//   Reuse savings:            1,024 bytes (43.8%)
+//
+// TILE DETAILS:
+//   Name                 Shape      Type   Bytes    Liveness [write,read]   Reuse
+//   --------------------------------------------------------------------------------
+//   K                    8x8        f32       256   [  1,  -1]           -
+//   Q                    8x8        f32       256   [  0,  -1]           -
+//   V                    8x8        f32       256   [  2,  -1]           -
+//   attn                 8x8        f32       256   [ 10,  -1]           <- shifted
+//   exp_scores           8x8        f32       256   [  8,  10]           <- scaled
+//   output               8x8        f32       256   [ 11,  12]           <- exp_scores
+//   row_sum              8x1        f32        32   [  5,  10]           -
+//   scaled               8x8        f32       256   [  4,   7]           -
+//   scores               8x8        f32       256   [  3,   4]           -
+//   shifted              8x8        f32       256   [  7,   8]           <- scores
+//
+// BUFFER REUSE MAP:
+//   shifted reuses buffer of scores
+//   exp_scores reuses buffer of scaled
+//   attn reuses buffer of shifted
+//   output reuses buffer of exp_scores
+//
+// ======================================================================
+
 // Auto-generated CUDA code from PTO ISA Compiler
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -26,7 +59,7 @@ __global__ void sdpa_with_scale_kernel(float* Q_mem, float* K_mem, float* V_mem,
     int _row = threadIdx.y + blockIdx.y * blockDim.y;
     int _col = threadIdx.x + blockIdx.x * blockDim.x;
 
-    // Loop fusion: 2 loop overheads saved
+    // Loop fusion: 3 loop overheads saved
 
     // FUSED (3 ops): Q=TLOAD(...); K=TLOAD(...); V=TLOAD(...)
     if (_row < 8 && _col < 8) {
@@ -57,10 +90,9 @@ __global__ void sdpa_with_scale_kernel(float* Q_mem, float* K_mem, float* V_mem,
         row_sum[_row][_col] = row_sum[_row][_col] / 8.0f;
     }
 
-    // TROWEXPANDSUB: Not implemented
-
-    // FUSED (1 ops): exp_scores=TEXP(...)
+    // FUSED (2 ops): shifted=TROWEXPANDSUB(...); exp_scores=TEXP(...)
     if (_row < 8 && _col < 8) {
+        shifted[_row][_col] = scaled[_row][_col] - row_sum[_row][0];
         exp_scores[_row][_col] = __expf(shifted[_row][_col]);
     }
 
@@ -70,7 +102,10 @@ __global__ void sdpa_with_scale_kernel(float* Q_mem, float* K_mem, float* V_mem,
         for (int _c = 0; _c < 8; _c++) _sum += exp_scores[_row][_c];
         row_sum[_row][0] = _sum;}
 
-    // TROWEXPANDDIV: Not implemented
+    // FUSED (1 ops): attn=TROWEXPANDDIV(...)
+    if (_row < 8 && _col < 8) {
+        attn[_row][_col] = exp_scores[_row][_col] / row_sum[_row][0];
+    }
 
     // TMATMUL: output = attn @ V
     if (_row < 8 && _col < 8) {
