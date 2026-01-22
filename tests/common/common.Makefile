@@ -1,6 +1,6 @@
 ROOT := $(shell echo $(CURDIR) | sed -e "s@\(.*\)/pto-isa/.*@\1/pto-isa@")
-TEST_ROOT := $(shell echo $(CURDIR) | sed -e "s@\(.*\)/pto-isa\/test/.*@\1/pto-isa\/test@")
-CATEGORY := $(shell echo $(CURDIR) | sed -e 's/\(.*\)pto-isa\/test\/\(.*\)/\2/')
+TEST_ROOT := $(shell echo $(CURDIR) | sed -e "s@\(.*\)/pto-isa\/tests/.*@\1/pto-isa\/tests@")
+CATEGORY := $(shell echo $(CURDIR) | sed -e 's/\(.*\)pto-isa\/tests\/\(.*\)/\2/')
 CATEGORY_NAME := $(shell echo $(CATEGORY) | sed -e 's/\//_/g')
 OBJ_ROOT := $(shell realpath $(TEST_ROOT)/../output)
 CASE_SRC_DIR := $(CATEGORY)/src
@@ -33,7 +33,7 @@ CC_O = -O2 --cce-aicore-arch=dav-c310 -lascendcl -lruntime
 DEFINES += -DREGISTER_BASE
 endif
 CC_VER ?= -std=c++17
-INCLUDE += -I$(COMPILER_DIR)/runtime/include -I$(ROOT)/test/common
+INCLUDE += -I$(COMPILER_DIR)/runtime/include -I$(ROOT)/tests/common
 INCLUDE += -L$(COMPILER_DIR)/runtime/lib64 -lstdc++ -lgcc
 
 endif
@@ -50,7 +50,7 @@ CC_O += -fPIC
 CC_LINK += -shared
 endif
 
-INCLUDE += -I$(ROOT)/include -I$(ROOT)/test/common -I$(ROOT)/test/kernels/src
+INCLUDE += -I$(ROOT)/include -I$(ROOT)/tests/common
 
 CC_O_ALL = $(CC_O) $(CC_VER) $(CC_OPTS)
 # $(info ROOT:		$(ROOT))
@@ -66,6 +66,10 @@ CC_O_ALL = $(CC_O) $(CC_VER) $(CC_OPTS)
 # $(info TARGET:		$(TARGET))
 
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp
+	@mkdir -p $(shell dirname $@)
+	$(CXX) $(CC_O_ALL) $(INCLUDE) $(DEFINES) $< -o $@
+
+$(OBJ_DIR)%.o: $(SRC_DIR)%.cce
 	@mkdir -p $(shell dirname $@)
 	$(CXX) $(CC_O_ALL) $(INCLUDE) $(DEFINES) $< -o $@
 

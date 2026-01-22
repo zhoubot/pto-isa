@@ -56,6 +56,9 @@ class _Compiler:
         self._t = _Text()
         self._sym: dict[str, _Sym] = {}
         self._tmp_i = 0
+        self._next_tensor_arg = 0
+        # Python-name -> literal string (emits as an immediate, not an SSA value).
+        self._literal: dict[str, str] = {}
 
     def _tmp(self) -> _Sym:
         self._tmp_i += 1
@@ -76,6 +79,9 @@ class _Compiler:
 
     def _opnd(self, node: ast.AST) -> str:
         if isinstance(node, ast.Name):
+            lit = self._literal.get(node.id)
+            if lit is not None:
+                return lit
             return self._sym_for(node.id).pto
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool):
@@ -109,15 +115,42 @@ class _Compiler:
                 stride = self._eval_const(kw.value)
             elif kw.arg == "layout":
                 layout = self._eval_const(kw.value)
+            elif kw.arg in ("arg", "arg_index"):
+                # Parsed below (controls %argN binding).
+                pass
             else:
                 raise FrontendError(f"unknown tensor(...) kw: {kw.arg}")
 
         if dtype is None or shape is None:
             raise FrontendError("tensor(...) requires dtype and shape")
 
+        # `tensor(...)` in the Python frontend declares a kernel tensor argument, mapped
+        # to `%argN` in declaration order, and introduces a view via `pto.make_tensor_view`.
+        arg_index: int | None = None
+        for kw in call.keywords:
+            if kw.arg in ("arg", "arg_index"):
+                arg_index = int(self._eval_const(kw.value))
+
+        if arg_index is None:
+            arg_index = self._next_tensor_arg
+            self._next_tensor_arg += 1
+
+        if not isinstance(shape, (tuple, list)) or len(shape) != 2:
+            raise FrontendError("tensor(...) currently expects shape=(H, W)")
+        h, w = int(shape[0]), int(shape[1])
+
+        if stride is None:
+            s0, s1 = w, 1
+        else:
+            if not isinstance(stride, (tuple, list)) or len(stride) != 2:
+                raise FrontendError("tensor(..., stride=...) expects stride=(S0, S1)")
+            s0, s1 = int(stride[0]), int(stride[1])
+
         sym = self._sym_for(target)
-        ty = TensorType(dtype=dtype, shape=shape, stride=stride, layout=layout)
-        self._t.line(f".arg {sym.pto} : {ty}")
+        self._t.line(
+            f"{sym.pto} = pto.make_tensor_view %arg{arg_index}, dtype={dtype}, "
+            f"shape=[{h},{w}] strides=[{s0},{s1}], layout={layout}"
+        )
 
     def _declare_tile(self, target: str, call: ast.Call) -> None:
         loc: str | None = None
@@ -130,6 +163,7 @@ class _Compiler:
         slayout: str = "NoneBox"
         fractal: int | None = None
         pad: str = "Null"
+        addr: int | None = None
 
         args = list(call.args)
         if args:
@@ -161,6 +195,8 @@ class _Compiler:
                 fractal = self._eval_const(kw.value)
             elif kw.arg == "pad":
                 pad = self._eval_const(kw.value)
+            elif kw.arg == "addr":
+                addr = int(self._eval_const(kw.value))
             else:
                 raise FrontendError(f"unknown tile(...) kw: {kw.arg}")
 
@@ -191,26 +227,29 @@ class _Compiler:
             fractal=fractal,
             pad=pad,
         )
-        self._t.line(f".arg {sym.pto} : {ty}")
+        if addr is None:
+            self._t.line(f"{sym.pto} = pto.alloc_tile : {ty}")
+        else:
+            self._t.line(f"{sym.pto} = pto.alloc_tile {addr} : {ty}")
 
     def _emit_scalar_assign(self, dst: str, value: ast.AST) -> None:
         dst_sym = self._sym_for(dst)
         if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
             fn = value.func.id
             if fn == "get_block_idx":
-                self._t.line(f"get_block_idx {dst_sym.pto} : index")
+                self._t.line(f"{dst_sym.pto} = pto.get_block_idx : index")
                 return
             if fn == "get_block_num":
-                self._t.line(f"get_block_num {dst_sym.pto} : index")
+                self._t.line(f"{dst_sym.pto} = pto.get_block_num : index")
                 return
         if isinstance(value, ast.BinOp):
             lhs = self._opnd(value.left)
             rhs = self._opnd(value.right)
             if isinstance(value.op, ast.Add):
-                self._t.line(f"iadd {dst_sym.pto}, {lhs}, {rhs} : index")
+                self._t.line(f"{dst_sym.pto} = pto.iadd {lhs}, {rhs} : index")
                 return
             if isinstance(value.op, ast.Mult):
-                self._t.line(f"imul {dst_sym.pto}, {lhs}, {rhs} : index")
+                self._t.line(f"{dst_sym.pto} = pto.imul {lhs}, {rhs} : index")
                 return
         raise FrontendError(f"unsupported scalar assignment: {dst} = {ast.dump(value)}")
 
@@ -227,28 +266,27 @@ class _Compiler:
             return [self._opnd(a) for a in call.args]
 
         if fn == "tassign":
-            a = opnds()
-            if len(a) != 2:
-                raise FrontendError("tassign(dst, addr)")
-            self._t.line(f"tassign {a[0]}, {a[1]}")
-            return
+            raise FrontendError(
+                "tassign(...) is not supported in the new PTO-AS syntax; "
+                "use tile(..., addr=0x...) or omit `addr` and run ptoas with --assign-tile-addrs"
+            )
         if fn == "tmov":
             a = opnds()
             if len(a) != 2:
                 raise FrontendError("tmov(dst, src)")
-            self._t.line(f"tmov {a[0]}, {a[1]}")
+            self._t.line(f"{a[0]} = pto.tmov {a[1]}")
             return
         if fn == "tadd":
             a = opnds()
             if len(a) != 3:
                 raise FrontendError("tadd(dst, a, b)")
-            self._t.line(f"tadd {a[0]}, {a[1]}, {a[2]}")
+            self._t.line(f"{a[0]} = pto.tadd {a[1]}, {a[2]}")
             return
         if fn == "tmatmul":
             a = opnds()
             if len(a) != 3:
                 raise FrontendError("tmatmul(dst, a, b)")
-            self._t.line(f"tmatmul {a[0]}, {a[1]}, {a[2]}")
+            self._t.line(f"{a[0]} = pto.tmatmul {a[1]}, {a[2]}")
             return
 
         if fn == "tload":
@@ -258,7 +296,7 @@ class _Compiler:
             src = self._opnd(call.args[1])
             r = self._opnd(call.args[2])
             c = self._opnd(call.args[3])
-            self._t.line(f"tload {dst}, {src}[{r}, {c}]")
+            self._t.line(f"{dst} = pto.tload {src}[{r}, {c}]")
             return
         if fn == "tstore":
             if len(call.args) != 4:
@@ -267,7 +305,7 @@ class _Compiler:
             r = self._opnd(call.args[1])
             c = self._opnd(call.args[2])
             src = self._opnd(call.args[3])
-            self._t.line(f"tstore {dst}[{r}, {c}], {src}")
+            self._t.line(f"pto.tstore {dst}[{r}, {c}], {src}")
             return
 
         raise FrontendError(f"unknown instruction call: {fn}")
@@ -297,7 +335,7 @@ class _Compiler:
             raise FrontendError("unsupported compare op")
 
         cond = self._tmp()
-        self._t.line(f"icmp_{mode} {cond.pto}, {lhs}, {rhs} : i1")
+        self._t.line(f"{cond.pto} = pto.icmp_{mode} {lhs}, {rhs} : i1")
         self._t.open(f"scf.if {cond.pto}")
         self._emit_stmts(stmt.body)
         if stmt.orelse:
@@ -340,11 +378,14 @@ class _Compiler:
             if isinstance(stmt.value, ast.Call) and isinstance(stmt.value.func, ast.Name) and stmt.value.func.id == "tile":
                 self._declare_tile(dst, stmt.value)
                 return
-            if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, int):
-                if self._t._indent != 0:
-                    raise FrontendError("integer constants must be defined at top-level (outside scf regions)")
-                sym = self._sym_for(dst)
-                self._t.line(f".const {sym.pto} = {stmt.value.value} : index")
+            if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, (int, bool, float)):
+                # Inline numeric literals directly (new PTO-AS removes `.const`).
+                if dst in self._sym:
+                    raise FrontendError(f"cannot rebind existing SSA symbol as a literal: {dst}")
+                if isinstance(stmt.value.value, bool):
+                    self._literal[dst] = "1" if stmt.value.value else "0"
+                else:
+                    self._literal[dst] = str(stmt.value.value)
                 return
             self._emit_scalar_assign(dst, stmt.value)
             return
@@ -403,14 +444,6 @@ def add16():
     ty = tile(loc="Vec", dtype="f16", rows=16, cols=16)
     tz = tile(loc="Vec", dtype="f16", rows=16, cols=16)
 
-    addr_x = 0x0
-    addr_y = 0x8000
-    addr_z = 0x10000
-
-    tassign(tx, addr_x)
-    tassign(ty, addr_y)
-    tassign(tz, addr_z)
-
     tload(tx, x, r0, 0)
     tload(ty, y, r0, 0)
     tadd(tz, tx, ty)
@@ -439,18 +472,6 @@ def gemm16():
     a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="RowMajor")
     b_right = tile(loc="Right", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="ColMajor")
     c_acc = tile(loc="Acc", dtype="f32", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-
-    addr_a_mat = 0x0
-    addr_b_mat = 0x20000
-    addr_a_left = 0x0
-    addr_b_right = 0x0
-    addr_c_acc = 0x0
-
-    tassign(a_mat, addr_a_mat)
-    tassign(b_mat, addr_b_mat)
-    tassign(a_left, addr_a_left)
-    tassign(b_right, addr_b_right)
-    tassign(c_acc, addr_c_acc)
 
     tload(a_mat, a, 0, 0)
     tload(b_mat, b, 0, 0)
@@ -483,18 +504,6 @@ def gemm16_cpu():
     a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
     b_right = tile(loc="Right", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="ColMajor")
     c_acc = tile(loc="Acc", dtype="f32", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-
-    addr_a_mat = 0x0
-    addr_b_mat = 0x20000
-    addr_a_left = 0x0
-    addr_b_right = 0x0
-    addr_c_acc = 0x0
-
-    tassign(a_mat, addr_a_mat)
-    tassign(b_mat, addr_b_mat)
-    tassign(a_left, addr_a_left)
-    tassign(b_right, addr_b_right)
-    tassign(c_acc, addr_c_acc)
 
     tload(a_mat, a, 0, 0)
     tload(b_mat, b, 0, 0)

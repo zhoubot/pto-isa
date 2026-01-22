@@ -1,7 +1,7 @@
 ; Minimal end-to-end test for `ptoas/mlir/build/bin/ptoas`
 ;
 ; Expected flow:
-;   ptoas add16_min.pto -o add16_min.cce --insert-events --emit-bin=add16_min.bin
+;   ptoas add16_min.pto -o add16_min.cpp --insert-events --emit-bin=add16_min.bin
 ;
 ; New-format PTO-AS (no `.arg` / `.const`):
 ; - tensors are introduced via `pto.make_tensor_view` from implicit `%argN` kernel args

@@ -13,8 +13,6 @@ def make_gemm16_pto(*, target: Target) -> str:
         src = r"""
 def gemm16_cpu():
     prologue()
-    bn = get_block_num()
-    bid = get_block_idx()
 
     a = tensor(dtype="f16", shape=(16, 16))
     b = tensor(dtype="f16", shape=(16, 16))
@@ -33,6 +31,7 @@ def gemm16_cpu():
     tmov(b_right, b_mat)
     tmatmul(c_acc, a_left, b_right)
     tstore(c, 0, 0, c_acc)
+
     epilogue()
 """
         return compile_kernel_from_source(src, func_name="gemm16_cpu")
@@ -41,8 +40,6 @@ def gemm16_cpu():
     src = r"""
 def gemm16():
     prologue()
-    bn = get_block_num()
-    bid = get_block_idx()
 
     a = tensor(dtype="f16", shape=(16, 16))
     b = tensor(dtype="f16", shape=(16, 16))
@@ -61,6 +58,8 @@ def gemm16():
     tmov(b_right, b_mat)
     tmatmul(c_acc, a_left, b_right)
     tstore(c, 0, 0, c_acc)
+
     epilogue()
 """
     return compile_kernel_from_source(src, func_name="gemm16")
+

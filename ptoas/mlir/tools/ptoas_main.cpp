@@ -27,7 +27,7 @@ static std::string getEnvOrEmpty(const char *name) {
 
 int main(int argc, char **argv) {
   llvm::cl::opt<std::string> input(llvm::cl::Positional, llvm::cl::Required, llvm::cl::desc("<input.pto>"));
-  llvm::cl::opt<std::string> output("o", llvm::cl::init(""), llvm::cl::desc("Output CCE path"));
+  llvm::cl::opt<std::string> output("o", llvm::cl::init(""), llvm::cl::desc("Output source path"));
   llvm::cl::opt<std::string> target("target", llvm::cl::init("npu"),
                                     llvm::cl::desc("Target: npu (CCE) or cpu (CPU simulator C++)"));
   llvm::cl::opt<std::string> kernelName("kernel-name", llvm::cl::init("pto_kernel"),
@@ -72,7 +72,11 @@ int main(int argc, char **argv) {
   std::string outPath = output;
   if (outPath.empty()) {
     llvm::SmallString<256> p(input);
-    llvm::sys::path::replace_extension(p, (target == "cpu") ? "cpp" : "cce");
+    // NPU sources are still compiled as CCE via `bisheng -xcce`; `.cpp` is used for
+    // better editor/tooling compatibility (matches the manual kernels style).
+    llvm::sys::path::replace_extension(p, "cpp");
+    if (target == "cpu")
+      llvm::sys::path::replace_extension(p, "cpu.cpp");
     outPath = p.str().str();
   }
 

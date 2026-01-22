@@ -21,7 +21,13 @@ def _repo_root() -> Path:
 
 
 def _default_ptoas() -> Path:
-    return _repo_root() / "ptoas/mlir/build/bin/ptoas"
+    for p in (
+        _repo_root() / "ptoas/mlir/build-macos/bin/ptoas",
+        _repo_root() / "ptoas/mlir/build/bin/ptoas",
+    ):
+        if p.exists():
+            return p
+    return _repo_root() / "ptoas/mlir/build-macos/bin/ptoas"
 
 
 def main() -> int:

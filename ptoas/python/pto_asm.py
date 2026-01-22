@@ -11,20 +11,26 @@ class TensorType:
     stride: Sequence[int] | None = None
     layout: str = "ND"
 
-    def __str__(self) -> str:
+    def shape2(self) -> tuple[int, int]:
         shape = list(self.shape)
-        if len(shape) == 2:
-            shape = [1, 1, 1, shape[0], shape[1]]
-        if len(shape) != 5:
-            raise ValueError("TensorType expects shape as 2D (H,W) or 5D")
+        if len(shape) != 2:
+            raise ValueError("TensorType currently expects shape as 2D (H, W)")
+        return int(shape[0]), int(shape[1])
 
-        stride = list(self.stride) if self.stride is not None else [1, 1, 1, int(shape[4]), 1]
-        if len(stride) != 5:
-            raise ValueError("TensorType expects stride as 5D when provided")
-        return (
-            f"!pto.tensor<dtype={self.dtype}, shape=[{','.join(map(str, shape))}], "
-            f"stride=[{','.join(map(str, stride))}], layout={self.layout}>"
-        )
+    def stride2(self) -> tuple[int, int]:
+        h, w = self.shape2()
+        if self.stride is None:
+            return w, 1
+        stride = list(self.stride)
+        if len(stride) != 2:
+            raise ValueError("TensorType currently expects stride as 2D (S0, S1)")
+        return int(stride[0]), int(stride[1])
+
+    def __str__(self) -> str:
+        # Preserve the canonical spelling used by the MLIR `ptoas` emitter.
+        h, w = self.shape2()
+        s0, s1 = self.stride2()
+        return f"!pto.tensor<dtype={self.dtype}, shape=[{h},{w}], stride=[{s0},{s1}], layout={self.layout}>"
 
 
 @dataclass(frozen=True)
@@ -45,10 +51,7 @@ class TileType:
         valid_cols = self.cols if self.valid_cols is None else self.valid_cols
         fractal = self.fractal
         if fractal is None:
-            if self.loc == "Acc":
-                fractal = 1024
-            else:
-                fractal = 512
+            fractal = 1024 if self.loc == "Acc" else 512
         return (
             f"!pto.tile<loc={self.loc}, dtype={self.dtype}, rows={self.rows}, cols={self.cols}, "
             f"blayout={self.blayout}, valid={valid_rows}x{valid_cols}, slayout={self.slayout}, "
@@ -57,8 +60,20 @@ class TileType:
 
 
 class PTOProgram:
+    """
+    Low-level PTO-AS builder that emits the new surface syntax:
+      - `%x = pto.make_tensor_view %arg0, ...`
+      - `%t = pto.alloc_tile : !pto.tile<...>`
+      - `%dst = pto.op %src0, %src1`
+
+    Notes:
+      - `.arg` / `.const` are intentionally not supported anymore (the MLIR `ptoas` frontend rejects them).
+      - Numeric literals should be used directly (e.g. `16`, `0x10000`).
+    """
+
     def __init__(self) -> None:
         self._lines: list[str] = []
+        self._next_tensor_arg = 0
 
     def comment(self, text: str) -> "PTOProgram":
         for line in text.splitlines():
@@ -75,20 +90,43 @@ class PTOProgram:
     def epilogue(self) -> "PTOProgram":
         return self.line("epilogue")
 
-    def arg(self, name: str, type_str: str | TensorType | TileType) -> "PTOProgram":
-        if not name.startswith("%"):
-            raise ValueError("arg name must start with %")
-        self._lines.append(f".arg {name} : {type_str}")
+    def make_tensor_view(self, *, view: str, arg_index: int, ty: TensorType) -> "PTOProgram":
+        if not view.startswith("%"):
+            raise ValueError("view must start with %")
+        h, w = ty.shape2()
+        s0, s1 = ty.stride2()
+        self._lines.append(
+            f"{view} = pto.make_tensor_view %arg{arg_index}, dtype={ty.dtype}, "
+            f"shape=[{h},{w}] strides=[{s0},{s1}], layout={ty.layout}"
+        )
         return self
 
-    def const(self, name: str, value: str, ty: str = "index") -> "PTOProgram":
+    def tensor_arg(self, name: str, ty: TensorType) -> "PTOProgram":
+        # Convenience: sequentially bind tensors to %arg0, %arg1, ...
+        idx = self._next_tensor_arg
+        self._next_tensor_arg += 1
+        return self.make_tensor_view(view=name, arg_index=idx, ty=ty)
+
+    def alloc_tile(self, name: str, ty: TileType, addr: str | None = None) -> "PTOProgram":
         if not name.startswith("%"):
-            raise ValueError("const name must start with %")
-        self._lines.append(f".const {name} = {value} : {ty}")
+            raise ValueError("tile name must start with %")
+        if addr is None:
+            self._lines.append(f"{name} = pto.alloc_tile : {ty}")
+        else:
+            self._lines.append(f"{name} = pto.alloc_tile {addr} : {ty}")
         return self
 
-    def instr(self, opcode: str, operands: Iterable[str], typesig: str | None = None) -> "PTOProgram":
-        op_text = f"{opcode} {', '.join(operands)}"
+    def assign(self, dst: str, opcode: str, operands: Iterable[str], typesig: str | None = None) -> "PTOProgram":
+        if not dst.startswith("%"):
+            raise ValueError("dst must start with %")
+        op_text = f"{dst} = pto.{opcode} {', '.join(operands)}".rstrip()
+        if typesig:
+            op_text += f" : {typesig}"
+        self._lines.append(op_text)
+        return self
+
+    def op(self, opcode: str, operands: Iterable[str], typesig: str | None = None) -> "PTOProgram":
+        op_text = f"pto.{opcode} {', '.join(operands)}".rstrip()
         if typesig:
             op_text += f" : {typesig}"
         self._lines.append(op_text)
@@ -100,78 +138,59 @@ class PTOProgram:
 
 def make_add16_program() -> str:
     prog = PTOProgram()
-    prog.comment(
-        "Generated by ptoas/python/pto_asm.py\n"
-        "Vec add: z = x + y, for a single 16x16 tile (blockDim=1 in runner)."
-    )
+    prog.comment("Generated by ptoas/python/pto_asm.py (new-format PTO-AS)\nVec add: z = x + y for one 16x16 tile.")
     prog.prologue()
-    prog.instr("get_block_num", ["%bn"], "index")
-    prog.instr("get_block_idx", ["%bid"], "index")
-    prog.instr("imul", ["%r0", "%bid", "16"], "index")
 
-    tensor = TensorType(dtype="f16", shape=[16, 16])
-    tile = TileType(
-        loc="Vec",
-        dtype="f16",
-        rows=16,
-        cols=16,
-    )
+    prog.assign("%bn", "get_block_num", [], "index")
+    prog.assign("%bid", "get_block_idx", [], "index")
 
-    prog.arg("%x", tensor).arg("%y", tensor).arg("%z", tensor)
-    prog.arg("%tx", tile).arg("%ty", tile).arg("%tz", tile)
+    t = TensorType(dtype="f16", shape=[16, 16])
+    prog.tensor_arg("%x", t).tensor_arg("%y", t).tensor_arg("%z", t)
 
-    prog.const("%addr_x", "0x0").const("%addr_y", "0x8000").const("%addr_z", "0x10000")
-    prog.instr("tassign", ["%tx", "%addr_x"], "(!pto.tile<...>, index)")
-    prog.instr("tassign", ["%ty", "%addr_y"], "(!pto.tile<...>, index)")
-    prog.instr("tassign", ["%tz", "%addr_z"], "(!pto.tile<...>, index)")
+    tile = TileType(loc="Vec", dtype="f16", rows=16, cols=16)
+    prog.alloc_tile("%tx", tile).alloc_tile("%ty", tile).alloc_tile("%tz", tile)
 
-    prog.instr("tload", ["%tx", "%x[%r0, 0]"], "(!pto.tile<...>, !pto.tensor<...>, index, index)")
-    prog.instr("tload", ["%ty", "%y[%r0, 0]"], "(!pto.tile<...>, !pto.tensor<...>, index, index)")
-    prog.instr("tadd", ["%tz", "%tx", "%ty"], "(!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)")
-    prog.instr("tstore", ["%z[%r0, 0]", "%tz"], "(!pto.tensor<...>, index, index, !pto.tile<...>)")
+    prog.assign("%tx", "tload", ["%x[0, 0]"])
+    prog.assign("%ty", "tload", ["%y[0, 0]"])
+    prog.assign("%tz", "tadd", ["%tx", "%ty"])
+    prog.op("tstore", ["%z[0, 0]", "%tz"])
+
     prog.epilogue()
     return prog.emit()
 
 
-def make_gemm16_program() -> str:
+def make_gemm16_program(*, target: str = "npu") -> str:
     prog = PTOProgram()
-    prog.comment(
-        "Generated by ptoas/python/pto_asm.py\n"
-        "Cube GEMM: C = A @ B, A/B f16[16,16], C f32[16,16]."
-    )
+    prog.comment("Generated by ptoas/python/pto_asm.py (new-format PTO-AS)\nCube GEMM: C = A @ B (16x16).")
     prog.prologue()
-    prog.instr("get_block_num", ["%bn"], "index")
-    prog.instr("get_block_idx", ["%bid"], "index")
 
     a = TensorType(dtype="f16", shape=[16, 16])
     b = TensorType(dtype="f16", shape=[16, 16])
     c = TensorType(dtype="f32", shape=[16, 16])
+    prog.tensor_arg("%a", a).tensor_arg("%b", b).tensor_arg("%c", c)
 
     a_mat = TileType("Mat", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
     b_mat = TileType("Mat", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
-    a_left = TileType("Left", "f16", 16, 16, blayout="RowMajor", slayout="RowMajor")
+    if target == "cpu":
+        a_left = TileType("Left", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
+    else:
+        a_left = TileType("Left", "f16", 16, 16, blayout="RowMajor", slayout="RowMajor")
     b_right = TileType("Right", "f16", 16, 16, blayout="RowMajor", slayout="ColMajor")
     c_acc = TileType("Acc", "f32", 16, 16, blayout="ColMajor", slayout="RowMajor")
 
-    prog.arg("%a", a).arg("%b", b).arg("%c", c)
-    prog.arg("%a_mat", a_mat).arg("%b_mat", b_mat)
-    prog.arg("%a_left", a_left).arg("%b_right", b_right).arg("%c_acc", c_acc)
+    prog.alloc_tile("%a_mat", a_mat)
+    prog.alloc_tile("%b_mat", b_mat)
+    prog.alloc_tile("%a_left", a_left)
+    prog.alloc_tile("%b_right", b_right)
+    prog.alloc_tile("%c_acc", c_acc)
 
-    prog.const("%addr_a_mat", "0x0").const("%addr_b_mat", "0x20000")
-    prog.const("%addr_a_left", "0x0").const("%addr_b_right", "0x0").const("%addr_c_acc", "0x0")
-
-    prog.instr("tassign", ["%a_mat", "%addr_a_mat"], "(!pto.tile<...>, index)")
-    prog.instr("tassign", ["%b_mat", "%addr_b_mat"], "(!pto.tile<...>, index)")
-    prog.instr("tassign", ["%a_left", "%addr_a_left"], "(!pto.tile<...>, index)")
-    prog.instr("tassign", ["%b_right", "%addr_b_right"], "(!pto.tile<...>, index)")
-    prog.instr("tassign", ["%c_acc", "%addr_c_acc"], "(!pto.tile<...>, index)")
-
-    prog.instr("tload", ["%a_mat", "%a[0, 0]"], "(!pto.tile<...>, !pto.tensor<...>, index, index)")
-    prog.instr("tload", ["%b_mat", "%b[0, 0]"], "(!pto.tile<...>, !pto.tensor<...>, index, index)")
-    prog.instr("tmov", ["%a_left", "%a_mat"], "(!pto.tile<...>, !pto.tile<...>)")
-    prog.instr("tmov", ["%b_right", "%b_mat"], "(!pto.tile<...>, !pto.tile<...>)")
-    prog.instr("tmatmul", ["%c_acc", "%a_left", "%b_right"], "(!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)")
-    prog.instr("tstore", ["%c[0, 0]", "%c_acc"], "(!pto.tensor<...>, index, index, !pto.tile<...>)")
+    prog.assign("%a_mat", "tload", ["%a[0, 0]"])
+    prog.assign("%b_mat", "tload", ["%b[0, 0]"])
+    prog.assign("%a_left", "tmov", ["%a_mat"])
+    prog.assign("%b_right", "tmov", ["%b_mat"])
+    prog.assign("%c_acc", "tmatmul", ["%a_left", "%b_right"])
+    prog.op("tstore", ["%c[0, 0]", "%c_acc"])
 
     prog.epilogue()
     return prog.emit()
+

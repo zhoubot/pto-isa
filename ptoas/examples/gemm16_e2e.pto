@@ -6,7 +6,7 @@
 ;   C: f32[16,16]
 ;
 ; Use with:
-;   ./ptoas/mlir/build/bin/ptoas ptoas/examples/gemm16_e2e.pto -o /tmp/gemm16.cce --insert-events --emit-bin=/tmp/gemm16.bin --arch dav-c220-cube ...
+;   ./ptoas/mlir/build/bin/ptoas ptoas/examples/gemm16_e2e.pto -o /tmp/gemm16.cpp --insert-events --emit-bin=/tmp/gemm16.bin --arch dav-c220-cube ...
 
 prologue
 %bn = pto.get_block_num : index

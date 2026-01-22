@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -42,7 +43,8 @@ class CompileConfig:
 
 def compile_pto_to_cce_and_bin(*, pto_path: Path, outdir: Path, cfg: CompileConfig) -> tuple[Path, Path]:
     outdir.mkdir(parents=True, exist_ok=True)
-    cce_path = outdir / (pto_path.stem + ".cce")
+    # This is still CCE source compiled via `bisheng -xcce`; we use `.cpp` for editor compatibility.
+    cce_path = outdir / (pto_path.stem + ".cpp")
     bin_path = outdir / (pto_path.stem + ".bin")
 
     args = [
@@ -85,6 +87,39 @@ def compile_pto_to_cpu_cpp(*, pto_path: Path, outdir: Path, ptoas: Path) -> Path
     return cpp_path
 
 
+def compile_pto_to_device_cpp(
+    *,
+    pto_path: Path,
+    out_cpp: Path,
+    ptoas: Path,
+    arch: str,
+    memory_model: str = "MEMORY_BASE",
+    insert_events: bool = True,
+    assign_tile_addrs: bool = True,
+) -> Path:
+    out_cpp.parent.mkdir(parents=True, exist_ok=True)
+    args = [
+        str(ptoas),
+        str(pto_path),
+        "--target",
+        "npu",
+        "-o",
+        str(out_cpp),
+        "--arch",
+        arch,
+        "--memory-model",
+        memory_model,
+        "--repo-root",
+        str(repo_root()),
+    ]
+    if insert_events:
+        args.append("--insert-events")
+    if assign_tile_addrs:
+        args.append("--assign-tile-addrs")
+    _run(args, cwd=repo_root())
+    return out_cpp
+
+
 def build_cpu_so_from_cpp(*, cpp_path: Path, out_so: Path) -> None:
     out_so.parent.mkdir(parents=True, exist_ok=True)
     _run(
@@ -108,20 +143,30 @@ def build_cpu_so_from_cpp(*, cpp_path: Path, out_so: Path) -> None:
 def build_fatobj_so_from_cce(*, cce_path: Path, out_so: Path, arch: str, ascend_home: Path) -> None:
     include_dirs = ascend_include_dirs(ascend_home) + [str(repo_root() / "include")]
 
-    combined = r"""
-#include "kernel.cce"
-#include <cstdint>
+    kernel_src = cce_path.read_text(encoding="utf-8")
 
-extern "C" void ptoas_launch(void *stream, uint32_t blockDim, void *arg0, void *arg1, void *arg2)
-{
-    pto_kernel<<<blockDim, nullptr, stream>>>((GM_ADDR)arg0, (GM_ADDR)arg1, (GM_ADDR)arg2);
-}
-""".lstrip()
+    m = re.search(r"\bpto_kernel\s*\(([^)]*)\)", kernel_src)
+    if not m:
+        raise RuntimeError(f"failed to infer pto_kernel(...) signature from: {cce_path}")
+    params = [p.strip() for p in m.group(1).split(",") if p.strip()]
+    arg_count = len(params)
+
+    host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
+    kernel_args = ", ".join([f"(GM_ADDR)arg{i}" for i in range(arg_count)])
+
+    combined = (
+        "#include \"kernel.cpp\"\n"
+        "#include <cstdint>\n\n"
+        f"extern \"C\" void ptoas_launch(void *stream, uint32_t blockDim{', ' if arg_count else ''}{host_params})\n"
+        "{\n"
+        f"    pto_kernel<<<blockDim, nullptr, stream>>>({kernel_args});\n"
+        "}\n"
+    )
 
     with tempfile.TemporaryDirectory(prefix="ptoas_so_") as td:
         td_path = Path(td)
-        (td_path / "kernel.cce").write_text(cce_path.read_text(encoding="utf-8"), encoding="utf-8")
-        combined_path = td_path / "combined.cce"
+        (td_path / "kernel.cpp").write_text(kernel_src, encoding="utf-8")
+        combined_path = td_path / "combined.cpp"
         combined_path.write_text(combined, encoding="utf-8")
         combined_o = td_path / "combined.o"
 

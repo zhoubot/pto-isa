@@ -178,12 +178,12 @@ There is also an MLIR-linked `ptoas` prototype under `ptoas/mlir/`:
   - `ptoas/mlir/lib/InsertEventsPass.cpp`
 - Emitter: emits Ascend CCE source from the module:
   - `ptoas/mlir/lib/CCEmitter.cpp`
-- Bisheng driver: compiles `.cce` and extracts `__aicore_rel_binary` into `.bin`:
+- Bisheng driver: compiles CCE source and extracts `__aicore_rel_binary` into `.bin`:
   - `ptoas/mlir/lib/BishengDriver.cpp`
 
 `ptoas` supports two emission targets:
 
-- `--target npu`: emit Ascend CCE (`*.cce`) and optionally `--emit-bin=...` via `bisheng`.
+- `--target npu`: emit Ascend CCE (source `*.cpp`) and optionally `--emit-bin=...` via `bisheng`.
 - `--target cpu`: emit CPU-simulator C++ (`*.cpp`); disables `--insert-events` automatically.
 
 #### Build MLIR + `ptoas`
@@ -199,7 +199,7 @@ Outputs:
 - `~/llvm-project/build-mlir/bin/mlir-opt`
 - `ptoas/mlir/build/bin/ptoas`
 
-#### End-to-end Test (Emit `.cce` + `.bin`)
+#### End-to-end Test (Emit `.cpp` + `.bin`)
 
 Use the minimal test program:
 
@@ -212,7 +212,7 @@ export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
 export PTO_REPO_ROOT=$(pwd)
 
 ./ptoas/mlir/build/bin/ptoas ptoas/examples/add16_min.pto \
-  -o /tmp/add16_min.cce \
+  -o /tmp/add16_min.cpp \
   --insert-events \
   --emit-bin=/tmp/add16_min.bin \
   --arch dav-c220-vec \
@@ -223,7 +223,7 @@ export PTO_REPO_ROOT=$(pwd)
 
 This produces:
 
-- `/tmp/add16_min.cce` (generated kernel source)
+- `/tmp/add16_min.cpp` (generated kernel source)
 - `/tmp/add16_min.bin` (extracted `__aicore_rel_binary`)
 
 ### Run On Real NPU (Python + `acl` + `numpy`)
@@ -232,7 +232,7 @@ The extracted `*.bin` is a useful build artifact, but `acl.rt.binary_load_from_f
 on some setups. A reliable way to validate kernels on real hardware is to build a **fatobj shared library** with `bisheng`
 and launch the kernel via `<<<>>>` (same pattern as `tests/npu/*/src/st`).
 
-End-to-end script (builds `*.cce` + `*.bin`, then builds a `*.so`, launches on NPU, and checks with numpy):
+End-to-end script (builds `*.cpp` + `*.bin`, then builds a `*.so`, launches on NPU, and checks with numpy):
 
 ```bash
 export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
@@ -268,7 +268,8 @@ There is also a small Python “binding” layer that can **generate PTO-AS** an
 - Low-level PTO-AS builder (generates `*.pto` text): `ptoas/python/pto_asm.py`
 - AST-based frontend (Python -> PTO-AS, supports `for`/`if`): `ptoas/python/ast_frontend.py`
 - Shared compile/run helpers: `ptoas/python/pipeline.py`
-- End-to-end runner (Python frontend -> `*.pto` -> `ptoas` -> `*.cce`/`*.bin` -> NPU run -> numpy check):
+- Host C++ launcher generator (emits `host.cpp` that calls `ptoas_launch` from a fatobj `.so`): `ptoas/python/host_codegen.py`
+- End-to-end runner (Python frontend -> `*.pto` -> `ptoas` -> `*.cpp`/`*.bin` -> NPU run -> numpy check):
 
 ```bash
 export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
@@ -295,13 +296,24 @@ python3 kernels/custom/gemm_python/run.py --target npu --ascend-home "$ASCEND_HO
 python3 kernels/custom/gemm_python/run.py --target both --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
 ```
 
+There are also Python-first examples that always emit:
+
+- `*.pto` (PTO-AS)
+- `foo.cpp` (CCE source, compiled by `bisheng -xcce` on real NPU env)
+- `host.cpp` (a standalone C++ launcher for the fatobj `.so`)
+
+```bash
+python3 kernels/python/fa/run.py --target cpu
+python3 kernels/python/gemm/run.py --target cpu
+```
+
 ### Control Flow In PTO-AS (Prototype)
 
 PTO-AS frontend also supports a small subset of MLIR-like SCF control flow (textual blocks):
 
 ```text
 scf.for %i = 0 to 2 step 1 {
-  icmp_lt %cond, %i, 1 : i1
+  %cond = pto.icmp_lt %i, 1 : i1
   scf.if %cond {
     ...
   } else {

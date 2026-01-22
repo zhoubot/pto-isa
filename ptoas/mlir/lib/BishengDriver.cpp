@@ -85,7 +85,7 @@ std::string compileCceToBin(const std::string &ccePath, const std::string &outBi
   bishengCmd.push_back("-xcce");
   bishengCmd.push_back("--cce-aicore-arch=" + opts.arch);
   bishengCmd.push_back("-std=c++17");
-  // The emitted `.cce` includes `#define MEMORY_BASE` / `#define REGISTER_BASE`,
+  // The emitted source includes `#define MEMORY_BASE` / `#define REGISTER_BASE`,
   // so we don't need (and should avoid) duplicating it on the command line.
 
   for (auto &inc : ascendIncludeDirs(opts.ascendHomePath))

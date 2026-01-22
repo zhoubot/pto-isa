@@ -4,7 +4,7 @@ This folder is a starter implementation for a distributable `ptoas` binary:
 
 - Input: PTO-AS `*.pto` (DPS syntax, `!pto.tensor<...>` / `!pto.tile<...>`).
 - Optional: run an MLIR pass to insert `tsync` + event records (prototype heuristic).
-- Output: Ascend CCE source (`*.cce`) and (optionally) compiled binary (`*.bin`) via `bisheng`.
+- Output: Ascend CCE source (`*.cpp`, compiled via `bisheng -xcce`) and (optionally) compiled binary (`*.bin`) via `bisheng`.
 
 ## 1) Build MLIR (`mlir-opt`) from `~/llvm-project`
 
@@ -49,7 +49,7 @@ ptoas/mlir/build/bin/ptoas
 ```bash
 export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
 
-./ptoas/mlir/build/bin/ptoas ptoas/examples/add16.pto -o /tmp/add16.cce
+./ptoas/mlir/build/bin/ptoas ptoas/examples/add16.pto -o /tmp/add16.cpp
 ./ptoas/mlir/build/bin/ptoas ptoas/examples/add16.pto --emit-bin=/tmp/add16.bin
 ```
 
@@ -57,4 +57,3 @@ export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
 
 - This is a prototype frontend: it parses PTO-AS directly (not MLIR text).
 - The event insertion pass is intentionally conservative: it only inserts events for common pipeline changes like `tload -> tadd` and `tadd -> tstore`.
-
