@@ -141,19 +141,8 @@ tcmp %mask, %a, %b {cmpMode = #pto.cmp<GT>} : (!pto.tile<...>, !pto.tile<...>, !
 
 ## 4. Directives
 
-PTO-AS supports a small set of non-instruction directives for declaring external inputs and constants.
-
-Legacy argument declaration (introduces a named value):
-
-```text
-.arg %a : !pto.tile<...>;
-```
-
-Event arguments (when modeling a dependency explicitly):
-
-```text
-.arg %e0 : !pto.event<...>;
-```
+PTO-AS no longer supports legacy `.arg` / `.const` directives. Frontends should instead use the new-format
+meta ops below and numeric literals directly.
 
 New-format declarations (recommended):
 
@@ -163,17 +152,32 @@ New-format declarations (recommended):
   %x = pto.make_tensor_view %arg0, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
   ```
 
+- Tensor subviews (pointer-offset views) from an existing tensor view:
+
+  ```text
+  ; Offsets are in tensor indices (2-D maps to DIM_3/DIM_4).
+  ; Typically, `%r0` is derived from `%bid = pto.get_block_idx`.
+  %x_blk = pto.subview %x, offsets=[%r0, 0]
+  ```
+
 - Tile allocation (optionally binds an address, replacing `tassign`):
 
   ```text
   %tx = pto.alloc_tile %addr_x : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
   ```
+  If the address is omitted, `ptoas` can assign a default address via `--assign-tile-addrs`.
 
-Constant declaration (introduces a named value):
+## 4.1 Explicit Events (prototype)
+
+For NPU targets, dependencies can be expressed explicitly with lightweight event tokens:
 
 ```text
-.const %c0 = 0 : index;
+pto.record_event {src_op = #pto.op<TLOAD>, dst_op = #pto.op<TADD>, token = 0}
+pto.wait_event   {src_op = #pto.op<TLOAD>, dst_op = #pto.op<TADD>, token = 0}
 ```
+
+In the current prototype implementation, `src_op` / `dst_op` are stored as string attrs (e.g. `TLOAD`, `TADD`)
+and lowered to `set_flag(...)` / `wait_flag(...)` in the generated CCE.
 
 ## 5. Grammar
 

@@ -6,11 +6,7 @@
 
 <program>        ::= { <stmt> }
 
-<stmt>           ::= <instr_stmt> | <assign_stmt> | <directive_stmt>
-
-<directive_stmt> ::= <arg_decl> | <const_decl>
-<arg_decl>       ::= '.arg' <value> ':' <type> ';'?
-<const_decl>     ::= '.const' <value> '=' <literal> ':' <type> ';'?
+<stmt>           ::= <instr_stmt> | <assign_stmt>
 
 ; An instruction is one line. PTO-AS uses destination-passing style (DPS):
 ; destination values are explicit operands (typically the first operand).

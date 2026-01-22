@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
 from ptoas.python import ast_frontend, pipeline
 
 Target = Literal["cpu", "npu"]

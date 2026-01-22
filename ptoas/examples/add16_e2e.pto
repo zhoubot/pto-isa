@@ -1,30 +1,38 @@
-; End-to-end NPU demo for `ptoas`:
+; End-to-end NPU demo for `ptoas` (vector core):
 ;   foo.pto -> ptoas -> foo.cce -> bisheng -> foo.bin -> run on NPU from Python (numpy check)
 ;
 ; Notes:
-; - Uses a minimal "complete-ish" kernel shape with prologue/epilogue and block id queries.
-; - Still launches with blockDim=1 in the Python runner (so r0 == 0 at runtime).
+; - No `.arg` / `.const`: use `pto.make_tensor_view` and numeric literals / auto tile addrs.
+; - Demonstrates `pto.subview` offsets computed from `%bid` and `scf.for` loops (%m0/%n0).
 
 prologue
 %bn = pto.get_block_num : index
 %bid = pto.get_block_idx : index
-%r0 = pto.imul %bid, 16 : index
-
-.const %addr_x = 0x0 : index
-.const %addr_y = 0x8000 : index
-.const %addr_z = 0x10000 : index
+%cond = pto.icmp_lt %bid, %bn
 
 %x = pto.make_tensor_view %arg0, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
 %y = pto.make_tensor_view %arg1, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
 %z = pto.make_tensor_view %arg2, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
 
-%tx = pto.alloc_tile %addr_x : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-%ty = pto.alloc_tile %addr_y : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-%tz = pto.alloc_tile %addr_z : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%tx = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%ty = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%tz = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
 
-%tx = pto.tload %x[%r0, 0]
-%ty = pto.tload %y[%r0, 0]
-%tz = pto.tadd %tx, %ty
-pto.tstore %z[%r0, 0], %tz
+scf.if %cond {
+  %m_base = pto.imul %bid, 16 : index
+  scf.for %m0 = 0 to 16 step 16 {
+    scf.for %n0 = 0 to 16 step 16 {
+      %m = pto.iadd %m_base, %m0 : index
+      %x_blk = pto.subview %x, offsets=[%m, %n0]
+      %y_blk = pto.subview %y, offsets=[%m, %n0]
+      %z_blk = pto.subview %z, offsets=[%m, %n0]
+
+      %tx = pto.tload %x_blk[0, 0]
+      %ty = pto.tload %y_blk[0, 0]
+      %tz = pto.tadd %tx, %ty
+      pto.tstore %z_blk[0, 0], %tz
+    }
+  }
+}
 
 epilogue

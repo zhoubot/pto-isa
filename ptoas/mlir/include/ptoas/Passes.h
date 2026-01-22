@@ -7,5 +7,6 @@
 namespace ptoas {
 
 std::unique_ptr<mlir::Pass> createInsertEventsPass();
+std::unique_ptr<mlir::Pass> createAssignTileAddressesPass();
 
 } // namespace ptoas

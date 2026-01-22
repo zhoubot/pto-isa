@@ -156,6 +156,14 @@ static std::vector<std::string> strideTo5(const std::vector<std::string> &stride
   llvm::report_fatal_error("stride must be 2-D or 5-D");
 }
 
+static std::vector<std::string> offsetTo5(const std::vector<std::string> &offset) {
+  if (offset.size() == 5)
+    return offset;
+  if (offset.size() == 2)
+    return {"0", "0", "0", offset[0], offset[1]};
+  llvm::report_fatal_error("offsets must be 2-D or 5-D");
+}
+
 static std::string extractBracketListOrEmpty(const std::string &s, llvm::StringRef key) {
   auto pos = s.find(key.str());
   if (pos == std::string::npos)
@@ -224,12 +232,6 @@ struct ConstInfo {
   std::string name;  // with leading %
   std::string value; // literal text
   std::string type;  // type text
-};
-
-struct RecordEventInfo {
-  std::string name; // e0
-  std::string src;  // Op enum string
-  std::string dst;  // Op enum string
 };
 
 static bool isTileType(const std::string &typeStr) { return llvm::StringRef(typeStr).starts_with("!pto.tile<"); }
@@ -317,6 +319,40 @@ static std::string buildTensorTypeFromMakeView(mlir::Operation *op) {
   return ss.str();
 }
 
+struct SubviewInfo {
+  std::string viewName;                 // with leading %
+  std::string baseView;                 // with leading % (view or %argN)
+  std::vector<std::string> offsets5;    // 5D offsets (DIM_0..DIM_4)
+  std::optional<std::string> typeStr;   // optional explicit typesig (must match base)
+};
+
+static SubviewInfo readSubview(mlir::Operation *op) {
+  auto operands = readOperands(op);
+  if (operands.size() < 2)
+    llvm::report_fatal_error("pto.subview expects at least 2 operands (%view, %base)");
+
+  std::string opts;
+  for (size_t i = 2; i < operands.size(); ++i) {
+    if (!opts.empty())
+      opts += ", ";
+    opts += operands[i];
+  }
+
+  auto offsetsLit = extractBracketListOrEmpty(opts, "offsets=");
+  if (offsetsLit.empty())
+    offsetsLit = extractBracketListOrEmpty(opts, "offset=");
+  if (offsetsLit.empty())
+    llvm::report_fatal_error("pto.subview missing offsets=[...]");
+
+  SubviewInfo out;
+  out.viewName = trim(operands[0]);
+  out.baseView = trim(operands[1]);
+  out.offsets5 = offsetTo5(parseList2or5(offsetsLit));
+  if (auto typeSig = op->getAttrOfType<mlir::StringAttr>("typesig"))
+    out.typeStr = typeSig.getValue().str();
+  return out;
+}
+
 static AllocTileInfo readAllocTile(mlir::Operation *op) {
   auto operands = readOperands(op);
   if (operands.empty())
@@ -330,15 +366,6 @@ static AllocTileInfo readAllocTile(mlir::Operation *op) {
   if (operands.size() >= 2)
     out.addrValue = trim(operands[1]);
   return out;
-}
-
-static RecordEventInfo readRecordEvent(mlir::Operation *op) {
-  auto name = op->getAttrOfType<mlir::StringAttr>("name");
-  auto src = op->getAttrOfType<mlir::StringAttr>("src");
-  auto dst = op->getAttrOfType<mlir::StringAttr>("dst");
-  if (!name || !src || !dst)
-    llvm::report_fatal_error("pto.record_event missing attrs");
-  return {name.getValue().str(), src.getValue().str(), dst.getValue().str()};
 }
 
 static std::vector<std::string> readOperands(mlir::Operation *op) {
@@ -401,7 +428,6 @@ static std::string indentExtra(const std::string &s, const std::string &extra) {
 std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot, const std::string &memoryModel) {
   std::vector<ArgInfo> args;
   std::vector<ConstInfo> consts;
-  std::vector<RecordEventInfo> events;
   std::vector<MakeTensorViewInfo> makeViews;
   std::vector<AllocTileInfo> allocTiles;
 
@@ -436,11 +462,6 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       continue;
     }
   }
-
-  module.walk([&](mlir::Operation *op) {
-    if (op->getName().getStringRef() == "pto.record_event")
-      events.push_back(readRecordEvent(op));
-  });
 
   // Const map (for substituting %c* inside make_tensor_view type spellings).
   std::map<std::string, std::string> constMap;
@@ -593,12 +614,8 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   if (!consts.empty())
     os << "\n";
 
-  // Declare events.
-  for (auto &e : events) {
-    os << "  Event<Op::" << e.src << ", Op::" << e.dst << "> " << e.name << ";\n";
-  }
-  if (!events.empty())
-    os << "\n";
+  // Local tensor variables introduced by meta ops (e.g. `pto.subview`).
+  std::map<std::string, std::string> localTensorVars; // "%view" -> "g_view"
 
   auto resolve = [&](const std::string &v) -> std::string {
     auto t = trim(v);
@@ -606,6 +623,9 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto aliasIt = tensorViewAlias.find(t);
       if (aliasIt != tensorViewAlias.end())
         t = aliasIt->second;
+      auto localIt = localTensorVars.find(t);
+      if (localIt != localTensorVars.end())
+        return localIt->second;
       auto key = t.substr(1);
       // Tensor args become g_<name>, tile locals become t_<name>, consts become c_<name>.
       for (auto &ta : tensorArgs)
@@ -622,6 +642,30 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     return t;
   };
 
+  auto emitSubviewStmt = [&](mlir::Operation *op) -> std::string {
+    auto sv = readSubview(op);
+    if (sv.viewName.empty() || sv.viewName[0] != '%')
+      llvm::report_fatal_error("pto.subview destination must be a %name symbol");
+
+    // Resolve base before registering the new view to avoid accidental self-reference.
+    auto baseVar = resolve(sv.baseView);
+    auto viewKey = sv.viewName.substr(1);
+    auto viewVar = "g_" + viewKey;
+    localTensorVars[sv.viewName] = viewVar;
+
+    std::ostringstream ss;
+    ss << "  auto* " << viewVar << "_base = " << baseVar << ".data();\n";
+    ss << "  decltype(" << baseVar << ") " << viewVar << "(" << viewVar << "_base);\n";
+    ss << "  auto " << viewVar << "_off = (" << resolve(sv.offsets5[0]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_0) + (" << resolve(sv.offsets5[1]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_1) + (" << resolve(sv.offsets5[2]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_2) + (" << resolve(sv.offsets5[3]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_3) + (" << resolve(sv.offsets5[4]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_4);\n";
+    ss << "  TASSIGN(" << viewVar << ", " << viewVar << "_base + " << viewVar << "_off);\n";
+    return ss.str();
+  };
+
   // Tile address binding (new-format PTO-AS removes explicit `tassign`).
   for (auto &at : allocTiles) {
     if (!at.addrValue)
@@ -633,11 +677,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
 
   auto emitInstrCall = [&](mlir::Operation *op, const std::string *assignEvent) -> std::string {
     auto opcode = mnemonicFor(op->getName().getStringRef());
-    auto assignPrefix = [&]() -> std::string {
-      if (!assignEvent)
-        return "  ";
-      return "  " + *assignEvent + " = ";
-    };
+    (void)assignEvent;
 
     // Marker/scalar ops (prototype): used to make PTO-AS inputs look like complete kernels.
     if (opcode == "prologue")
@@ -724,23 +764,21 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto operands = readOperands(op);
       if (operands.size() != 2)
         llvm::report_fatal_error("tmov expects 2 operands");
-      return assignPrefix() + "TMOV(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ");\n";
+      return "  TMOV(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ");\n";
     }
 
     if (opcode == "tadd") {
       auto operands = readOperands(op);
       if (operands.size() != 3)
         llvm::report_fatal_error("tadd expects 3 operands");
-      return assignPrefix() + "TADD(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " +
-             resolve(operands[2]) + ");\n";
+      return "  TADD(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " + resolve(operands[2]) + ");\n";
     }
 
     if (opcode == "tmatmul") {
       auto operands = readOperands(op);
       if (operands.size() != 3)
         llvm::report_fatal_error("tmatmul expects 3 operands");
-      return assignPrefix() + "TMATMUL(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " +
-             resolve(operands[2]) + ");\n";
+      return "  TMATMUL(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " + resolve(operands[2]) + ");\n";
     }
 
     if (opcode == "tload") {
@@ -751,11 +789,11 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto [base, idx] = parseIndexedOperand(operands[1]);
       auto src = resolve(base);
       if (!idx)
-        return assignPrefix() + "TLOAD(" + dst + ", " + src + ");\n";
+        return "  TLOAD(" + dst + ", " + src + ");\n";
       auto r0 = resolve(idx->first);
       auto c0 = resolve(idx->second);
       if ((r0 == "0" || r0 == "c_r0") && (c0 == "0" || c0 == "c_c0"))
-        return assignPrefix() + "TLOAD(" + dst + ", " + src + ");\n";
+        return "  TLOAD(" + dst + ", " + src + ");\n";
 
       std::ostringstream ss;
       ss << "  // NOTE: tload with non-zero indices is lowered via pointer bump (prototype).\n";
@@ -765,7 +803,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
          << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
          << ".GetStride(GlobalTensorDim::DIM_4);\n";
       ss << "  TASSIGN(" << src << "_view, " << src << "_ptr + " << src << "_off);\n";
-      ss << assignPrefix() << "TLOAD(" << dst << ", " << src << "_view);\n";
+      ss << "  TLOAD(" << dst << ", " << src << "_view);\n";
       return ss.str();
     }
 
@@ -777,11 +815,11 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto dst = resolve(base);
       auto src = resolve(operands[1]);
       if (!idx)
-        return assignPrefix() + "TSTORE(" + dst + ", " + src + ");\n";
+        return "  TSTORE(" + dst + ", " + src + ");\n";
       auto r0 = resolve(idx->first);
       auto c0 = resolve(idx->second);
       if ((r0 == "0" || r0 == "c_r0") && (c0 == "0" || c0 == "c_c0"))
-        return assignPrefix() + "TSTORE(" + dst + ", " + src + ");\n";
+        return "  TSTORE(" + dst + ", " + src + ");\n";
 
       std::ostringstream ss;
       ss << "  // NOTE: tstore with non-zero indices is lowered via pointer bump (prototype).\n";
@@ -791,40 +829,126 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
          << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
          << ".GetStride(GlobalTensorDim::DIM_4);\n";
       ss << "  TASSIGN(" << dst << "_view, " << dst << "_ptr + " << dst << "_off);\n";
-      ss << assignPrefix() << "TSTORE(" << dst << "_view, " << src << ");\n";
+      ss << "  TSTORE(" << dst << "_view, " << src << ");\n";
       return ss.str();
     }
 
-    if (opcode == "tsync") {
-      std::vector<std::string> evs;
-      if (auto arr = op->getAttrOfType<mlir::ArrayAttr>("events")) {
-        for (auto a : arr) {
-          auto s = llvm::dyn_cast<mlir::StringAttr>(a);
-          if (!s)
-            llvm::report_fatal_error("tsync events must be strings");
-          evs.push_back(s.getValue().str());
-        }
-      } else {
-        // Also accept `tsync %e0, %e1 : ...` directly from PTO-AS input, which is parsed
-        // as an `operands = ["%e0", "%e1"]` attribute by the frontend.
-        auto operands = readOperands(op);
-        for (auto &o : operands)
-          evs.push_back(resolve(o));
-      }
-      std::ostringstream ss;
-      ss << "  TSYNC(";
-      for (size_t i = 0; i < evs.size(); ++i) {
-        if (i)
-          ss << ", ";
-        ss << evs[i];
-      }
-      ss << ");\n";
-      return ss.str();
-    }
-
-    // meta ops
-    if (opcode == "record_event")
+    // Explicit event primitives (prototype): lower to set_flag/wait_flag.
+    auto pipeForOpEnum = [&](llvm::StringRef opEnum) -> llvm::StringRef {
+      if (opEnum == "TLOAD")
+        return "MTE2";
+      if (opEnum == "TSTORE_VEC" || opEnum == "TSTORE_MAT")
+        return "MTE3";
+      if (opEnum == "TSTORE_ACC")
+        return "FIX";
+      if (opEnum == "TADD" || opEnum == "TMUL" || opEnum == "TSUB" || opEnum == "TCVT" || opEnum == "TMRGSORT" ||
+          opEnum == "TSORT32")
+        return "V";
+      if (opEnum == "TMATMUL")
+        return "M";
+      if (opEnum == "TMOV_V2V")
+        return "V";
+      if (opEnum == "TMOV_V2M" || opEnum == "TEXTRACT_V2M" || opEnum == "TMOV_A2V" || opEnum == "TMOV_A2M")
+        return "FIX";
+      if (opEnum == "TMOV_M2B" || opEnum == "TMOV_M2L" || opEnum == "TMOV_M2R" || opEnum == "TEXTRACT_M2LR")
+        return "MTE1";
+      if (opEnum == "TMOV_M2S")
+        return "FIX";
       return "";
+    };
+
+    auto pipeConstForPipeName = [&](llvm::StringRef pipeName) -> std::string {
+      if (pipeName == "S" || pipeName == "FIX")
+        return "PIPE_S";
+      if (pipeName == "V")
+        return "PIPE_V";
+      if (pipeName == "MTE1")
+        return "PIPE_MTE1";
+      if (pipeName == "MTE2")
+        return "PIPE_MTE2";
+      if (pipeName == "MTE3")
+        return "PIPE_MTE3";
+      if (pipeName == "M")
+        return "PIPE_M";
+      return "";
+    };
+
+    auto emitRecordOrWait = [&](llvm::StringRef kind) -> std::optional<std::string> {
+      if (opcode != kind)
+        return std::nullopt;
+
+      auto normalizeOpValue = [&](std::string v) -> std::string {
+        v = trim(std::move(v));
+        // Accept `#pto.op<TLOAD>` or `#op<TLOAD>` spellings and extract the payload.
+        if (!v.empty() && v[0] == '#') {
+          auto l = v.find('<');
+          auto r = v.rfind('>');
+          if (l != std::string::npos && r != std::string::npos && r > l + 1)
+            v = trim(v.substr(l + 1, r - l - 1));
+        }
+        return v;
+      };
+
+      std::optional<std::string> srcOpt;
+      std::optional<std::string> dstOpt;
+      std::optional<std::string> tokOpt;
+
+      if (auto srcA = op->getAttrOfType<mlir::StringAttr>("src_op"))
+        srcOpt = normalizeOpValue(srcA.getValue().str());
+      if (auto dstA = op->getAttrOfType<mlir::StringAttr>("dst_op"))
+        dstOpt = normalizeOpValue(dstA.getValue().str());
+      if (auto tokA = op->getAttrOfType<mlir::StringAttr>("token"))
+        tokOpt = trim(tokA.getValue().str());
+
+      // Also accept textual `{...}` dict from PTO-AS input (stored as a single string attr `attrs` by the frontend).
+      if ((!srcOpt || !dstOpt || !tokOpt) && op->hasAttr("attrs")) {
+        auto raw = op->getAttrOfType<mlir::StringAttr>("attrs");
+        if (raw) {
+          auto s = trim(raw.getValue().str());
+          if (!s.empty() && s.front() == '{' && s.back() == '}')
+            s = trim(s.substr(1, s.size() - 2));
+          for (auto &p : splitTopLevelCommas(s)) {
+            auto eq = p.find('=');
+            if (eq == std::string::npos)
+              continue;
+            auto k = trim(p.substr(0, eq));
+            auto v = trim(p.substr(eq + 1));
+            if (k == "src_op" && !srcOpt)
+              srcOpt = normalizeOpValue(v);
+            else if (k == "dst_op" && !dstOpt)
+              dstOpt = normalizeOpValue(v);
+            else if (k == "token" && !tokOpt)
+              tokOpt = trim(v);
+          }
+        }
+      }
+
+      if (!srcOpt || !dstOpt || !tokOpt)
+        llvm::report_fatal_error("pto.(record_event|wait_event) missing src_op/dst_op/token");
+
+      auto src = *srcOpt;
+      auto dst = *dstOpt;
+      auto tok = *tokOpt;
+
+      auto srcPipe = pipeForOpEnum(src);
+      auto dstPipe = pipeForOpEnum(dst);
+      if (srcPipe.empty() || dstPipe.empty())
+        llvm::report_fatal_error("unknown pipe for src_op/dst_op");
+      auto srcPipeConst = pipeConstForPipeName(srcPipe);
+      auto dstPipeConst = pipeConstForPipeName(dstPipe);
+      if (srcPipeConst.empty() || dstPipeConst.empty())
+        llvm::report_fatal_error("unknown pipe constant for src/dst pipe");
+      auto tokResolved = resolve(tok);
+      std::ostringstream ss;
+      ss << "  " << ((kind == "record_event") ? "set_flag" : "wait_flag") << "(" << srcPipeConst << ", "
+         << dstPipeConst << ", " << tokResolved << ");\n";
+      return ss.str();
+    };
+
+    if (auto s = emitRecordOrWait("record_event"))
+      return *s;
+    if (auto s = emitRecordOrWait("wait_event"))
+      return *s;
 
     llvm::report_fatal_error(llvm::Twine("Unsupported opcode for CCE emission: ") + opcode);
   };
@@ -835,19 +959,12 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     for (auto it = block.begin(); it != block.end(); ++it) {
       auto *op = &*it;
       auto name = op->getName().getStringRef();
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.make_tensor_view" ||
-          name == "pto.alloc_tile")
+      if (name == "pto.subview") {
+        os << indentExtra(emitSubviewStmt(op), extra);
         continue;
-
-      // `record_event` assignment is a lookahead within the same block.
-      const std::string *assignEvent = nullptr;
-      std::string assignBuf;
-      auto next = std::next(it);
-      if (next != block.end() && next->getName().getStringRef() == "pto.record_event") {
-        auto e = readRecordEvent(&*next);
-        assignBuf = e.name;
-        assignEvent = &assignBuf;
       }
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.alloc_tile")
+        continue;
 
       if (name == "scf.for") {
         auto operands = readOperands(op);
@@ -896,7 +1013,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       }
 
       // Default: PTO instruction in the current block.
-      os << indentExtra(emitInstrCall(op, assignEvent), extra);
+      os << indentExtra(emitInstrCall(op, /*assignEvent=*/nullptr), extra);
     }
   };
 
@@ -1088,12 +1205,17 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
   if (!consts.empty())
     os << "\n";
 
+  std::map<std::string, std::string> localTensorVars; // "%view" -> "g_view"
+
   auto resolve = [&](const std::string &v) -> std::string {
     auto t = trim(v);
     if (!t.empty() && t[0] == '%') {
       auto aliasIt = tensorViewAlias.find(t);
       if (aliasIt != tensorViewAlias.end())
         t = aliasIt->second;
+      auto localIt = localTensorVars.find(t);
+      if (localIt != localTensorVars.end())
+        return localIt->second;
       auto key = t.substr(1);
       for (auto &ta : tensorArgs)
         if (ta.a.name.substr(1) == key)
@@ -1107,6 +1229,29 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       return key;
     }
     return t;
+  };
+
+  auto emitSubviewStmt = [&](mlir::Operation *op) -> std::string {
+    auto sv = readSubview(op);
+    if (sv.viewName.empty() || sv.viewName[0] != '%')
+      llvm::report_fatal_error("pto.subview destination must be a %name symbol");
+
+    auto baseVar = resolve(sv.baseView);
+    auto viewKey = sv.viewName.substr(1);
+    auto viewVar = "g_" + viewKey;
+    localTensorVars[sv.viewName] = viewVar;
+
+    std::ostringstream ss;
+    ss << "  auto* " << viewVar << "_base = " << baseVar << ".data();\n";
+    ss << "  decltype(" << baseVar << ") " << viewVar << "(" << viewVar << "_base);\n";
+    ss << "  auto " << viewVar << "_off = (" << resolve(sv.offsets5[0]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_0) + (" << resolve(sv.offsets5[1]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_1) + (" << resolve(sv.offsets5[2]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_2) + (" << resolve(sv.offsets5[3]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_3) + (" << resolve(sv.offsets5[4]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_4);\n";
+    ss << "  TASSIGN(" << viewVar << ", " << viewVar << "_base + " << viewVar << "_off);\n";
+    return ss.str();
   };
 
   // Tile address binding (new-format PTO-AS removes explicit `tassign`).
@@ -1277,7 +1422,12 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
 
     for (auto &op : block.getOperations()) {
       auto name = op.getName().getStringRef();
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.tsync" ||
+      if (name == "pto.subview") {
+        os << indentExtra(emitSubviewStmt(&op), extra);
+        continue;
+      }
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.wait_event" ||
+          name == "pto.tsync" ||
           name == "pto.make_tensor_view" || name == "pto.alloc_tile")
         continue;
 

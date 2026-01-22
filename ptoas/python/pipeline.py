@@ -204,7 +204,10 @@ def run_gemm16_from_so(*, so_path: Path, device_id: int, block_dim: int) -> None
 
     a = (np.random.rand(16, 16).astype(np.float16) - 0.5)
     b = (np.random.rand(16, 16).astype(np.float16) - 0.5)
-    expected = (a.astype(np.float32) @ b.astype(np.float32)).astype(np.float32)
+    # Avoid relying on NumPy's matmul/dot (can be broken depending on the local build/toolchain).
+    a32 = a.astype(np.float32)
+    b32 = b.astype(np.float32)
+    expected = (a32[:, :, None] * b32[None, :, :]).sum(axis=1).astype(np.float32)
     out = np.empty((16, 16), dtype=np.float32)
 
     acl.init()
@@ -263,7 +266,10 @@ def run_gemm16_cpu_from_so(*, so_path: Path) -> None:
 
     a = (np.random.rand(16, 16).astype(np.float16) - 0.5)
     b = (np.random.rand(16, 16).astype(np.float16) - 0.5)
-    expected = (a.astype(np.float32) @ b.astype(np.float32)).astype(np.float32)
+    # Avoid relying on NumPy's matmul/dot (can be broken depending on the local build/toolchain).
+    a32 = a.astype(np.float32)
+    b32 = b.astype(np.float32)
+    expected = (a32[:, :, None] * b32[None, :, :]).sum(axis=1).astype(np.float32)
     out = np.empty((16, 16), dtype=np.float32)
 
     lib = ctypes.CDLL(str(so_path))

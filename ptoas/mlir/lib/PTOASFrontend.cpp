@@ -287,36 +287,13 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
       }
     }
 
-    if (line.rfind(".arg ", 0) == 0) {
-      if (blockStack.size() != 1)
-        llvm::report_fatal_error(".arg must appear at top-level (outside scf regions)");
-      auto rest = trim(line.substr(5));
-      auto parts = splitOnceOrDie(rest, ':', "invalid .arg (expected: .arg %name : type)");
-      auto name = parts.first;
-      auto typeStr = parts.second;
-      mlir::OperationState st(loc, "pto.arg");
-      st.addAttribute("name", b.getStringAttr(name));
-      st.addAttribute("type", b.getStringAttr(typeStr));
-      b.create(st);
-      continue;
-    }
-
-    if (line.rfind(".const ", 0) == 0) {
-      if (blockStack.size() != 1)
-        llvm::report_fatal_error(".const must appear at top-level (outside scf regions)");
-      auto rest = trim(line.substr(7));
-      auto parts = splitOnceOrDie(rest, ':', "invalid .const (expected: .const %name = lit : type)");
-      auto lhs = parts.first;
-      auto typeStr = parts.second;
-      auto parts2 = splitOnceOrDie(lhs, '=', "invalid .const (expected '=' in lhs)");
-      auto name = parts2.first;
-      auto value = parts2.second;
-      mlir::OperationState st(loc, "pto.const");
-      st.addAttribute("name", b.getStringAttr(name));
-      st.addAttribute("value", b.getStringAttr(value));
-      st.addAttribute("type", b.getStringAttr(typeStr));
-      b.create(st);
-      continue;
+    if (line.rfind(".arg ", 0) == 0 || line.rfind(".const ", 0) == 0) {
+      llvm::report_fatal_error(
+          "PTO-AS: legacy directives `.arg` / `.const` are not supported.\n"
+          "Use:\n"
+          "  - `%x = pto.make_tensor_view %arg0, ...`\n"
+          "  - `%t = pto.alloc_tile <addr-literal> : !pto.tile<...>` (or omit addr and use --assign-tile-addrs)\n"
+          "  - numeric literals directly (e.g. 0, 16, 0x10000)\n");
     }
 
     // SSA-style destination binding (PTO-AS sugar):
@@ -331,7 +308,7 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
     //   %t0 = pto.alloc_tile %addr : !pto.tile<...>
     //   %x  = pto.make_tensor_view %arg0, ... : !pto.tensor<...>
     auto eqPos = line.find('=');
-    if (eqPos != std::string::npos && line.rfind(".const ", 0) != 0 && line.rfind(".arg ", 0) != 0) {
+    if (eqPos != std::string::npos) {
       auto lhs = trim(line.substr(0, eqPos));
       auto rhs = trim(line.substr(eqPos + 1));
       if (lhs.empty() || rhs.empty())

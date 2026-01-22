@@ -7,8 +7,25 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/ErrorHandling.h"
 
+#include <algorithm>
+#include <cctype>
+#include <map>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <vector>
+
 namespace ptoas {
 namespace {
+
+static std::string trim(std::string s) {
+  auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+  while (!s.empty() && isSpace((unsigned char)s.front()))
+    s.erase(s.begin());
+  while (!s.empty() && isSpace((unsigned char)s.back()))
+    s.pop_back();
+  return s;
+}
 
 static llvm::StringRef stripDialect(llvm::StringRef opName) {
   if (auto dot = opName.find('.'); dot != llvm::StringRef::npos)
@@ -18,8 +35,8 @@ static llvm::StringRef stripDialect(llvm::StringRef opName) {
 
 static bool isPtoMetaOp(mlir::Operation *op) {
   auto name = op->getName().getStringRef();
-  return name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.tsync" ||
-         name == "pto.make_tensor_view" || name == "pto.alloc_tile";
+  return name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.subview" ||
+         name == "pto.alloc_tile" || name == "pto.record_event" || name == "pto.wait_event" || name == "pto.tsync";
 }
 
 static bool isPtoInstrOp(mlir::Operation *op) {
@@ -48,6 +65,8 @@ static std::string stripIndexing(std::string s) {
     return s;
   return s.substr(0, l);
 }
+
+static bool isTileTypeString(llvm::StringRef typeStr) { return typeStr.starts_with("!pto.tile"); }
 
 static llvm::StringRef parseTileLocFromType(llvm::StringRef typeStr) {
   // Very small parser: `!pto.tile<..., loc=Vec, ...>`.
@@ -157,102 +176,207 @@ static llvm::StringRef opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *o
   return "";
 }
 
+struct DefInfo {
+  mlir::Operation *op = nullptr;
+  std::string opEnum;
+  std::string pipe;
+};
+
+static bool opcodeDefinesTile(llvm::StringRef opcode) {
+  // Heuristic for the prototype: most `t*` ops define their first operand (DPS).
+  // Exceptions:
+  // - tstore: writes to GM, does not define a tile
+  // - tsync/record_event: meta
+  // - tassign: binds address, not a data-producing tile op
+  if (!opcode.starts_with("t"))
+    return false;
+  return opcode != "tstore" && opcode != "tsync" && opcode != "record_event" && opcode != "tassign";
+}
+
+static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Operation *op,
+                                               const std::map<std::string, std::string> &argTypes) {
+  auto operands = readOperands(op);
+  if (operands.empty())
+    return {};
+
+  // tstore: operands = [dstTensor, srcTile]
+  if (opcode == "tstore") {
+    if (operands.size() >= 2)
+      return {stripIndexing(trim(operands[1]))};
+    return {};
+  }
+
+  // tload: operands = [dstTile, srcTensor]
+  if (opcode == "tload")
+    return {};
+
+  // Generic `t*` DPS-like ops: operands = [dst, src0, src1, ...]
+  if (opcode.starts_with("t")) {
+    std::vector<std::string> uses;
+    for (size_t i = 1; i < operands.size(); ++i) {
+      auto base = stripIndexing(trim(operands[i]));
+      if (argTypes.count(base) && isTileTypeString(argTypes.at(base)))
+        uses.push_back(base);
+      else if (!base.empty() && base[0] == '%')
+        uses.push_back(base); // best-effort: unknown symbols are treated as tiles
+    }
+    return uses;
+  }
+
+  return {};
+}
+
+static bool hasEquivalentRecordEventAfter(mlir::Operation *producer, llvm::StringRef srcOp, llvm::StringRef dstOp,
+                                          llvm::StringRef token) {
+  for (auto *n = producer->getNextNode(); n && n->getName().getStringRef() == "pto.record_event";
+       n = n->getNextNode()) {
+    auto srcA = n->getAttrOfType<mlir::StringAttr>("src_op");
+    auto dstA = n->getAttrOfType<mlir::StringAttr>("dst_op");
+    auto tokA = n->getAttrOfType<mlir::StringAttr>("token");
+    if (!srcA || !dstA || !tokA)
+      continue;
+    if (srcA.getValue() == srcOp && dstA.getValue() == dstOp && tokA.getValue() == token)
+      return true;
+  }
+  return false;
+}
+
+static bool hasEquivalentWaitEventBefore(mlir::Operation *consumer, llvm::StringRef srcOp, llvm::StringRef dstOp,
+                                         llvm::StringRef token) {
+  for (auto *p = consumer->getPrevNode(); p && p->getName().getStringRef() == "pto.wait_event"; p = p->getPrevNode()) {
+    auto srcA = p->getAttrOfType<mlir::StringAttr>("src_op");
+    auto dstA = p->getAttrOfType<mlir::StringAttr>("dst_op");
+    auto tokA = p->getAttrOfType<mlir::StringAttr>("token");
+    if (!srcA || !dstA || !tokA)
+      continue;
+    if (srcA.getValue() == srcOp && dstA.getValue() == dstOp && tokA.getValue() == token)
+      return true;
+  }
+  return false;
+}
+
 struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::OperationPass<mlir::ModuleOp>> {
   void runOnOperation() override {
     auto module = getOperation();
-    auto *block = module.getBody();
-    if (!block)
+    if (!module.getBody())
       return;
 
-    // Collect `.arg` types so we can choose TMOV/TSTORE enum variants correctly.
+    // Collect tile types so we can choose TMOV/TSTORE enum variants correctly.
     std::map<std::string, std::string> argTypes;
-    for (auto &op : block->getOperations()) {
-      auto name = op.getName().getStringRef();
+    module.walk([&](mlir::Operation *op) {
+      auto name = op->getName().getStringRef();
       if (name == "pto.arg") {
-        auto n = op.getAttrOfType<mlir::StringAttr>("name");
-        auto t = op.getAttrOfType<mlir::StringAttr>("type");
+        auto n = op->getAttrOfType<mlir::StringAttr>("name");
+        auto t = op->getAttrOfType<mlir::StringAttr>("type");
         if (!n || !t)
-          continue;
+          return;
         argTypes[n.getValue().str()] = t.getValue().str();
-        continue;
+        return;
       }
       if (name == "pto.alloc_tile") {
-        auto operands = readOperands(&op);
+        auto operands = readOperands(op);
         if (operands.empty())
-          continue;
-        auto typeSig = op.getAttrOfType<mlir::StringAttr>("typesig");
+          return;
+        auto typeSig = op->getAttrOfType<mlir::StringAttr>("typesig");
         if (!typeSig)
-          continue;
-        argTypes[operands[0]] = typeSig.getValue().str();
-        continue;
+          return;
+        argTypes[trim(operands[0])] = typeSig.getValue().str();
+        return;
       }
-    }
+    });
 
     mlir::OpBuilder b(module.getContext());
-    int nextEventId = 0;
+    int nextToken = 0;
+    auto allocToken = [&]() -> std::string {
+      // Hardware typically caps event id count; keep tokens in [0,7] for the prototype.
+      int tok = nextToken++ % 8;
+      return std::to_string(tok);
+    };
 
-    for (auto it = block->begin(); it != block->end(); ++it) {
-      mlir::Operation *producer = &*it;
-      if (!isPtoInstrOp(producer))
-        continue;
+    // Dedup tokens per semantic edge from a specific producer: (producer op, src_op, dst_op) -> token.
+    std::map<std::tuple<mlir::Operation *, std::string, std::string>, std::string> edgeToken;
 
-      auto nextIt = std::next(it);
-      if (nextIt == block->end())
-        break;
+    auto processBlock = [&](mlir::Block &block, auto &&self) -> void {
+      std::map<std::string, DefInfo> lastDef;
 
-      // Skip if there's already a record_event right after producer; we assume pass already ran.
-      if (nextIt->getName().getStringRef() == "pto.record_event")
-        continue;
+      for (auto it = block.begin(); it != block.end(); ++it) {
+        auto *consumer = &*it;
+        if (consumer->getName().getStringRef() == "scf.for" || consumer->getName().getStringRef() == "scf.if") {
+          for (auto &r : consumer->getRegions())
+            if (!r.empty())
+              self(r.front(), self);
+          continue;
+        }
 
-      // Find the next instruction (skip meta ops that might already exist).
-      auto consumerIt = nextIt;
-      while (consumerIt != block->end() && !isPtoInstrOp(&*consumerIt)) {
-        ++consumerIt;
+        if (!isPtoInstrOp(consumer))
+          continue;
+
+        auto consOpcode = stripDialect(consumer->getName().getStringRef());
+        auto consEnum = opcodeToOpEnum(consOpcode, consumer, argTypes);
+        if (consEnum.empty())
+          continue;
+        auto consPipe = pipeForOpEnum(consEnum);
+        if (consPipe.empty())
+          continue;
+
+        // Insert waits for cross-pipe tile dependencies.
+        for (auto &useSym : opcodeTileUses(consOpcode, consumer, argTypes)) {
+          auto use = stripIndexing(trim(useSym));
+          auto defIt = lastDef.find(use);
+          if (defIt == lastDef.end())
+            continue;
+          auto &def = defIt->second;
+          if (!def.op || def.pipe.empty() || def.opEnum.empty())
+            continue;
+          if (def.pipe == consPipe)
+            continue;
+
+          // Dedup at the semantic edge level (SrcOp,DstOp) and keep token count bounded.
+          // Key: (producer op ptr, src_op, dst_op).
+          auto key = std::make_tuple(def.op, def.opEnum, consEnum.str());
+          auto itTok = edgeToken.find(key);
+          if (itTok == edgeToken.end())
+            itTok = edgeToken.emplace(key, allocToken()).first;
+          auto token = itTok->second;
+
+          // Ensure record_event exists on the producer path.
+          if (!hasEquivalentRecordEventAfter(def.op, def.opEnum, consEnum, token)) {
+            b.setInsertionPointAfter(def.op);
+            mlir::OperationState st(def.op->getLoc(), "pto.record_event");
+            st.addAttribute("src_op", b.getStringAttr(def.opEnum));
+            st.addAttribute("dst_op", b.getStringAttr(consEnum));
+            st.addAttribute("token", b.getStringAttr(token));
+            b.create(st);
+          }
+
+          // Ensure wait_event exists before consumer.
+          if (!hasEquivalentWaitEventBefore(consumer, def.opEnum, consEnum, token)) {
+            b.setInsertionPoint(consumer);
+            mlir::OperationState st(consumer->getLoc(), "pto.wait_event");
+            st.addAttribute("src_op", b.getStringAttr(def.opEnum));
+            st.addAttribute("dst_op", b.getStringAttr(consEnum));
+            st.addAttribute("token", b.getStringAttr(token));
+            b.create(st);
+          }
+        }
+
+        // Update last-def for tile results.
+        if (opcodeDefinesTile(consOpcode)) {
+          auto operands = readOperands(consumer);
+          if (!operands.empty()) {
+            auto dst = stripIndexing(trim(operands[0]));
+            lastDef[dst] = DefInfo{consumer, consEnum.str(), consPipe.str()};
+          }
+        }
       }
-      if (consumerIt == block->end())
-        break;
-      mlir::Operation *consumer = &*consumerIt;
+    };
 
-      auto prodOpcode = stripDialect(producer->getName().getStringRef());
-      auto consOpcode = stripDialect(consumer->getName().getStringRef());
-
-      auto srcEnum = opcodeToOpEnum(prodOpcode, producer, argTypes);
-      auto dstEnum = opcodeToOpEnum(consOpcode, consumer, argTypes);
-      if (srcEnum.empty() || dstEnum.empty())
-        continue;
-      auto srcPipe = pipeForOpEnum(srcEnum);
-      auto dstPipe = pipeForOpEnum(dstEnum);
-      if (srcPipe.empty() || dstPipe.empty())
-        continue;
-      if (srcPipe == dstPipe)
-        continue;
-
-      std::string eventName = ("e" + std::to_string(nextEventId++));
-
-      // Insert record_event after producer.
-      b.setInsertionPointAfter(producer);
-      {
-        mlir::OperationState st(producer->getLoc(), "pto.record_event");
-        st.addAttribute("name", b.getStringAttr(eventName));
-        st.addAttribute("src", b.getStringAttr(srcEnum));
-        st.addAttribute("dst", b.getStringAttr(dstEnum));
-        b.create(st);
-      }
-
-      // Insert tsync immediately before consumer (unless there's already one there).
-      auto *prev = consumer->getPrevNode();
-      if (!prev || prev->getName().getStringRef() != "pto.tsync") {
-        b.setInsertionPoint(consumer);
-        mlir::OperationState st(consumer->getLoc(), "pto.tsync");
-        st.addAttribute("events", b.getArrayAttr({b.getStringAttr(eventName)}));
-        b.create(st);
-      }
-    }
+    processBlock(*module.getBody(), processBlock);
   }
 
   llvm::StringRef getArgument() const final { return "ptoas-insert-events"; }
   llvm::StringRef getDescription() const final {
-    return "Insert tsync + record_event between memory/vector pipeline ops (prototype).";
+    return "Insert pto.record_event + pto.wait_event for cross-pipe tile dependencies (prototype).";
   }
 };
 

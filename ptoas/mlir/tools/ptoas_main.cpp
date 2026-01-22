@@ -42,7 +42,9 @@ int main(int argc, char **argv) {
   llvm::cl::opt<std::string> ascendHomeOpt("ascend-home", llvm::cl::init(""),
                                            llvm::cl::desc("ASCEND_HOME_PATH (for bisheng includes)"));
   llvm::cl::opt<bool> insertEvents("insert-events", llvm::cl::init(false),
-                                   llvm::cl::desc("Run ptoas-insert-events pass (prototype)"));
+                                   llvm::cl::desc("Insert record_event/wait_event for cross-pipe deps (prototype)"));
+  llvm::cl::opt<bool> assignTileAddrs("assign-tile-addrs", llvm::cl::init(true),
+                                      llvm::cl::desc("Assign default addresses to tiles (prototype)"));
 
   llvm::cl::ParseCommandLineOptions(argc, argv, "ptoas (MLIR-based prototype)\n");
 
@@ -54,13 +56,12 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  bool doInsertEvents = insertEvents;
-  if (target == "cpu")
-    doInsertEvents = false;
-
-  if (doInsertEvents) {
+  if (assignTileAddrs || insertEvents) {
     mlir::PassManager pm(&ctx);
-    pm.addPass(ptoas::createInsertEventsPass());
+    if (assignTileAddrs)
+      pm.addPass(ptoas::createAssignTileAddressesPass());
+    if (insertEvents)
+      pm.addPass(ptoas::createInsertEventsPass());
     if (mlir::failed(pm.run(module))) {
       llvm::errs() << "pass pipeline failed\n";
       return 1;

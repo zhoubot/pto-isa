@@ -3,29 +3,28 @@
 ; Expected flow:
 ;   ptoas add16_min.pto -o add16_min.cce --insert-events --emit-bin=add16_min.bin
 ;
-; New-format PTO-AS:
+; New-format PTO-AS (no `.arg` / `.const`):
 ; - tensors are introduced via `pto.make_tensor_view` from implicit `%argN` kernel args
-; - tiles are introduced via `pto.alloc_tile` (optionally binding an address, replacing `tassign`)
+; - tiles are introduced via `pto.alloc_tile` (addr can be auto-assigned by `ptoas --assign-tile-addrs`)
 ; - tile ops use `dst = pto.op ...` sugar (destination is implicit from the LHS)
 
-.const %c16 = 16 : index
-.const %c1 = 1 : index
+%0 = pto.make_tensor_view %arg0, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
+%1 = pto.make_tensor_view %arg1, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
+%2 = pto.make_tensor_view %arg2, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
 
-.const %addr_x = 0x0 : index
-.const %addr_y = 0x8000 : index
-.const %addr_z = 0x10000 : index
-.const %r0 = 0 : index
-.const %c0 = 0 : index
+%tx = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%ty = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
+%tz = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
 
-%0 = pto.make_tensor_view %arg0, dtype=f16, shape=[%c16,%c16] strides=[%c16,%c1], layout=ND
-%1 = pto.make_tensor_view %arg1, dtype=f16, shape=[%c16,%c16] strides=[%c16,%c1], layout=ND
-%2 = pto.make_tensor_view %arg2, dtype=f16, shape=[%c16,%c16] strides=[%c16,%c1], layout=ND
+scf.for %m0 = 0 to 16 step 16 {
+  scf.for %n0 = 0 to 16 step 16 {
+    %x_blk = pto.subview %0, offsets=[%m0, %n0]
+    %y_blk = pto.subview %1, offsets=[%m0, %n0]
+    %z_blk = pto.subview %2, offsets=[%m0, %n0]
 
-%tx = pto.alloc_tile %addr_x : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-%ty = pto.alloc_tile %addr_y : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-%tz = pto.alloc_tile %addr_z : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-
-%tx = pto.tload %0[%r0, %c0]
-%ty = pto.tload %1[%r0, %c0]
-%tz = pto.tadd %tx, %ty
-pto.tstore %2[%r0, %c0], %tz
+    %tx = pto.tload %x_blk[0, 0]
+    %ty = pto.tload %y_blk[0, 0]
+    %tz = pto.tadd %tx, %ty
+    pto.tstore %z_blk[0, 0], %tz
+  }
+}
