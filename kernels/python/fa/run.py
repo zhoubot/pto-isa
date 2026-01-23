@@ -2,20 +2,18 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import sys
 from pathlib import Path
-
-import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from ptoas.python import pipeline  # noqa: E402
-from ptoas.python.host_codegen import TensorSpec, emit_acl_host_cpp  # noqa: E402
+from ptoas.python import binding  # noqa: E402
+from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
-from kernel import make_fa16_pto  # noqa: E402
+from kernel import make_fa16_kernel  # noqa: E402
 
 
 def _default_ptoas() -> Path:
@@ -28,35 +26,16 @@ def _default_ptoas() -> Path:
     return _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas"
 
 
-def _run_cpu(*, so_path: Path) -> None:
-    q = (np.random.rand(16, 16).astype(np.float16) - 0.5)
-    k = (np.random.rand(16, 16).astype(np.float16) - 0.5)
-    v = (np.random.rand(16, 16).astype(np.float16) - 0.5)
-    out = np.empty_like(q)
-    expected = (q + k + v).astype(np.float16)
-
-    lib = ctypes.CDLL(str(so_path))
-    fn = lib.pto_kernel_cpu
-    fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-    fn.restype = None
-
-    fn(
-        ctypes.c_void_p(int(q.ctypes.data)),
-        ctypes.c_void_p(int(k.ctypes.data)),
-        ctypes.c_void_p(int(v.ctypes.data)),
-        ctypes.c_void_p(int(out.ctypes.data)),
-    )
-    np.testing.assert_allclose(out, expected, rtol=0, atol=0)
-
-
 def main() -> int:
-    ap = argparse.ArgumentParser(description="kernels/python/fa: Python -> PTO-AS -> ptoas -> emit foo.cpp + host.cpp.")
+    ap = argparse.ArgumentParser(description="kernels/python/fa: Python -> PTO-AS -> ptoas -> run/compare (CPU ref).")
     ap.add_argument("--target", choices=["cpu", "npu", "both"], default="cpu")
     ap.add_argument("--ptoas", type=Path, default=_default_ptoas())
     ap.add_argument("--outdir", type=Path, default=Path("/tmp/pto_kernel_python_fa"))
 
     # NPU options (optional; required only if you want to build/run the fatobj .so)
     ap.add_argument("--ascend-home", type=Path, default=pipeline.default_ascend_home())
+    ap.add_argument("--run-mode", choices=["npu", "sim"], default="npu")
+    ap.add_argument("--soc", default="a3", help="Simulator SoC (a3|a5|Ascend910B1|...) when --run-mode=sim")
     ap.add_argument("--device", type=int, default=0)
     ap.add_argument("--block-dim", type=int, default=1)
     ap.add_argument("--memory-model", default="MEMORY_BASE")
@@ -68,35 +47,31 @@ def main() -> int:
 
     args.outdir.mkdir(parents=True, exist_ok=True)
 
-    # Always emit the PTO-AS.
+    kernel_spec = make_fa16_kernel(target="npu")
     pto_path = args.outdir / "fa16.pto"
-    pto_path.write_text(make_fa16_pto(target="cpu" if args.target == "cpu" else "npu"), encoding="utf-8")
+    pto_text = prepend_host_spec_to_pto(pto=kernel_spec.pto, spec=binding.default_host_spec(kernel_spec))
+    pto_path.write_text(pto_text, encoding="utf-8")
 
-    # Always emit device source + host source (even on macOS with no NPU).
-    device_cpp = args.outdir / "fa16.cpp"
-    pipeline.compile_pto_to_device_cpp(
-        pto_path=pto_path,
-        out_cpp=device_cpp,
-        ptoas=args.ptoas,
-        arch="dav-c220-vec",
-        memory_model=args.memory_model,
+    host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
+    host_spec = type(host_spec)(
+        args=host_spec.args, seed=host_spec.seed, block_dim=args.block_dim, kernel_name=host_spec.kernel_name
     )
-    host_cpp = args.outdir / "host.cpp"
-    host_cpp.write_text(
-        emit_acl_host_cpp(
-            so_basename="libfa16_npu.so",
-            args=[TensorSpec("f16", (16, 16)), TensorSpec("f16", (16, 16)), TensorSpec("f16", (16, 16)), TensorSpec("f16", (16, 16))],
-        ),
-        encoding="utf-8",
-    )
+    base = pipeline.make_host_arrays(host_spec)
 
-    if args.target in ("cpu", "both"):
-        cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas)
-        so_path = args.outdir / "libfa16_cpu.so"
-        pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=so_path)
-        _run_cpu(so_path=so_path)
+    # CPU reference (also used to validate NPU).
+    cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas)
+    cpu_so = args.outdir / "libfa16_cpu.so"
+    pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
+    cpu_arrays = [a.copy() for a in base]
+    cpu_out = pipeline.run_cpu_kernel_from_so(so_path=cpu_so, host_spec=host_spec, host_arrays=cpu_arrays)
 
-    if args.target in ("npu", "both") and args.ascend_home and args.ascend_home.exists():
+    if args.target in ("npu", "both"):
+        if not args.ascend_home or not args.ascend_home.exists():
+            print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
+            return 2
+        if args.run_mode == "sim":
+            soc = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
+            pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
         cfg = pipeline.CompileConfig(
             ptoas=args.ptoas,
             ascend_home=args.ascend_home,
@@ -104,10 +79,18 @@ def main() -> int:
             memory_model=args.memory_model,
             insert_events=True,
         )
-        cce_path, _ = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
-        so_path = args.outdir / "libfa16_npu.so"
-        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=so_path, arch=cfg.arch, ascend_home=cfg.ascend_home)
-        print(f"built: {so_path} (run {host_cpp} on NPU env to launch)")
+        cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
+        npu_so = args.outdir / "libfa16_npu.so"
+        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
+
+        npu_arrays = [a.copy() for a in base]
+        npu_out = pipeline.run_npu_kernel_from_so(
+            so_path=npu_so, host_spec=host_spec, host_arrays=npu_arrays, device_id=args.device, block_dim=args.block_dim
+        )
+
+        out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
+        pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
+        print(f"OK: fa16 matched CPU reference (bin: {bin_path.name})")
 
     print(f"OK: kernels/python/fa (target={args.target}) outdir={args.outdir}")
     return 0

@@ -14,6 +14,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from ptoas.python import pipeline  # noqa: E402
 from gemm_pto import make_gemm16_pto  # noqa: E402
+from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 
 def _repo_root() -> Path:
@@ -38,6 +39,8 @@ def main() -> int:
 
     # NPU options
     ap.add_argument("--ascend-home", type=Path, default=pipeline.default_ascend_home())
+    ap.add_argument("--run-mode", choices=["npu", "sim"], default="npu")
+    ap.add_argument("--soc", default="a3", help="Simulator SoC (a3|a5|Ascend910B1|...) when --run-mode=sim")
     ap.add_argument("--device", type=int, default=0)
     ap.add_argument("--block-dim", type=int, default=1)
     ap.add_argument("--memory-model", default="MEMORY_BASE")
@@ -49,22 +52,30 @@ def main() -> int:
 
     args.outdir.mkdir(parents=True, exist_ok=True)
 
-    if args.target in ("cpu", "both"):
-        pto_path = args.outdir / "gemm16.cpu.pto"
-        pto_path.write_text(make_gemm16_pto(target="cpu"), encoding="utf-8")
+    pto_text = make_gemm16_pto(target="npu")
+    pto_text = prepend_host_spec_to_pto(pto=pto_text, spec=pipeline.parse_or_default_host_spec(pto_text=pto_text))
+    pto_path = args.outdir / "gemm16.pto"
+    pto_path.write_text(pto_text, encoding="utf-8")
 
-        cpp_path = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas)
-        so_path = args.outdir / "libgemm16_cpu.so"
-        pipeline.build_cpu_so_from_cpp(cpp_path=cpp_path, out_so=so_path)
-        pipeline.run_gemm16_cpu_from_so(so_path=so_path)
+    cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas)
+    cpu_so = args.outdir / "libgemm16_cpu.so"
+    pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
+
+    host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
+    host_spec = type(host_spec)(
+        args=host_spec.args, seed=host_spec.seed, block_dim=args.block_dim, kernel_name=host_spec.kernel_name
+    )
+    base = pipeline.make_host_arrays(host_spec)
+    cpu_arrays = [a.copy() for a in base]
+    cpu_out = pipeline.run_cpu_kernel_from_so(so_path=cpu_so, host_spec=host_spec, host_arrays=cpu_arrays)
 
     if args.target in ("npu", "both"):
         if not args.ascend_home or not args.ascend_home.exists():
             print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
             return 2
-
-        pto_path = args.outdir / "gemm16.npu.pto"
-        pto_path.write_text(make_gemm16_pto(target="npu"), encoding="utf-8")
+        if args.run_mode == "sim":
+            soc = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
+            pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
 
         cfg = pipeline.CompileConfig(
             ptoas=args.ptoas,
@@ -73,10 +84,17 @@ def main() -> int:
             memory_model=args.memory_model,
             insert_events=True,
         )
-        cce_path, _ = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
-        so_path = args.outdir / "libgemm16_npu.so"
-        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=so_path, arch=cfg.arch, ascend_home=cfg.ascend_home)
-        pipeline.run_gemm16_from_so(so_path=so_path, device_id=args.device, block_dim=args.block_dim)
+        cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
+        npu_so = args.outdir / "libgemm16_npu.so"
+        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
+
+        npu_arrays = [a.copy() for a in base]
+        npu_out = pipeline.run_npu_kernel_from_so(
+            so_path=npu_so, host_spec=host_spec, host_arrays=npu_arrays, device_id=args.device, block_dim=args.block_dim
+        )
+        out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
+        pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
+        print(f"OK: gemm16 matched CPU reference (bin: {bin_path.name})")
 
     print(f"OK: kernels/custom/gemm_python (target={args.target}) outdir={args.outdir}")
     return 0

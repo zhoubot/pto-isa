@@ -1,9 +1,48 @@
 from __future__ import annotations
 
+"""
+Tiny Python-to-PTO-AS frontend.
+
+The frontend parses a restricted Python AST and emits the newer PTO-AS syntax:
+  - `tensor(...)` declares a kernel arg bound to `%argN` via `pto.make_tensor_view`
+  - `tile(...)` allocates a tile with `pto.alloc_tile`
+  - `tload/tstore/tadd/tmatmul/...` map directly to PTO ops
+
+Only a minimal subset of Python is supported (straight-line code, `for range`,
+and simple `if` compares). This is intended for prototyping kernels quickly.
+
+Supported kernel authoring styles:
+
+1) Function-call DSL (legacy, still supported):
+
+   ```
+   def add16():
+       prologue()
+       x = tensor(dtype="f16", shape=(16, 16))
+       ...
+       tadd(tz, tx, ty)
+       tstore(z, 0, 0, tz)
+       epilogue()
+   ```
+
+2) Object DSL (recommended; matches `pto_as.PTO` examples):
+
+   ```
+   def build():
+       pto = PTO("my_kernel")
+       x = pto.tensor("x", (16, 16), dtype="f16")
+       tx = pto.vec_tile("tx", dtype="f16", shape=(16, 16))
+       pto.tload(tx, x)     # defaults to [0,0]
+       ...
+       pto.tstore(x, tx)    # defaults to [0,0]
+   ```
+"""
+
 import ast
 import inspect
 import textwrap
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from .pto_asm import TensorType, TileType
@@ -11,6 +50,29 @@ from .pto_asm import TensorType, TileType
 
 class FrontendError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class TensorArg:
+    name: str
+    arg_index: int
+    ty: TensorType
+    role: str | None = None
+
+    def host_spec(self) -> "TensorSpec":
+        from .host_codegen import TensorSpec
+
+        return TensorSpec(dtype=self.ty.dtype, shape=self.ty.shape2())
+
+
+@dataclass(frozen=True)
+class KernelSpec:
+    name: str
+    pto: str
+    tensor_args: tuple[TensorArg, ...]
+
+    def host_tensor_specs(self) -> list["TensorSpec"]:
+        return [arg.host_spec() for arg in self.tensor_args]
 
 
 @dataclass
@@ -59,6 +121,13 @@ class _Compiler:
         self._next_tensor_arg = 0
         # Python-name -> literal string (emits as an immediate, not an SSA value).
         self._literal: dict[str, str] = {}
+        # Python-name -> compile-time value (used for shapes/strides/const folding).
+        self._const_env: dict[str, Any] = {}
+        # Kernel arg tracking for host codegen.
+        self._tensor_args: dict[int, TensorType] = {}
+        self._tensor_arg_names: dict[int, str] = {}
+        self._tensor_arg_roles: dict[int, str | None] = {}
+        self._explicit_kernel_name: str | None = None
 
     def _tmp(self) -> _Sym:
         self._tmp_i += 1
@@ -71,11 +140,87 @@ class _Compiler:
             self._sym[py_name] = _Sym(py_name)
         return self._sym[py_name]
 
+    def _bind_sym(self, py_name: str, pto_name: str) -> _Sym:
+        # Bind a Python variable name to a specific PTO-AS SSA name.
+        # This is used by the object DSL when the first argument is an explicit name:
+        #   centered = pto.vec_tile("scores_centered", ...)
+        self._sym[py_name] = _Sym(pto_name)
+        return self._sym[py_name]
+
     def _eval_const(self, node: ast.AST) -> Any:
         try:
             return ast.literal_eval(node)
         except Exception as e:
             raise FrontendError(f"expected a literal, got: {ast.dump(node)}") from e
+
+    def _eval_static(self, node: ast.AST) -> Any:
+        """
+        Evaluate a restricted, compile-time-only Python expression.
+
+        This is used for things like:
+          - tensor/tiling shapes: (s, d)
+          - simple math for constants: 1.0 / sqrt(d)
+        """
+
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            if node.id in self._const_env:
+                return self._const_env[node.id]
+            # Fall back to literal operand strings for already-emitted literals.
+            if node.id in self._literal:
+                try:
+                    return ast.literal_eval(self._literal[node.id])
+                except Exception:
+                    pass
+            raise FrontendError(f"unknown compile-time name: {node.id}")
+        if isinstance(node, (ast.Tuple, ast.List)):
+            return tuple(self._eval_static(elt) for elt in node.elts)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            v = self._eval_static(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +v
+            return -v
+        if isinstance(node, ast.BinOp):
+            lhs = self._eval_static(node.left)
+            rhs = self._eval_static(node.right)
+            if isinstance(node.op, ast.Add):
+                return lhs + rhs
+            if isinstance(node.op, ast.Sub):
+                return lhs - rhs
+            if isinstance(node.op, ast.Mult):
+                return lhs * rhs
+            if isinstance(node.op, ast.Div):
+                return lhs / rhs
+            if isinstance(node.op, ast.FloorDiv):
+                return lhs // rhs
+            raise FrontendError(f"unsupported binop in const eval: {ast.dump(node.op)}")
+        if isinstance(node, ast.Call):
+            # Support a tiny whitelist of compile-time functions.
+            fn_name: str | None = None
+            if isinstance(node.func, ast.Name):
+                fn_name = node.func.id
+            elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                # e.g. math.sqrt(...)
+                fn_name = f"{node.func.value.id}.{node.func.attr}"
+            if fn_name is None:
+                raise FrontendError(f"unsupported call in const eval: {ast.dump(node)}")
+
+            args = [self._eval_static(a) for a in node.args]
+            if fn_name in ("sqrt", "math.sqrt"):
+                if len(args) != 1:
+                    raise FrontendError("sqrt(...) expects 1 arg")
+                import math
+
+                return math.sqrt(args[0])
+            if fn_name == "scalar":
+                # `scalar("f32")` is a type hint in the Python frontend.
+                if len(args) != 1 or not isinstance(args[0], str):
+                    raise FrontendError('scalar(...) expects one string arg like scalar("f32")')
+                return args[0]
+            raise FrontendError(f"unsupported compile-time call: {fn_name}")
+
+        raise FrontendError(f"unsupported compile-time expr: {ast.dump(node)}")
 
     def _opnd(self, node: ast.AST) -> str:
         if isinstance(node, ast.Name):
@@ -89,38 +234,127 @@ class _Compiler:
             return str(node.value)
         raise FrontendError(f"unsupported operand node: {ast.dump(node)}")
 
+    def _call_name(self, call: ast.Call) -> str:
+        # Support both:
+        #   tensor(...)
+        #   pto.tensor(...)
+        if isinstance(call.func, ast.Name):
+            return call.func.id
+        if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Name):
+            # Intentionally allow any `<name>.<attr>(...)` where `<name>` is a
+            # plain name (we only special-case `pto` further down).
+            return call.func.attr
+        raise FrontendError(f"unsupported call form: {ast.dump(call)}")
+
+    def _opcode_alias(self, name: str) -> str:
+        # Small Python-friendly aliases.
+        # Keep this intentionally minimal: most PTO ops are already descriptive.
+        return {
+            "mov": "tmov",
+            "load": "tload",
+            "store": "tstore",
+        }.get(name, name)
+
+    def _emit_instr_assign(self, *, dst_name: str, call: ast.Call) -> None:
+        """
+        Emit an instruction where the destination is provided by Python assignment:
+
+          dst = pto.tadd(a, b)          # emits: %dst = pto.tadd %a, %b
+          dst = pto.tload(x, r, c)      # emits: %dst = pto.tload %x[r, c]
+
+        This is the preferred "left assignment" style for readability.
+        """
+        fn = self._opcode_alias(self._call_name(call))
+        dst = self._sym_for(dst_name).pto
+
+        if fn in ("prologue", "epilogue", "comment", "program"):
+            raise FrontendError(f"cannot assign the result of {fn}(...); use it as a statement")
+        if fn in ("tstore", "store"):
+            raise FrontendError("tstore/store does not return a value; use it as a statement")
+        if fn in ("record_event", "wait_event"):
+            raise FrontendError(f"{fn}(...) does not return a value; use it as a statement")
+
+        # Special-case load/store addressing forms.
+        if fn == "tload":
+            if len(call.args) not in (1, 3):
+                raise FrontendError("tload/load in assignment form expects: dst = tload(src, [r, c])")
+            src = self._opnd(call.args[0])
+            r = "0"
+            c = "0"
+            if len(call.args) == 3:
+                r = self._opnd(call.args[1])
+                c = self._opnd(call.args[2])
+            self._t.line(f"{dst} = pto.tload {src}[{r}, {c}]")
+            return
+
+        if call.keywords:
+            raise FrontendError(f"{fn}(...) does not support keyword args in kernels")
+
+        ops = [self._opnd(a) for a in call.args]
+        if ops:
+            self._t.line(f"{dst} = pto.{fn} {', '.join(ops)}")
+        else:
+            self._t.line(f"{dst} = pto.{fn}")
+
+    def _record_tensor_arg(self, *, name: str, arg_index: int, ty: TensorType) -> None:
+        existing = self._tensor_args.get(arg_index)
+        if existing is None:
+            self._tensor_args[arg_index] = ty
+            self._tensor_arg_names[arg_index] = name
+            return
+        if existing != ty:
+            raise FrontendError(f"tensor arg {arg_index} redeclared with a different type")
+
     def _declare_tensor(self, target: str, call: ast.Call) -> None:
+        # Accept both forms:
+        #   x = tensor(dtype="f16", shape=(16,16))
+        #   x = pto.tensor("x", (16,16), dtype="f16")
         dtype: str | None = None
         shape: Any | None = None
         stride: Any | None = None
         layout: str = "ND"
+        role: str | None = None
+        declared_name: str | None = None
 
         args = list(call.args)
-        if args:
-            if len(args) >= 1:
-                dtype = self._eval_const(args[0])
-            if len(args) >= 2:
-                shape = self._eval_const(args[1])
-            if len(args) >= 3:
-                stride = self._eval_const(args[2])
-            if len(args) >= 4:
-                layout = self._eval_const(args[3])
+        # Disambiguate old vs new:
+        # - old: tensor("f16", (16,16), ...)
+        # - new: pto.tensor("x", (16,16), dtype="f16", ...)
+        has_dtype_kw = any(kw.arg == "dtype" for kw in call.keywords if kw.arg is not None)
+        if len(args) >= 2 and isinstance(args[0], ast.Constant) and isinstance(args[0].value, str) and has_dtype_kw:
+            declared_name = args[0].value
+            shape = self._eval_static(args[1])
+        else:
+            if args:
+                if len(args) >= 1:
+                    dtype = self._eval_const(args[0])
+                if len(args) >= 2:
+                    shape = self._eval_static(args[1])
+                if len(args) >= 3:
+                    stride = self._eval_static(args[2])
+                if len(args) >= 4:
+                    layout = self._eval_const(args[3])
 
         for kw in call.keywords:
             if kw.arg == "dtype":
                 dtype = self._eval_const(kw.value)
             elif kw.arg == "shape":
-                shape = self._eval_const(kw.value)
+                shape = self._eval_static(kw.value)
             elif kw.arg == "stride":
-                stride = self._eval_const(kw.value)
+                stride = self._eval_static(kw.value)
             elif kw.arg == "layout":
                 layout = self._eval_const(kw.value)
+            elif kw.arg == "role":
+                role = str(self._eval_const(kw.value))
+                if role not in ("in", "out", "inout"):
+                    raise FrontendError("tensor(..., role=...) must be one of: in, out, inout")
             elif kw.arg in ("arg", "arg_index"):
                 # Parsed below (controls %argN binding).
                 pass
             else:
                 raise FrontendError(f"unknown tensor(...) kw: {kw.arg}")
 
+        pto_name = declared_name or target
         if dtype is None or shape is None:
             raise FrontendError("tensor(...) requires dtype and shape")
 
@@ -135,6 +369,15 @@ class _Compiler:
             arg_index = self._next_tensor_arg
             self._next_tensor_arg += 1
 
+        if arg_index not in self._tensor_arg_roles:
+            self._tensor_arg_roles[arg_index] = role
+        else:
+            existing_role = self._tensor_arg_roles[arg_index]
+            if role is not None and existing_role is not None and role != existing_role:
+                raise FrontendError(f"tensor arg {arg_index} redeclared with a different role")
+            if existing_role is None and role is not None:
+                self._tensor_arg_roles[arg_index] = role
+
         if not isinstance(shape, (tuple, list)) or len(shape) != 2:
             raise FrontendError("tensor(...) currently expects shape=(H, W)")
         h, w = int(shape[0]), int(shape[1])
@@ -146,13 +389,17 @@ class _Compiler:
                 raise FrontendError("tensor(..., stride=...) expects stride=(S0, S1)")
             s0, s1 = int(stride[0]), int(stride[1])
 
-        sym = self._sym_for(target)
+        ty = TensorType(dtype=dtype, shape=(h, w), stride=(s0, s1), layout=layout)
+        self._record_tensor_arg(name=pto_name, arg_index=arg_index, ty=ty)
+
+        sym = self._bind_sym(target, pto_name)
         self._t.line(
             f"{sym.pto} = pto.make_tensor_view %arg{arg_index}, dtype={dtype}, "
             f"shape=[{h},{w}] strides=[{s0},{s1}], layout={layout}"
         )
 
     def _declare_tile(self, target: str, call: ast.Call) -> None:
+        # Legacy tile(...) helper.
         loc: str | None = None
         dtype: str | None = None
         rows: int | None = None
@@ -172,9 +419,9 @@ class _Compiler:
             if len(args) >= 2:
                 dtype = self._eval_const(args[1])
             if len(args) >= 3:
-                rows = self._eval_const(args[2])
+                rows = int(self._eval_static(args[2]))
             if len(args) >= 4:
-                cols = self._eval_const(args[3])
+                cols = int(self._eval_static(args[3]))
 
         for kw in call.keywords:
             if kw.arg == "loc":
@@ -182,9 +429,9 @@ class _Compiler:
             elif kw.arg == "dtype":
                 dtype = self._eval_const(kw.value)
             elif kw.arg == "rows":
-                rows = self._eval_const(kw.value)
+                rows = int(self._eval_static(kw.value))
             elif kw.arg == "cols":
-                cols = self._eval_const(kw.value)
+                cols = int(self._eval_static(kw.value))
             elif kw.arg == "blayout":
                 blayout = self._eval_const(kw.value)
             elif kw.arg == "valid":
@@ -232,10 +479,102 @@ class _Compiler:
         else:
             self._t.line(f"{sym.pto} = pto.alloc_tile {addr} : {ty}")
 
+    def _declare_tile_sugar(self, target: str, call: ast.Call, *, loc: str) -> None:
+        # New object-DSL helpers:
+        #   q_tile = pto.vec_tile("q_tile", dtype="f32", shape=(s,d))
+        declared_name: str | None = None
+        dtype: str | None = None
+        shape: Any | None = None
+
+        # Per-loc defaults chosen to match the common NPU expectations for TMATMUL pipelines.
+        if loc == "Mat":
+            blayout = "ColMajor"
+            slayout = "RowMajor"
+        elif loc == "Left":
+            blayout = "RowMajor"
+            slayout = "RowMajor"
+        elif loc == "Right":
+            blayout = "RowMajor"
+            slayout = "ColMajor"
+        elif loc == "Acc":
+            blayout = "ColMajor"
+            slayout = "RowMajor"
+        else:
+            blayout = "RowMajor"
+            slayout = "NoneBox"
+
+        valid: str | None = None
+        fractal: int | None = None
+        pad: str = "Null"
+        addr: int | None = None
+
+        args = list(call.args)
+        if args and isinstance(args[0], ast.Constant) and isinstance(args[0].value, str):
+            declared_name = args[0].value
+        for kw in call.keywords:
+            if kw.arg == "dtype":
+                dtype = self._eval_const(kw.value)
+            elif kw.arg == "shape":
+                shape = self._eval_static(kw.value)
+            elif kw.arg == "blayout":
+                blayout = self._eval_const(kw.value)
+            elif kw.arg == "valid":
+                valid = self._eval_const(kw.value)
+            elif kw.arg == "slayout":
+                slayout = self._eval_const(kw.value)
+            elif kw.arg == "fractal":
+                fractal = int(self._eval_static(kw.value))
+            elif kw.arg == "pad":
+                pad = self._eval_const(kw.value)
+            elif kw.arg == "addr":
+                addr = int(self._eval_const(kw.value))
+            elif kw.arg == "b":
+                # Convenience annotation used by some higher-level examples (e.g. softmax broadcast axis).
+                # PTO-AS tile types do not currently encode broadcast semantics, so this is ignored.
+                _ = kw.value
+            else:
+                raise FrontendError(f"unknown {call.func} kw: {kw.arg}")
+
+        pto_name = declared_name or target
+        if dtype is None or shape is None:
+            raise FrontendError("vec_tile/left_tile/right_tile/acc_tile require dtype=... and shape=(H,W)")
+        if not isinstance(shape, (tuple, list)) or len(shape) != 2:
+            raise FrontendError("tile shape must be (rows, cols)")
+        rows, cols = int(shape[0]), int(shape[1])
+
+        sym = self._bind_sym(target, pto_name)
+        if valid is not None:
+            if isinstance(valid, str) and "x" in valid:
+                vr, vc = valid.split("x", 1)
+                valid_rows = int(vr)
+                valid_cols = int(vc)
+            else:
+                raise FrontendError("tile(..., valid=...) must be like '16x16'")
+        else:
+            valid_rows = None
+            valid_cols = None
+
+        ty = TileType(
+            loc=loc,
+            dtype=dtype,
+            rows=rows,
+            cols=cols,
+            blayout=blayout,
+            valid_rows=valid_rows,
+            valid_cols=valid_cols,
+            slayout=slayout,
+            fractal=fractal,
+            pad=pad,
+        )
+        if addr is None:
+            self._t.line(f"{sym.pto} = pto.alloc_tile : {ty}")
+        else:
+            self._t.line(f"{sym.pto} = pto.alloc_tile {addr} : {ty}")
+
     def _emit_scalar_assign(self, dst: str, value: ast.AST) -> None:
         dst_sym = self._sym_for(dst)
-        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
-            fn = value.func.id
+        if isinstance(value, ast.Call):
+            fn = self._call_name(value)
             if fn == "get_block_idx":
                 self._t.line(f"{dst_sym.pto} = pto.get_block_idx : index")
                 return
@@ -251,12 +590,16 @@ class _Compiler:
             if isinstance(value.op, ast.Mult):
                 self._t.line(f"{dst_sym.pto} = pto.imul {lhs}, {rhs} : index")
                 return
+            if isinstance(value.op, ast.FloorDiv):
+                self._t.line(f"{dst_sym.pto} = pto.idiv {lhs}, {rhs} : index")
+                return
+            if isinstance(value.op, ast.Mod):
+                self._t.line(f"{dst_sym.pto} = pto.irem {lhs}, {rhs} : index")
+                return
         raise FrontendError(f"unsupported scalar assignment: {dst} = {ast.dump(value)}")
 
     def _emit_instr_stmt(self, call: ast.Call) -> None:
-        if not isinstance(call.func, ast.Name):
-            raise FrontendError(f"unsupported call form: {ast.dump(call)}")
-        fn = call.func.id
+        fn = self._opcode_alias(self._call_name(call))
 
         if fn in ("prologue", "epilogue"):
             self._t.line(fn)
@@ -270,45 +613,74 @@ class _Compiler:
                 "tassign(...) is not supported in the new PTO-AS syntax; "
                 "use tile(..., addr=0x...) or omit `addr` and run ptoas with --assign-tile-addrs"
             )
-        if fn == "tmov":
-            a = opnds()
-            if len(a) != 2:
-                raise FrontendError("tmov(dst, src)")
-            self._t.line(f"{a[0]} = pto.tmov {a[1]}")
+
+        if fn == "comment":
+            if len(call.args) != 1:
+                raise FrontendError('comment("...") expects one string argument')
+            text = self._eval_const(call.args[0])
+            if not isinstance(text, str):
+                raise FrontendError('comment("...") expects one string argument')
+            for line in text.splitlines():
+                self._t.line(f"; {line}" if line else ";")
             return
-        if fn == "tadd":
-            a = opnds()
-            if len(a) != 3:
-                raise FrontendError("tadd(dst, a, b)")
-            self._t.line(f"{a[0]} = pto.tadd {a[1]}, {a[2]}")
-            return
-        if fn == "tmatmul":
-            a = opnds()
-            if len(a) != 3:
-                raise FrontendError("tmatmul(dst, a, b)")
-            self._t.line(f"{a[0]} = pto.tmatmul {a[1]}, {a[2]}")
+
+        if fn == "program":
+            # Object-DSL convention: `return pto.program()`; ignored by the compiler.
             return
 
         if fn == "tload":
-            if len(call.args) != 4:
-                raise FrontendError("tload(dst_tile, src_tensor, r, c)")
+            if len(call.args) not in (2, 4):
+                raise FrontendError("tload(dst_tile, src_tensor, [r, c])")
             dst = self._opnd(call.args[0])
             src = self._opnd(call.args[1])
-            r = self._opnd(call.args[2])
-            c = self._opnd(call.args[3])
+            r = "0"
+            c = "0"
+            if len(call.args) == 4:
+                r = self._opnd(call.args[2])
+                c = self._opnd(call.args[3])
             self._t.line(f"{dst} = pto.tload {src}[{r}, {c}]")
             return
         if fn == "tstore":
-            if len(call.args) != 4:
-                raise FrontendError("tstore(dst_tensor, r, c, src_tile)")
+            if len(call.args) not in (2, 4):
+                raise FrontendError("tstore(dst_tensor, [r, c,] src_tile)")
             dst = self._opnd(call.args[0])
-            r = self._opnd(call.args[1])
-            c = self._opnd(call.args[2])
-            src = self._opnd(call.args[3])
+            r = "0"
+            c = "0"
+            src = self._opnd(call.args[-1])
+            if len(call.args) == 4:
+                r = self._opnd(call.args[1])
+                c = self._opnd(call.args[2])
             self._t.line(f"pto.tstore {dst}[{r}, {c}], {src}")
             return
 
-        raise FrontendError(f"unknown instruction call: {fn}")
+        if fn in ("record_event", "wait_event"):
+            if call.args:
+                raise FrontendError(f"{fn}(...) only supports keyword args: src_op=..., dst_op=..., token=...")
+            kwargs = {kw.arg: kw.value for kw in call.keywords if kw.arg is not None}
+            if set(kwargs) != {"src_op", "dst_op", "token"}:
+                raise FrontendError(f"{fn}(...) requires keyword args: src_op, dst_op, token")
+            src_op = self._eval_const(kwargs["src_op"])
+            dst_op = self._eval_const(kwargs["dst_op"])
+            token = self._opnd(kwargs["token"])
+            if not isinstance(src_op, str) or not isinstance(dst_op, str):
+                raise FrontendError(f"{fn}(src_op=..., dst_op=...) must be string literals")
+            # Keep this aligned with CCEmitter's `emitRecordOrWait(...)` parsing:
+            # accept both `#pto.op<TLOAD>` and `#op<TLOAD>` spellings.
+            self._t.line(f"pto.{fn} {{src_op=#op<{src_op}>, dst_op=#op<{dst_op}>, token={token}}}")
+            return
+
+        a = opnds()
+        if not a:
+            # Allow opcode-only marker statements.
+            self._t.line(f"pto.{fn}")
+            return
+        dst = a[0]
+        rest = a[1:]
+        if rest:
+            self._t.line(f"{dst} = pto.{fn} {', '.join(rest)}")
+        else:
+            self._t.line(f"{dst} = pto.{fn}")
+        return
 
     def _emit_if(self, stmt: ast.If) -> None:
         # Only support simple compare -> icmp_* -> scf.if.
@@ -368,30 +740,81 @@ class _Compiler:
         self._t.close()
 
     def _emit_stmt(self, stmt: ast.stmt) -> None:
+        if isinstance(stmt, ast.Return):
+            # The frontend is statement-driven; returning a "program()" object is a convention
+            # in the object DSL but does not affect PTO-AS emission.
+            return
+
         if isinstance(stmt, ast.Assign):
             if len(stmt.targets) != 1 or not isinstance(stmt.targets[0], ast.Name):
                 raise FrontendError("only simple assignments to a name are supported")
             dst = stmt.targets[0].id
-            if isinstance(stmt.value, ast.Call) and isinstance(stmt.value.func, ast.Name) and stmt.value.func.id == "tensor":
-                self._declare_tensor(dst, stmt.value)
+
+            if isinstance(stmt.value, ast.Call):
+                fn = self._call_name(stmt.value)
+                if fn == "PTO":
+                    # `pto = PTO("name")` is the object-DSL entrypoint; record the preferred
+                    # output kernel name and emit no PTO-AS for it.
+                    if stmt.value.args:
+                        name0 = self._eval_const(stmt.value.args[0])
+                        if isinstance(name0, str):
+                            self._explicit_kernel_name = name0
+                    return
+                if fn == "tensor":
+                    self._declare_tensor(dst, stmt.value)
+                    return
+                if fn == "tile":
+                    self._declare_tile(dst, stmt.value)
+                    return
+                if fn in ("vec_tile", "left_tile", "right_tile", "acc_tile", "mat_tile"):
+                    loc_map = {
+                        "vec_tile": "Vec",
+                        "left_tile": "Left",
+                        "right_tile": "Right",
+                        "acc_tile": "Acc",
+                        "mat_tile": "Mat",
+                    }
+                    self._declare_tile_sugar(dst, stmt.value, loc=loc_map[fn])
+                    return
+                if fn == "const":
+                    # `scale = pto.const("scale", 1.0 / sqrt(d), scalar("f32"))`
+                    if len(stmt.value.args) < 2:
+                        raise FrontendError("const(name, value, [type]) expects at least 2 args")
+                    value = self._eval_static(stmt.value.args[1])
+                    if not isinstance(value, (int, float, bool)):
+                        raise FrontendError("const(..., value, ...) must evaluate to a number/bool")
+                    lit = "1" if value is True else "0" if value is False else repr(value)
+                    if dst in self._sym:
+                        raise FrontendError(f"cannot rebind existing SSA symbol as a literal: {dst}")
+                    self._literal[dst] = lit
+                    self._const_env[dst] = value
+                    return
+
+                # Left-assignment style instruction: `dst = pto.op(...)`.
+                self._emit_instr_assign(dst_name=dst, call=stmt.value)
                 return
-            if isinstance(stmt.value, ast.Call) and isinstance(stmt.value.func, ast.Name) and stmt.value.func.id == "tile":
-                self._declare_tile(dst, stmt.value)
-                return
+
             if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, (int, bool, float)):
                 # Inline numeric literals directly (new PTO-AS removes `.const`).
                 if dst in self._sym:
                     raise FrontendError(f"cannot rebind existing SSA symbol as a literal: {dst}")
-                if isinstance(stmt.value.value, bool):
-                    self._literal[dst] = "1" if stmt.value.value else "0"
+                v = stmt.value.value
+                if isinstance(v, bool):
+                    self._literal[dst] = "1" if v else "0"
                 else:
-                    self._literal[dst] = str(stmt.value.value)
+                    self._literal[dst] = repr(v) if isinstance(v, float) else str(v)
+                self._const_env[dst] = v
                 return
             self._emit_scalar_assign(dst, stmt.value)
             return
 
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
             self._emit_instr_stmt(stmt.value)
+            return
+
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+            # Ignore docstrings / bare string expression statements inside kernels.
+            # This keeps the frontend friendlier to normal Python style.
             return
 
         if isinstance(stmt, ast.For):
@@ -408,12 +831,29 @@ class _Compiler:
         for s in stmts:
             self._emit_stmt(s)
 
-    def compile_funcdef(self, fn: ast.FunctionDef) -> str:
+    def _tensor_arg_list(self) -> list[TensorArg]:
+        args: list[TensorArg] = []
+        for idx in sorted(self._tensor_args):
+            name = self._tensor_arg_names.get(idx, f"arg{idx}")
+            args.append(TensorArg(name=name, arg_index=idx, ty=self._tensor_args[idx], role=self._tensor_arg_roles.get(idx)))
+        return args
+
+    def compile_funcdef(self, fn: ast.FunctionDef) -> KernelSpec:
         self._emit_stmts(fn.body)
-        return self._t.emit()
+        name = self._explicit_kernel_name or fn.name
+        return KernelSpec(name=name, pto=self._t.emit(), tensor_args=tuple(self._tensor_arg_list()))
 
 
-def compile_kernel_from_source(source: str, *, func_name: str) -> str:
+def list_kernel_functions(source: str) -> list[str]:
+    module = ast.parse(textwrap.dedent(source))
+    return [n.name for n in module.body if isinstance(n, ast.FunctionDef)]
+
+
+def list_kernel_functions_from_file(path: Path) -> list[str]:
+    return list_kernel_functions(path.read_text(encoding="utf-8"))
+
+
+def compile_kernel_spec_from_source(source: str, *, func_name: str) -> KernelSpec:
     m = ast.parse(textwrap.dedent(source))
     fns = [n for n in m.body if isinstance(n, ast.FunctionDef) and n.name == func_name]
     if not fns:
@@ -421,6 +861,14 @@ def compile_kernel_from_source(source: str, *, func_name: str) -> str:
     if len(fns) != 1:
         raise FrontendError(f"ambiguous function: {func_name}")
     return _Compiler().compile_funcdef(fns[0])
+
+
+def compile_kernel_spec_from_file(path: Path, *, func_name: str) -> KernelSpec:
+    return compile_kernel_spec_from_source(path.read_text(encoding="utf-8"), func_name=func_name)
+
+
+def compile_kernel_from_source(source: str, *, func_name: str) -> str:
+    return compile_kernel_spec_from_source(source, func_name=func_name).pto
 
 
 def compile_kernel(func: Callable[..., Any]) -> str:

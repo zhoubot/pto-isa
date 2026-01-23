@@ -10,6 +10,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 
 #include <cctype>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -90,6 +91,45 @@ static std::vector<std::string> splitTopLevelCommas(const std::string &s) {
   }
   flush();
   return out;
+}
+
+static std::optional<size_t> findTopLevelChar(const std::string &s, char needle) {
+  int depthParen = 0, depthBrack = 0, depthAngle = 0, depthBrace = 0;
+  for (size_t i = 0; i < s.size(); ++i) {
+    char ch = s[i];
+    switch (ch) {
+    case '(':
+      depthParen++;
+      break;
+    case ')':
+      depthParen = std::max(0, depthParen - 1);
+      break;
+    case '[':
+      depthBrack++;
+      break;
+    case ']':
+      depthBrack = std::max(0, depthBrack - 1);
+      break;
+    case '<':
+      depthAngle++;
+      break;
+    case '>':
+      depthAngle = std::max(0, depthAngle - 1);
+      break;
+    case '{':
+      depthBrace++;
+      break;
+    case '}':
+      depthBrace = std::max(0, depthBrace - 1);
+      break;
+    default:
+      break;
+    }
+
+    if (ch == needle && depthParen == 0 && depthBrack == 0 && depthAngle == 0 && depthBrace == 0)
+      return i;
+  }
+  return std::nullopt;
 }
 
 static std::pair<std::string, std::string> splitOnceOrDie(const std::string &s, char sep, const char *msg) {
@@ -307,8 +347,9 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
     // Also used for declaration-like helpers:
     //   %t0 = pto.alloc_tile %addr : !pto.tile<...>
     //   %x  = pto.make_tensor_view %arg0, ... : !pto.tensor<...>
-    auto eqPos = line.find('=');
-    if (eqPos != std::string::npos) {
+    auto eqPosOpt = findTopLevelChar(line, '=');
+    if (eqPosOpt.has_value()) {
+      auto eqPos = *eqPosOpt;
       auto lhs = trim(line.substr(0, eqPos));
       auto rhs = trim(line.substr(eqPos + 1));
       if (lhs.empty() || rhs.empty())

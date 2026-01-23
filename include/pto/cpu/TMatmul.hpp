@@ -56,11 +56,10 @@ namespace pto {
             (TileLeft::Rows == TileAcc::Rows) && (TileLeft::Cols == TileRight::Rows) && (TileRight::Cols == TileAcc::Cols),
             "Inconsistent number of m, k, n");
         static_assert(
-            ((TileLeft::Loc == TileType::Left) && (!TileLeft::isRowMajor) && (TileLeft::SFractal == SLayout::RowMajor)) &&
-                ((TileRight::Loc == TileType::Right) && (TileRight::isRowMajor) &&
-                    (TileRight::SFractal == SLayout::ColMajor)) &&
-                ((TileAcc::Loc == TileType::Acc) && (!TileAcc::isRowMajor) && (TileAcc::SFractal == SLayout::RowMajor)),
-            "Non-conforming matrix fractal");
+            (TileLeft::Loc == TileType::Left) && (TileRight::Loc == TileType::Right) && (TileAcc::Loc == TileType::Acc),
+            "Non-conforming matrix loc");
+        // CPU reference implements TMATMUL via element-wise offsets, so we intentionally accept
+        // a broader set of tile layouts than the strict NPU hardware constraints.
     }
 
     template <typename TileAcc, typename TileBias>

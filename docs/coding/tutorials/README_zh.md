@@ -8,3 +8,4 @@
 - 向量加法（分块、边界 mask）：（TODO）
 - 行 softmax 模式（attention 的基础组件）：（TODO）
 - GEMM 模式与常见 tile 布局：（TODO）
+- GEMM256 编译全流程（Python → PTO-AS → C++/CCE → NPU）：`docs/coding/tutorials/gemm256-compilation_zh.md`

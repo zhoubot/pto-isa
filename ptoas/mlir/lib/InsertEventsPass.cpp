@@ -88,9 +88,6 @@ static llvm::StringRef pipeForOpEnum(llvm::StringRef opEnum) {
     return "MTE3";
   if (opEnum == "TSTORE_ACC")
     return "FIX";
-  if (opEnum == "TADD" || opEnum == "TMUL" || opEnum == "TSUB" || opEnum == "TCVT" || opEnum == "TMRGSORT" ||
-      opEnum == "TSORT32")
-    return "V";
   if (opEnum == "TMATMUL")
     return "M";
   if (opEnum == "TMOV_V2V")
@@ -101,11 +98,24 @@ static llvm::StringRef pipeForOpEnum(llvm::StringRef opEnum) {
     return "MTE1";
   if (opEnum == "TMOV_M2S")
     return "FIX";
+  if (opEnum == "TCI")
+    return "S";
+  // Default: most remaining PTO ops are vector pipe on A2/A3 (see `include/pto/npu/a2a3/TSync.hpp`).
+  if (opEnum.starts_with("T"))
+    return "V";
   return "";
 }
 
-static llvm::StringRef opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
-                                      const std::map<std::string, std::string> &argTypes) {
+static std::string uppercaseOpEnum(llvm::StringRef opcode) {
+  std::string out;
+  out.reserve(opcode.size());
+  for (char ch : opcode)
+    out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+  return out;
+}
+
+static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
+                                  const std::map<std::string, std::string> &argTypes) {
   // Minimal mapping for the prototype. Must return an enum value from `pto::Op`.
   if (opcode == "tload")
     return "TLOAD";
@@ -126,19 +136,9 @@ static llvm::StringRef opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *o
     return "TSTORE_VEC";
   }
 
-  if (opcode == "tadd")
-    return "TADD";
-  if (opcode == "tmul")
-    return "TMUL";
-  if (opcode == "tsub")
-    return "TSUB";
-  if (opcode == "tcvt")
-    return "TCVT";
-  if (opcode == "tmrgsort")
-    return "TMRGSORT";
-  if (opcode == "tsort32")
-    return "TSORT32";
   if (opcode == "tmatmul")
+    return "TMATMUL";
+  if (opcode == "tmatmul_acc")
     return "TMATMUL";
 
   if (opcode == "tmov") {
@@ -173,6 +173,11 @@ static llvm::StringRef opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *o
     return "";
   }
 
+  // Default: PTO ISA op enums are typically just uppercase of the mnemonic.
+  // This allows `--insert-events` to cover more vector ops (TMULS/TEXP/TROWMAX/...).
+  if (opcode.starts_with("t"))
+    return uppercaseOpEnum(opcode);
+
   return "";
 }
 
@@ -180,6 +185,14 @@ struct DefInfo {
   mlir::Operation *op = nullptr;
   std::string opEnum;
   std::string pipe;
+};
+
+struct TileSyncState {
+  DefInfo def;
+  // Consumer pipes that have already waited for `def` in the current static scope.
+  // This avoids generating multiple `wait_flag` for the same `(set_flag, token)` which
+  // can deadlock on hardware that treats `wait_flag` as consuming a token.
+  std::set<std::string> waitedPipes;
 };
 
 static bool opcodeDefinesTile(llvm::StringRef opcode) {
@@ -224,6 +237,15 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
   }
 
   return {};
+}
+
+static void insertEventOp(mlir::OpBuilder &b, mlir::Location loc, llvm::StringRef kind, llvm::StringRef srcOp,
+                          llvm::StringRef dstOp, llvm::StringRef token) {
+  mlir::OperationState st(loc, ("pto." + kind).str());
+  st.addAttribute("src_op", b.getStringAttr(srcOp));
+  st.addAttribute("dst_op", b.getStringAttr(dstOp));
+  st.addAttribute("token", b.getStringAttr(token));
+  b.create(st);
 }
 
 static bool hasEquivalentRecordEventAfter(mlir::Operation *producer, llvm::StringRef srcOp, llvm::StringRef dstOp,
@@ -286,25 +308,155 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     });
 
     mlir::OpBuilder b(module.getContext());
-    int nextToken = 0;
-    auto allocToken = [&]() -> std::string {
-      // Hardware typically caps event id count; keep tokens in [0,7] for the prototype.
-      int tok = nextToken++ % 8;
-      return std::to_string(tok);
+
+    // Token allocator:
+    // - Tokens are only 0..7 per (srcPipe,dstPipe) channel.
+    // - We keep a stable mapping per (src_op, dst_op, key) to avoid reuse hazards within the same channel.
+    // - If a channel needs >8 distinct keys, we fall back to a hashed slot (still bounded).
+    std::map<std::tuple<std::string, std::string, std::string>, std::string> tokenByEdgeKey;
+    std::map<std::pair<std::string, std::string>, int> nextTokenByEdge;
+    auto allocTokenFor = [&](llvm::StringRef srcOp, llvm::StringRef dstOp, llvm::StringRef key) -> std::string {
+      auto k = std::make_tuple(srcOp.str(), dstOp.str(), key.str());
+      auto it = tokenByEdgeKey.find(k);
+      if (it != tokenByEdgeKey.end())
+        return it->second;
+
+      auto ch = std::make_pair(srcOp.str(), dstOp.str());
+      int next = nextTokenByEdge[ch];
+      if (next < 8) {
+        nextTokenByEdge[ch] = next + 1;
+        return tokenByEdgeKey.emplace(k, std::to_string(next)).first->second;
+      }
+
+      // Fallback: keep within [0,7] but avoid crashing. This may reduce overlap.
+      uint32_t h = 2166136261u;
+      for (char c : key.str()) {
+        h ^= static_cast<uint8_t>(c);
+        h *= 16777619u;
+      }
+      return tokenByEdgeKey.emplace(k, std::to_string(h % 8)).first->second;
     };
 
-    // Dedup tokens per semantic edge from a specific producer: (producer op, src_op, dst_op) -> token.
-    std::map<std::tuple<mlir::Operation *, std::string, std::string>, std::string> edgeToken;
-
-    auto processBlock = [&](mlir::Block &block, auto &&self) -> void {
-      std::map<std::string, DefInfo> lastDef;
-
+    auto processBlock = [&](mlir::Block &block, std::map<std::string, TileSyncState> &tileState, auto &&self) -> void {
       for (auto it = block.begin(); it != block.end(); ++it) {
         auto *consumer = &*it;
-        if (consumer->getName().getStringRef() == "scf.for" || consumer->getName().getStringRef() == "scf.if") {
+        auto opname = consumer->getName().getStringRef();
+        if (opname == "scf.for") {
+          // Loop-carried reuse hazards:
+          // - Many real kernels reuse the same tile storage across loop iterations.
+          // - Since `set_flag` is pipe-scoped (not object-scoped), we insert a conservative
+          //   per-iteration handshake to prevent overwriting tiles that may still be in-flight.
+          //
+          // This implements the spec's "Reverse dependency must be explicit" rule (WAR/WAW hazards)
+          // in a conservative way for common pipelines:
+          //   - M -> MTE1 (protect Left/Right reuse across TMATMUL)
+          //   - MTE1 -> MTE2 (protect Mat/L1 reuse across TMOV)
+          //
+          // Pattern: prime in preheader, then {wait at loop start; record at loop end} each iter.
+          bool hasM = false;
+          bool hasMte1 = false;
+          bool hasMte2 = false;
+          for (auto &r : consumer->getRegions()) {
+            if (r.empty())
+              continue;
+            r.walk([&](mlir::Operation *op) {
+              if (!isPtoInstrOp(op))
+                return;
+              auto opcode = stripDialect(op->getName().getStringRef());
+              auto opEnum = opcodeToOpEnum(opcode, op, argTypes);
+              if (opEnum.empty())
+                return;
+              auto pipe = pipeForOpEnum(opEnum);
+              if (pipe == "M")
+                hasM = true;
+              else if (pipe == "MTE1")
+                hasMte1 = true;
+              else if (pipe == "MTE2")
+                hasMte2 = true;
+            });
+          }
+
+          // Insert priming events in the preheader (before the scf.for op).
+          b.setInsertionPoint(consumer);
+          if (hasM && hasMte1) {
+            auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", "loop_m_to_mte1");
+            insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
+          }
+          if (hasMte1 && hasMte2) {
+            auto tok = allocTokenFor("TMOV_M2L", "TLOAD", "loop_mte1_to_mte2");
+            insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TLOAD", tok);
+          }
+
+          // Insert per-iteration waits/records inside the loop body (front block).
+          for (auto &r : consumer->getRegions()) {
+            if (r.empty())
+              continue;
+            auto &body = r.front();
+            auto *term = body.getTerminator();
+
+            if (hasM && hasMte1) {
+              auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", "loop_m_to_mte1");
+              b.setInsertionPointToStart(&body);
+              insertEventOp(b, consumer->getLoc(), "wait_event", "TMATMUL", "TMOV_M2L", tok);
+              b.setInsertionPoint(term);
+              insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
+            }
+            if (hasMte1 && hasMte2) {
+              auto tok = allocTokenFor("TMOV_M2L", "TLOAD", "loop_mte1_to_mte2");
+              b.setInsertionPointToStart(&body);
+              insertEventOp(b, consumer->getLoc(), "wait_event", "TMOV_M2L", "TLOAD", tok);
+              b.setInsertionPoint(term);
+              insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TLOAD", tok);
+            }
+          }
+
+          // Process the loop region with a snapshot of the current tile state, then conservatively
+          // merge by invalidating tile defs (loop may execute 0 times).
           for (auto &r : consumer->getRegions())
-            if (!r.empty())
-              self(r.front(), self);
+            if (!r.empty()) {
+              auto inner = tileState;
+              self(r.front(), inner, self);
+            }
+          continue;
+        }
+        if (opname == "scf.if") {
+          // Process then/else with independent states; merge conservatively.
+          std::map<std::string, TileSyncState> thenState = tileState;
+          std::map<std::string, TileSyncState> elseState = tileState;
+          if (consumer->getNumRegions() >= 1 && !consumer->getRegion(0).empty())
+            self(consumer->getRegion(0).front(), thenState, self);
+          if (consumer->getNumRegions() >= 2 && !consumer->getRegion(1).empty())
+            self(consumer->getRegion(1).front(), elseState, self);
+
+          std::set<std::string> keys;
+          for (auto &kv : thenState)
+            keys.insert(kv.first);
+          for (auto &kv : elseState)
+            keys.insert(kv.first);
+
+          std::map<std::string, TileSyncState> merged = tileState;
+          for (auto &k : keys) {
+            auto itT = thenState.find(k);
+            auto itE = elseState.find(k);
+            if (itT == thenState.end() || itE == elseState.end()) {
+              // Defined/updated in only one branch: invalidate to avoid generating unmatched waits.
+              merged.erase(k);
+              continue;
+            }
+            auto &t = itT->second;
+            auto &e = itE->second;
+            if (t.def.opEnum == e.def.opEnum && t.def.pipe == e.def.pipe && !t.def.opEnum.empty() && !t.def.pipe.empty()) {
+              TileSyncState out;
+              // Anchor to the scf.if op itself so the record_event is unconditional.
+              out.def = DefInfo{consumer, t.def.opEnum, t.def.pipe};
+              out.waitedPipes.clear();
+              out.waitedPipes.insert(out.def.pipe);
+              merged[k] = std::move(out);
+              continue;
+            }
+            merged.erase(k);
+          }
+          tileState = std::move(merged);
           continue;
         }
 
@@ -319,45 +471,38 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         if (consPipe.empty())
           continue;
 
-        // Insert waits for cross-pipe tile dependencies.
+        // Insert waits for cross-pipe RAW tile dependencies (producer -> consumer).
+        // This is conservative and pipe-scoped per the hardware contract: `set_flag` releases all
+        // prior ops on srcPipe, so we must avoid inserting multiple `wait_flag` on the same token.
         for (auto &useSym : opcodeTileUses(consOpcode, consumer, argTypes)) {
           auto use = stripIndexing(trim(useSym));
-          auto defIt = lastDef.find(use);
-          if (defIt == lastDef.end())
+          auto defIt = tileState.find(use);
+          if (defIt == tileState.end())
             continue;
-          auto &def = defIt->second;
+          auto &defState = defIt->second;
+          auto &def = defState.def;
           if (!def.op || def.pipe.empty() || def.opEnum.empty())
             continue;
           if (def.pipe == consPipe)
             continue;
 
-          // Dedup at the semantic edge level (SrcOp,DstOp) and keep token count bounded.
-          // Key: (producer op ptr, src_op, dst_op).
-          auto key = std::make_tuple(def.op, def.opEnum, consEnum.str());
-          auto itTok = edgeToken.find(key);
-          if (itTok == edgeToken.end())
-            itTok = edgeToken.emplace(key, allocToken()).first;
-          auto token = itTok->second;
+          // Only wait once per (tile, consumer pipe) for the current definition site.
+          if (defState.waitedPipes.count(consPipe.str()))
+            continue;
+          auto token = allocTokenFor(def.opEnum, consEnum, use);
 
           // Ensure record_event exists on the producer path.
           if (!hasEquivalentRecordEventAfter(def.op, def.opEnum, consEnum, token)) {
             b.setInsertionPointAfter(def.op);
-            mlir::OperationState st(def.op->getLoc(), "pto.record_event");
-            st.addAttribute("src_op", b.getStringAttr(def.opEnum));
-            st.addAttribute("dst_op", b.getStringAttr(consEnum));
-            st.addAttribute("token", b.getStringAttr(token));
-            b.create(st);
+            insertEventOp(b, def.op->getLoc(), "record_event", def.opEnum, consEnum, token);
           }
 
           // Ensure wait_event exists before consumer.
           if (!hasEquivalentWaitEventBefore(consumer, def.opEnum, consEnum, token)) {
             b.setInsertionPoint(consumer);
-            mlir::OperationState st(consumer->getLoc(), "pto.wait_event");
-            st.addAttribute("src_op", b.getStringAttr(def.opEnum));
-            st.addAttribute("dst_op", b.getStringAttr(consEnum));
-            st.addAttribute("token", b.getStringAttr(token));
-            b.create(st);
+            insertEventOp(b, consumer->getLoc(), "wait_event", def.opEnum, consEnum, token);
           }
+          defState.waitedPipes.insert(consPipe.str());
         }
 
         // Update last-def for tile results.
@@ -365,13 +510,17 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           auto operands = readOperands(consumer);
           if (!operands.empty()) {
             auto dst = stripIndexing(trim(operands[0]));
-            lastDef[dst] = DefInfo{consumer, consEnum.str(), consPipe.str()};
+            TileSyncState st;
+            st.def = DefInfo{consumer, consEnum, consPipe.str()};
+            st.waitedPipes.insert(consPipe.str());
+            tileState[dst] = std::move(st);
           }
         }
       }
     };
 
-    processBlock(*module.getBody(), processBlock);
+    std::map<std::string, TileSyncState> tileState;
+    processBlock(*module.getBody(), tileState, processBlock);
   }
 
   llvm::StringRef getArgument() const final { return "ptoas-insert-events"; }

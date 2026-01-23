@@ -84,15 +84,11 @@ int main(int argc, char **argv) {
   if (repoRoot.empty())
     repoRoot = ".";
 
-  // (NOTE) kernelName is currently a placeholder for future integration; the emitter
-  // uses a fixed function name today.
-  (void)kernelName;
-
   std::string outText;
   if (target == "cpu") {
     outText = ptoas::emitCpuCppFromModule(module, repoRoot);
   } else if (target == "npu") {
-    outText = ptoas::emitCceFromModule(module, repoRoot, memoryModel);
+    outText = ptoas::emitCceFromModule(module, repoRoot, memoryModel, kernelName);
   } else {
     llvm::errs() << "unknown --target: " << target << " (expected: npu|cpu)\n";
     return 1;

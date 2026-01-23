@@ -425,7 +425,8 @@ static std::string indentExtra(const std::string &s, const std::string &extra) {
 
 } // namespace
 
-std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot, const std::string &memoryModel) {
+std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot, const std::string &memoryModel,
+                              const std::string &kernelName) {
   std::vector<ArgInfo> args;
   std::vector<ConstInfo> consts;
   std::vector<MakeTensorViewInfo> makeViews;
@@ -540,7 +541,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   os << "using namespace pto;\n\n";
 
   // Kernel signature: tensors only.
-  os << "extern \"C\" __global__ AICORE void pto_kernel(";
+  os << "extern \"C\" __global__ AICORE void " << kernelName << "(";
   for (size_t i = 0; i < tensorArgs.size(); ++i) {
     if (i)
       os << ", ";
@@ -621,6 +622,40 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   // Local tensor variables introduced by meta ops (e.g. `pto.subview`).
   std::map<std::string, std::string> localTensorVars; // "%view" -> "g_view"
 
+  struct TileDims {
+    std::string rows;
+    std::string cols;
+  };
+  struct TensorInfo {
+    std::string elemCpp;
+    std::string strideTypeName;
+    std::string layoutCpp;
+  };
+
+  // Resolved symbol -> tile shape (rows/cols).
+  std::map<std::string, TileDims> tileDimsByResolvedName;
+  for (auto &tl : tileLocals) {
+    auto baseName = tl.a.name.substr(1);
+    auto rows = tl.kv.at("rows");
+    auto cols = tl.kv.at("cols");
+    if (!rows.empty() && rows[0] == '%')
+      rows = constMap.at(rows);
+    if (!cols.empty() && cols[0] == '%')
+      cols = constMap.at(cols);
+    tileDimsByResolvedName["t_" + baseName] = {intOrDynamic(rows), intOrDynamic(cols)};
+  }
+
+  // Resolved symbol -> tensor ABI info (elem/stride/layout).
+  std::map<std::string, TensorInfo> tensorInfoByResolvedName;
+  for (auto &ta : tensorArgs) {
+    auto &kv = ta.kv;
+    auto dtype = kv.at("dtype");
+    auto elemCpp = elemToCpp(dtype);
+    auto layout = kv.count("layout") ? kv.at("layout") : "ND";
+    auto baseName = ta.a.name.substr(1);
+    tensorInfoByResolvedName["g_" + baseName] = {elemCpp, baseName + "_Stride", cppLayout(layout)};
+  }
+
   auto resolve = [&](const std::string &v) -> std::string {
     auto t = trim(v);
     if (!t.empty() && t[0] == '%') {
@@ -656,6 +691,8 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     auto viewKey = sv.viewName.substr(1);
     auto viewVar = "g_" + viewKey;
     localTensorVars[sv.viewName] = viewVar;
+    if (auto it = tensorInfoByResolvedName.find(baseVar); it != tensorInfoByResolvedName.end())
+      tensorInfoByResolvedName[viewVar] = it->second;
 
     std::ostringstream ss;
     ss << "  auto* " << viewVar << "_base = " << baseVar << ".data();\n";
@@ -729,6 +766,26 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       return "  auto " + dst + " = (" + resolve(operands[1]) + ") * (" + resolve(operands[2]) + ");\n";
     }
 
+    if (opcode == "idiv") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("idiv expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      return "  auto " + dst + " = (" + resolve(operands[1]) + ") / (" + resolve(operands[2]) + ");\n";
+    }
+
+    if (opcode == "irem") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("irem expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      return "  auto " + dst + " = (" + resolve(operands[1]) + ") % (" + resolve(operands[2]) + ");\n";
+    }
+
     auto emitIcmp = [&](const char *expect, const char *cxxOp) -> std::optional<std::string> {
       if (opcode != expect)
         return std::nullopt;
@@ -785,6 +842,14 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       return "  TMATMUL(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " + resolve(operands[2]) + ");\n";
     }
 
+    if (opcode == "tmatmul_acc") {
+      auto operands = readOperands(op);
+      if (operands.size() != 4)
+        llvm::report_fatal_error("tmatmul_acc expects 4 operands");
+      return "  TMATMUL_ACC(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " + resolve(operands[2]) +
+             ", " + resolve(operands[3]) + ");\n";
+    }
+
     if (opcode == "tload") {
       auto operands = readOperands(op);
       if (operands.size() != 2)
@@ -796,11 +861,29 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         return "  TLOAD(" + dst + ", " + src + ");\n";
       auto r0 = resolve(idx->first);
       auto c0 = resolve(idx->second);
-      if ((r0 == "0" || r0 == "c_r0") && (c0 == "0" || c0 == "c_c0"))
-        return "  TLOAD(" + dst + ", " + src + ");\n";
+
+      auto ti = tensorInfoByResolvedName.find(src);
+      auto td = tileDimsByResolvedName.find(dst);
+      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+        std::ostringstream ss;
+        ss << "  // NOTE: tload with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  {\n";
+        ss << "    auto* " << src << "_ptr = " << src << ".data();\n";
+        ss << "    auto " << src << "_off = (" << r0 << ") * " << src
+           << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
+           << ".GetStride(GlobalTensorDim::DIM_4);\n";
+        ss << "    using TloadShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TloadTensor = GlobalTensor<" << ti->second.elemCpp << ", TloadShape, "
+           << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
+        ss << "    TloadTensor " << src << "_view(" << src << "_ptr);\n";
+        ss << "    TASSIGN(" << src << "_view, " << src << "_ptr + " << src << "_off);\n";
+        ss << "    TLOAD(" << dst << ", " << src << "_view);\n";
+        ss << "  }\n";
+        return ss.str();
+      }
 
       std::ostringstream ss;
-      ss << "  // NOTE: tload with non-zero indices is lowered via pointer bump (prototype).\n";
+      ss << "  // NOTE: tload with indices is lowered via pointer bump (prototype).\n";
       ss << "  auto* " << src << "_ptr = " << src << ".data();\n";
       ss << "  decltype(" << src << ") " << src << "_view(" << src << "_ptr);\n";
       ss << "  auto " << src << "_off = (" << r0 << ") * " << src
@@ -822,11 +905,29 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         return "  TSTORE(" + dst + ", " + src + ");\n";
       auto r0 = resolve(idx->first);
       auto c0 = resolve(idx->second);
-      if ((r0 == "0" || r0 == "c_r0") && (c0 == "0" || c0 == "c_c0"))
-        return "  TSTORE(" + dst + ", " + src + ");\n";
+
+      auto ti = tensorInfoByResolvedName.find(dst);
+      auto td = tileDimsByResolvedName.find(src);
+      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+        std::ostringstream ss;
+        ss << "  // NOTE: tstore with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  {\n";
+        ss << "    auto* " << dst << "_ptr = " << dst << ".data();\n";
+        ss << "    auto " << dst << "_off = (" << r0 << ") * " << dst
+           << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
+           << ".GetStride(GlobalTensorDim::DIM_4);\n";
+        ss << "    using TstoreShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TstoreTensor = GlobalTensor<" << ti->second.elemCpp << ", TstoreShape, "
+           << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
+        ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr);\n";
+        ss << "    TASSIGN(" << dst << "_view, " << dst << "_ptr + " << dst << "_off);\n";
+        ss << "    TSTORE(" << dst << "_view, " << src << ");\n";
+        ss << "  }\n";
+        return ss.str();
+      }
 
       std::ostringstream ss;
-      ss << "  // NOTE: tstore with non-zero indices is lowered via pointer bump (prototype).\n";
+      ss << "  // NOTE: tstore with indices is lowered via pointer bump (prototype).\n";
       ss << "  auto* " << dst << "_ptr = " << dst << ".data();\n";
       ss << "  decltype(" << dst << ") " << dst << "_view(" << dst << "_ptr);\n";
       ss << "  auto " << dst << "_off = (" << r0 << ") * " << dst
@@ -845,9 +946,6 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         return "MTE3";
       if (opEnum == "TSTORE_ACC")
         return "FIX";
-      if (opEnum == "TADD" || opEnum == "TMUL" || opEnum == "TSUB" || opEnum == "TCVT" || opEnum == "TMRGSORT" ||
-          opEnum == "TSORT32")
-        return "V";
       if (opEnum == "TMATMUL")
         return "M";
       if (opEnum == "TMOV_V2V")
@@ -858,12 +956,19 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         return "MTE1";
       if (opEnum == "TMOV_M2S")
         return "FIX";
+      if (opEnum == "TCI")
+        return "S";
+      // Default: most remaining PTO ops are vector pipe on A2/A3 (see `include/pto/npu/a2a3/TSync.hpp`).
+      if (opEnum.starts_with("T"))
+        return "V";
       return "";
     };
 
     auto pipeConstForPipeName = [&](llvm::StringRef pipeName) -> std::string {
-      if (pipeName == "S" || pipeName == "FIX")
+      if (pipeName == "S")
         return "PIPE_S";
+      if (pipeName == "FIX")
+        return "PIPE_FIX";
       if (pipeName == "V")
         return "PIPE_V";
       if (pipeName == "MTE1")
@@ -945,7 +1050,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto tokResolved = resolve(tok);
       std::ostringstream ss;
       ss << "  " << ((kind == "record_event") ? "set_flag" : "wait_flag") << "(" << srcPipeConst << ", "
-         << dstPipeConst << ", " << tokResolved << ");\n";
+         << dstPipeConst << ", static_cast<event_t>(" << tokResolved << "));\n";
       return ss.str();
     };
 
@@ -954,7 +1059,27 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     if (auto s = emitRecordOrWait("wait_event"))
       return *s;
 
-    llvm::report_fatal_error(llvm::Twine("Unsupported opcode for CCE emission: ") + opcode);
+    // Generic fallback: most PTO ISA ops have a corresponding C++ macro of the same name in uppercase.
+    // Examples:
+    //   trowmax -> TROWMAX
+    //   tmuls   -> TMULS
+    // This keeps the assembler toolchain usable while opcode-specific lowering evolves.
+    auto operands = readOperands(op);
+    if (operands.empty())
+      return "  // " + opcode + "\n";
+    std::string macro;
+    macro.reserve(opcode.size());
+    for (char ch : opcode)
+      macro.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    std::ostringstream ss;
+    ss << "  " << macro << "(";
+    for (size_t i = 0; i < operands.size(); ++i) {
+      if (i)
+        ss << ", ";
+      ss << resolve(operands[i]);
+    }
+    ss << ");\n";
+    return ss.str();
   };
 
   auto emitBlock = [&](mlir::Block &block, int depth, auto &&self) -> void {
@@ -1212,6 +1337,40 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
 
   std::map<std::string, std::string> localTensorVars; // "%view" -> "g_view"
 
+  struct TileDims {
+    std::string rows;
+    std::string cols;
+  };
+  struct TensorInfo {
+    std::string elemCpp;
+    std::string strideTypeName;
+    std::string layoutCpp;
+  };
+
+  // Resolved symbol -> tile shape (rows/cols).
+  std::map<std::string, TileDims> tileDimsByResolvedName;
+  for (auto &tl : tileLocals) {
+    auto baseName = tl.a.name.substr(1);
+    auto rows = tl.kv.at("rows");
+    auto cols = tl.kv.at("cols");
+    if (!rows.empty() && rows[0] == '%')
+      rows = constMap.at(rows);
+    if (!cols.empty() && cols[0] == '%')
+      cols = constMap.at(cols);
+    tileDimsByResolvedName["t_" + baseName] = {intOrDynamic(rows), intOrDynamic(cols)};
+  }
+
+  // Resolved symbol -> tensor ABI info (elem/stride/layout).
+  std::map<std::string, TensorInfo> tensorInfoByResolvedName;
+  for (auto &ta : tensorArgs) {
+    auto &kv = ta.kv;
+    auto dtype = kv.at("dtype");
+    auto elemCpp = elemToCpp(dtype);
+    auto layout = kv.count("layout") ? kv.at("layout") : "ND";
+    auto baseName = ta.a.name.substr(1);
+    tensorInfoByResolvedName["g_" + baseName] = {elemCpp, baseName + "_Stride", cppLayout(layout)};
+  }
+
   auto resolve = [&](const std::string &v) -> std::string {
     auto t = trim(v);
     if (!t.empty() && t[0] == '%') {
@@ -1245,6 +1404,8 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
     auto viewKey = sv.viewName.substr(1);
     auto viewVar = "g_" + viewKey;
     localTensorVars[sv.viewName] = viewVar;
+    if (auto it = tensorInfoByResolvedName.find(baseVar); it != tensorInfoByResolvedName.end())
+      tensorInfoByResolvedName[viewVar] = it->second;
 
     std::ostringstream ss;
     ss << "  auto* " << viewVar << "_base = " << baseVar << ".data();\n";
@@ -1314,6 +1475,26 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       return "  auto " + dst + " = (" + resolve(operands[1]) + ") * (" + resolve(operands[2]) + ");\n";
     }
 
+    if (opcode == "idiv") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("idiv expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      return "  auto " + dst + " = (" + resolve(operands[1]) + ") / (" + resolve(operands[2]) + ");\n";
+    }
+
+    if (opcode == "irem") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("irem expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      return "  auto " + dst + " = (" + resolve(operands[1]) + ") % (" + resolve(operands[2]) + ");\n";
+    }
+
     auto emitIcmp = [&](const char *expect, const char *cxxOp) -> std::optional<std::string> {
       if (opcode != expect)
         return std::nullopt;
@@ -1367,6 +1548,14 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       return "  TMATMUL(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " + resolve(operands[2]) + ");\n";
     }
 
+    if (opcode == "tmatmul_acc") {
+      auto operands = readOperands(op);
+      if (operands.size() != 4)
+        llvm::report_fatal_error("tmatmul_acc expects 4 operands");
+      return "  TMATMUL_ACC(" + resolve(operands[0]) + ", " + resolve(operands[1]) + ", " + resolve(operands[2]) +
+             ", " + resolve(operands[3]) + ");\n";
+    }
+
     if (opcode == "tload") {
       auto operands = readOperands(op);
       if (operands.size() != 2)
@@ -1378,11 +1567,29 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         return "  TLOAD(" + dst + ", " + src + ");\n";
       auto r0 = resolve(idx->first);
       auto c0 = resolve(idx->second);
-      if ((r0 == "0" || r0 == "c_r0") && (c0 == "0" || c0 == "c_c0"))
-        return "  TLOAD(" + dst + ", " + src + ");\n";
+
+      auto ti = tensorInfoByResolvedName.find(src);
+      auto td = tileDimsByResolvedName.find(dst);
+      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+        std::ostringstream ss;
+        ss << "  // NOTE: tload with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  {\n";
+        ss << "    auto* " << src << "_ptr = " << src << ".data();\n";
+        ss << "    auto " << src << "_off = (" << r0 << ") * " << src
+           << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
+           << ".GetStride(GlobalTensorDim::DIM_4);\n";
+        ss << "    using TloadShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TloadTensor = GlobalTensor<" << ti->second.elemCpp << ", TloadShape, "
+           << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
+        ss << "    TloadTensor " << src << "_view(" << src << "_ptr);\n";
+        ss << "    TASSIGN(" << src << "_view, " << src << "_ptr + " << src << "_off);\n";
+        ss << "    TLOAD(" << dst << ", " << src << "_view);\n";
+        ss << "  }\n";
+        return ss.str();
+      }
 
       std::ostringstream ss;
-      ss << "  // NOTE: tload with non-zero indices is lowered via pointer bump (prototype).\n";
+      ss << "  // NOTE: tload with indices is lowered via pointer bump (prototype).\n";
       ss << "  auto* " << src << "_ptr = " << src << ".data();\n";
       ss << "  decltype(" << src << ") " << src << "_view(" << src << "_ptr);\n";
       ss << "  auto " << src << "_off = (" << r0 << ") * " << src
@@ -1404,11 +1611,29 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         return "  TSTORE(" + dst + ", " + src + ");\n";
       auto r0 = resolve(idx->first);
       auto c0 = resolve(idx->second);
-      if ((r0 == "0" || r0 == "c_r0") && (c0 == "0" || c0 == "c_c0"))
-        return "  TSTORE(" + dst + ", " + src + ");\n";
+
+      auto ti = tensorInfoByResolvedName.find(dst);
+      auto td = tileDimsByResolvedName.find(src);
+      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+        std::ostringstream ss;
+        ss << "  // NOTE: tstore with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  {\n";
+        ss << "    auto* " << dst << "_ptr = " << dst << ".data();\n";
+        ss << "    auto " << dst << "_off = (" << r0 << ") * " << dst
+           << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
+           << ".GetStride(GlobalTensorDim::DIM_4);\n";
+        ss << "    using TstoreShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TstoreTensor = GlobalTensor<" << ti->second.elemCpp << ", TstoreShape, "
+           << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
+        ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr);\n";
+        ss << "    TASSIGN(" << dst << "_view, " << dst << "_ptr + " << dst << "_off);\n";
+        ss << "    TSTORE(" << dst << "_view, " << src << ");\n";
+        ss << "  }\n";
+        return ss.str();
+      }
 
       std::ostringstream ss;
-      ss << "  // NOTE: tstore with non-zero indices is lowered via pointer bump (prototype).\n";
+      ss << "  // NOTE: tstore with indices is lowered via pointer bump (prototype).\n";
       ss << "  auto* " << dst << "_ptr = " << dst << ".data();\n";
       ss << "  decltype(" << dst << ") " << dst << "_view(" << dst << "_ptr);\n";
       ss << "  auto " << dst << "_off = (" << r0 << ") * " << dst
@@ -1419,7 +1644,23 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       return ss.str();
     }
 
-    llvm::report_fatal_error(llvm::Twine("Unsupported opcode for CPU emission: ") + opcode);
+    // Generic fallback: most PTO ISA ops have a corresponding C++ macro of the same name in uppercase.
+    auto operands = readOperands(op);
+    if (operands.empty())
+      return "  // " + opcode + "\n";
+    std::string macro;
+    macro.reserve(opcode.size());
+    for (char ch : opcode)
+      macro.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    std::ostringstream ss;
+    ss << "  " << macro << "(";
+    for (size_t i = 0; i < operands.size(); ++i) {
+      if (i)
+        ss << ", ";
+      ss << resolve(operands[i]);
+    }
+    ss << ");\n";
+    return ss.str();
   };
 
   auto emitBlock = [&](mlir::Block &block, int depth, auto &&self) -> void {

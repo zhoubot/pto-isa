@@ -49,6 +49,8 @@ nav:
       - "Example: Vec Add": docs/coding/tutorials/vec-add.md
       - "Example: Row Softmax": docs/coding/tutorials/row-softmax.md
       - "Example: GEMM": docs/coding/tutorials/gemm.md
+      - "Example: GEMM256 Compilation": docs/coding/tutorials/gemm256-compilation.md
+      - "示例：GEMM256 编译流程（中文）": docs/coding/tutorials/gemm256-compilation_zh.md
       - Optimization: docs/coding/opt.md
       - Debugging: docs/coding/debug.md
   - ISA Reference:

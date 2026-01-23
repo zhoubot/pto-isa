@@ -95,6 +95,12 @@ static uint64_t tileBytesFromTypeOrDefault(llvm::StringRef typeStr) {
   return 512;
 }
 
+static std::string tileLocOrEmpty(llvm::StringRef typeStr) {
+  if (auto loc = findTypeKV(typeStr, "loc="))
+    return *loc;
+  return "";
+}
+
 struct AssignTileAddressesPass
     : public mlir::PassWrapper<AssignTileAddressesPass, mlir::OperationPass<mlir::ModuleOp>> {
   void runOnOperation() override {
@@ -132,8 +138,38 @@ struct AssignTileAddressesPass
       }
     });
 
-    // Compute starting address after any existing literal address assignments we can resolve.
-    uint64_t nextAddr = 0x10000;
+    auto isDedicatedLoc = [&](llvm::StringRef loc) -> bool {
+      // These tiles live in dedicated on-core buffers (L0A/L0B/L0C/...) with their own address spaces.
+      // We still need distinct offsets when multiple tiles share the same loc (e.g. ping-pong Left/Right tiles).
+      return loc == "Left" || loc == "Right" || loc == "Acc" || loc == "Bias" || loc == "ScaleLeft" ||
+             loc == "ScaleRight" || loc == "Scaling";
+    };
+
+    auto stepForLoc = [&](llvm::StringRef loc, llvm::StringRef typeStr) -> uint64_t {
+      // Empirically align with NPU ST patterns:
+      // - Vec tiles can be tightly packed (UB/Vec scratch); keep them 4KB-aligned
+      // - Mat tiles use 0x20000 spacing (L1 tiles for cube matmul)
+      if (loc == "Vec") {
+        auto bytes = tileBytesFromTypeOrDefault(typeStr);
+        return alignUp(bytes, 0x1000);
+      }
+      if (loc == "Mat")
+        return 0x20000;
+      // L0A/L0B/L0C ping-pong patterns commonly use 32 KiB slots. This is conservative and avoids overlap
+      // even when the tile's physical footprint is larger than `fractal`.
+      if (isDedicatedLoc(loc))
+        return 0x8000;
+      // Fallback: keep the old conservative scheme.
+      auto bytes = tileBytesFromTypeOrDefault(typeStr);
+      return alignUp(bytes, 0x1000);
+    };
+
+    // Track per-loc address ranges.
+    uint64_t nextVec = 0x0;
+    uint64_t nextMat = 0x0;
+    uint64_t nextOther = 0x10000;
+    std::map<std::string, uint64_t> nextDedicated;
+
     for (auto &[tileName, decl] : tiles) {
       if (!tilesWithAddr.count(tileName))
         continue;
@@ -143,19 +179,39 @@ struct AssignTileAddressesPass
       auto addrLit = parseIntLiteralOrZero(trim(operands[1]));
       if (addrLit == 0 && trim(operands[1]) != "0" && trim(operands[1]) != "0x0" && trim(operands[1]) != "0X0")
         continue;
-      auto bytes = tileBytesFromTypeOrDefault(decl.typeStr);
-      auto step = alignUp(bytes, 0x1000);
-      nextAddr = std::max(nextAddr, alignUp(addrLit + step, 0x1000));
+      auto loc = tileLocOrEmpty(decl.typeStr);
+      auto step = stepForLoc(loc, decl.typeStr);
+      if (loc == "Vec")
+        nextVec = std::max(nextVec, addrLit + step);
+      else if (loc == "Mat")
+        nextMat = std::max(nextMat, addrLit + step);
+      else if (isDedicatedLoc(loc))
+        nextDedicated[loc] = std::max(nextDedicated[loc], addrLit + step);
+      else
+        nextOther = std::max(nextOther, alignUp(addrLit + step, 0x1000));
     }
 
     // Assign missing addresses (by attaching a numeric literal to `pto.alloc_tile`).
     for (auto &[tileName, decl] : tiles) {
       if (tilesWithAddr.count(tileName))
         continue;
-      auto bytes = tileBytesFromTypeOrDefault(decl.typeStr);
-      auto step = alignUp(bytes, 0x1000);
-      auto addr = alignUp(nextAddr, 0x1000);
-      nextAddr = addr + step;
+      auto loc = tileLocOrEmpty(decl.typeStr);
+
+      uint64_t addr = 0;
+      if (loc == "Vec") {
+        addr = alignUp(nextVec, 0x1000);
+        nextVec = addr + stepForLoc(loc, decl.typeStr);
+      } else if (loc == "Mat") {
+        addr = alignUp(nextMat, 0x20000);
+        nextMat = addr + stepForLoc(loc, decl.typeStr);
+      } else if (isDedicatedLoc(loc)) {
+        addr = alignUp(nextDedicated[loc], 0x1000);
+        nextDedicated[loc] = addr + stepForLoc(loc, decl.typeStr);
+      } else {
+        auto step = stepForLoc(loc, decl.typeStr);
+        addr = alignUp(nextOther, 0x1000);
+        nextOther = addr + step;
+      }
 
       std::ostringstream ss;
       ss << "0x" << std::hex << addr;

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from ptoas.python.ast_frontend import compile_kernel_from_source
+from ptoas.python.ast_frontend import KernelSpec, compile_kernel_spec_from_source
 
 
-def make_fa16_pto(*, target: str) -> str:
+def make_fa16_kernel(*, target: str) -> KernelSpec:
     # This is a minimal "FA" placeholder kernel for validating the end-to-end Python->PTO-AS->CPU flow.
     # Signature (tensor args):
     #   arg0: q f16[16,16]
@@ -38,5 +38,8 @@ def fa16():
 """
     if target not in ("cpu", "npu"):
         raise ValueError("target must be cpu|npu")
-    return compile_kernel_from_source(src, func_name="fa16")
+    return compile_kernel_spec_from_source(src, func_name="fa16")
 
+
+def make_fa16_pto(*, target: str) -> str:
+    return make_fa16_kernel(target=target).pto

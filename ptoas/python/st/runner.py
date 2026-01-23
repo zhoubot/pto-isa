@@ -10,6 +10,7 @@ from typing import Callable, Literal
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from ptoas.python import ast_frontend, pipeline
+from ptoas.python.host_spec import prepend_host_spec_to_pto
 
 Target = Literal["cpu", "npu"]
 
@@ -19,47 +20,33 @@ class Case:
     name: str
     desc: str
     covers: tuple[str, ...]
-    make_pto: Callable[[Target], str]
-    run: Callable[[Target, Path, argparse.Namespace], None]
+    make_pto: Callable[[], str]
+    arch: str
 
 
 def _case_add16() -> Case:
-    def make_pto(target: Target) -> str:
+    def make_pto() -> str:
         return ast_frontend.make_add16_program()
-
-    def run(target: Target, so_or_unused: Path, args: argparse.Namespace) -> None:
-        if target == "cpu":
-            pipeline.run_add16_cpu_from_so(so_path=so_or_unused)
-        else:
-            pipeline.run_add16_from_so(so_path=so_or_unused, device_id=args.device, block_dim=args.block_dim)
 
     return Case(
         name="add16",
         desc="Vec add 16x16 (tload/tadd/tstore)",
         covers=("tassign", "tload", "tadd", "tstore"),
         make_pto=make_pto,
-        run=run,
+        arch="dav-c220-vec",
     )
 
 
 def _case_gemm16() -> Case:
-    def make_pto(target: Target) -> str:
-        if target == "cpu":
-            return ast_frontend.make_gemm16_cpu_program()
+    def make_pto() -> str:
         return ast_frontend.make_gemm16_program()
-
-    def run(target: Target, so_or_unused: Path, args: argparse.Namespace) -> None:
-        if target == "cpu":
-            pipeline.run_gemm16_cpu_from_so(so_path=so_or_unused)
-        else:
-            pipeline.run_gemm16_from_so(so_path=so_or_unused, device_id=args.device, block_dim=args.block_dim)
 
     return Case(
         name="gemm16",
         desc="Cube GEMM 16x16 (tmatmul)",
         covers=("tassign", "tload", "tmov", "tmatmul", "tstore"),
         make_pto=make_pto,
-        run=run,
+        arch="dav-c220-cube",
     )
 
 
@@ -78,27 +65,43 @@ def _compile_and_run_case(*, case: Case, target: Target, args: argparse.Namespac
         outdir = Path(args.outdir) if args.outdir else td
         outdir.mkdir(parents=True, exist_ok=True)
 
-        pto_path = outdir / f"{case.name}.{target}.pto"
-        pto_path.write_text(case.make_pto(target), encoding="utf-8")
+        pto_text = case.make_pto()
+        pto_text = prepend_host_spec_to_pto(pto=pto_text, spec=pipeline.parse_or_default_host_spec(pto_text=pto_text))
+        pto_path = outdir / f"{case.name}.pto"
+        pto_path.write_text(pto_text, encoding="utf-8")
+
+        host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
+        host_spec = type(host_spec)(
+            args=host_spec.args, seed=host_spec.seed, block_dim=args.block_dim, kernel_name=host_spec.kernel_name
+        )
+        base = pipeline.make_host_arrays(host_spec)
+
+        cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=outdir, ptoas=ptoas_bin)
+        cpu_so = outdir / f"lib{case.name}_cpu.so"
+        pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
+        cpu_out = pipeline.run_cpu_kernel_from_so(
+            so_path=cpu_so, host_spec=host_spec, host_arrays=[a.copy() for a in base]
+        )
 
         if target == "cpu":
-            cpp_path = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=outdir, ptoas=ptoas_bin)
-            so_path = outdir / f"lib{case.name}_cpu.so"
-            pipeline.build_cpu_so_from_cpp(cpp_path=cpp_path, out_so=so_path)
-            case.run(target, so_path, args)
             return
 
         cfg = pipeline.CompileConfig(
             ptoas=ptoas_bin,
             ascend_home=args.ascend_home,
-            arch=args.arch,
+            arch=case.arch,
             insert_events=args.insert_events,
             memory_model=args.memory_model,
         )
-        cce_path, _ = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=outdir, cfg=cfg)
-        so_path = outdir / f"lib{case.name}_npu.so"
-        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=so_path, arch=cfg.arch, ascend_home=cfg.ascend_home)
-        case.run(target, so_path, args)
+        cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=outdir, cfg=cfg)
+        npu_so = outdir / f"lib{case.name}_npu.so"
+        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
+        npu_out = pipeline.run_npu_kernel_from_so(
+            so_path=npu_so, host_spec=host_spec, host_arrays=[a.copy() for a in base], device_id=args.device, block_dim=args.block_dim
+        )
+        out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
+        pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
+        print(f"OK: {case.name} matched CPU reference (bin: {bin_path.name})")
 
 
 def main() -> int:
@@ -113,6 +116,8 @@ def main() -> int:
 
     # NPU options
     ap.add_argument("--ascend-home", type=Path, default=pipeline.default_ascend_home())
+    ap.add_argument("--run-mode", choices=["npu", "sim"], default="npu")
+    ap.add_argument("--soc", default="a3", help="Simulator SoC (a3|a5|Ascend910B1|...) when --run-mode=sim")
     ap.add_argument("--device", type=int, default=0)
     ap.add_argument("--block-dim", type=int, default=1)
     ap.add_argument("--arch", default="dav-c220-vec")
@@ -164,11 +169,12 @@ def main() -> int:
         if not args.ascend_home or not args.ascend_home.exists():
             print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
             return 2
+        if args.run_mode == "sim":
+            soc = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
+            pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
 
     case = CASES[args.case]
     for t in targets:
-        if t == "npu" and case.name == "gemm16":
-            args.arch = "dav-c220-cube"
         _compile_and_run_case(case=case, target=t, args=args)
 
     print(f"OK: {case.name} ({args.target})")

@@ -22,7 +22,7 @@ def main() -> int:
     args.outdir.mkdir(parents=True, exist_ok=True)
 
     add_pto = repo / "ptoas/examples/add16_e2e.pto"
-    gemm_pto = repo / "ptoas/examples/gemm16_cpu.pto"
+    gemm_pto = repo / "ptoas/examples/gemm16_e2e.pto"
 
     add_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=add_pto, outdir=args.outdir, ptoas=args.ptoas)
     add_so = args.outdir / "libadd16_cpu.so"

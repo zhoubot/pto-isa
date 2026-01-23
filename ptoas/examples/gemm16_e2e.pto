@@ -1,3 +1,37 @@
+; PTO_HOST_SPEC_BEGIN v1
+; {
+;   "args": [
+;     {
+;       "dtype": "f16",
+;       "role": "in",
+;       "shape": [
+;         16,
+;         16
+;       ]
+;     },
+;     {
+;       "dtype": "f16",
+;       "role": "in",
+;       "shape": [
+;         16,
+;         16
+;       ]
+;     },
+;     {
+;       "dtype": "f32",
+;       "role": "out",
+;       "shape": [
+;         16,
+;         16
+;       ]
+;     }
+;   ],
+;   "block_dim": 1,
+;   "kernel_name": "pto_kernel",
+;   "seed": 0
+; }
+; PTO_HOST_SPEC_END
+
 ; 16x16 GEMM end-to-end NPU demo for `ptoas` (cube core).
 ;
 ; C = A @ B
