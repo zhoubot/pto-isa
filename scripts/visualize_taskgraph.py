@@ -115,19 +115,17 @@ class TaskGraphParser:
         """Parse the verbose TASK TABLE format with sections."""
         # Parse task blocks that look like:
         # ----------------
-        # TASK N
+        # TASK N (slot M)
         # ----------------
         #   Function:     name
-        #   ...
-        #   without_reuse = X bytes
-        #   with_reuse    = Y bytes
         #   ...
         #   fanin = X
         #   ...
         #   fanout[] = [1, 2, 3]
         
-        # Find all TASK blocks
-        task_pattern = r'TASK\s+(\d+)\s*\n-+\n(.*?)(?=\n-+\nTASK|\n={10,}|$)'
+        # Find all TASK blocks - handles format with (slot N) after task ID
+        # Pattern: dashes, TASK N (slot M), dashes, content until next task or end
+        task_pattern = r'-{10,}\nTASK\s+(\d+)(?:\s*\(slot\s*\d+\))?\s*\n-{10,}\n(.*?)(?=-{10,}\nTASK|\n={10,}|$)'
         
         for match in re.finditer(task_pattern, content, re.DOTALL):
             task_id = int(match.group(1))

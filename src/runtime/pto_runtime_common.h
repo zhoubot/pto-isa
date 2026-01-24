@@ -547,9 +547,16 @@ void pto_register_incore_func(PTORuntime* rt, const char* func_name, PTOInCoreFu
 
 /**
  * Estimate cycle cost based on function name pattern.
- * Used when no explicit cycle_func is provided.
+ * Uses A2A3 Core Simulator when available (compile with -DA2A3_CORE_SIM_AVAILABLE
+ * and link with liba2a3_core.a), otherwise uses heuristic estimation.
  */
 int64_t pto_estimate_cycle_cost(const char* func_name);
+
+/**
+ * Cleanup the core simulator (called automatically by pto_runtime_shutdown).
+ * Safe to call multiple times.
+ */
+void pto_cleanup_core_sim(void);
 
 /**
  * Simulate all pending tasks with cycle-accurate timing.

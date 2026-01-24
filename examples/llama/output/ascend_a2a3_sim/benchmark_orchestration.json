@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-24T02:45:21.508212",
+  "timestamp": "2026-01-24T11:50:11.431464",
   "benchmark_type": "orchestration",
   "platform": "ascend_a2a3_sim",
   "seq_len_range": {
@@ -13,166 +13,166 @@
       "seq_len": 1024,
       "num_tiles": 32,
       "tasks_submitted": 3584,
-      "avg_time_ms": 0.774,
-      "min_time_ms": 0.774,
-      "max_time_ms": 0.774,
-      "tasks_per_ms": 4630.49,
-      "tasks_per_sec": 4630490.0
+      "avg_time_ms": 0.624,
+      "min_time_ms": 0.624,
+      "max_time_ms": 0.624,
+      "tasks_per_ms": 5743.59,
+      "tasks_per_sec": 5743590.0
     },
     {
       "seq_len": 2048,
       "num_tiles": 64,
       "tasks_submitted": 13312,
-      "avg_time_ms": 2.214,
-      "min_time_ms": 2.214,
-      "max_time_ms": 2.214,
-      "tasks_per_ms": 6012.65,
-      "tasks_per_sec": 6012650.0
+      "avg_time_ms": 1.664,
+      "min_time_ms": 1.664,
+      "max_time_ms": 1.664,
+      "tasks_per_ms": 8000.0,
+      "tasks_per_sec": 8000000.0
     },
     {
       "seq_len": 3072,
       "num_tiles": 96,
       "tasks_submitted": 29184,
-      "avg_time_ms": 3.52,
-      "min_time_ms": 3.52,
-      "max_time_ms": 3.52,
-      "tasks_per_ms": 8290.91,
-      "tasks_per_sec": 8290910.0
+      "avg_time_ms": 3.084,
+      "min_time_ms": 3.084,
+      "max_time_ms": 3.084,
+      "tasks_per_ms": 9463.04,
+      "tasks_per_sec": 9463040.0
     },
     {
       "seq_len": 4096,
       "num_tiles": 128,
       "tasks_submitted": 51200,
-      "avg_time_ms": 5.105,
-      "min_time_ms": 5.105,
-      "max_time_ms": 5.105,
-      "tasks_per_ms": 10029.38,
-      "tasks_per_sec": 10029380.0
+      "avg_time_ms": 4.969,
+      "min_time_ms": 4.969,
+      "max_time_ms": 4.969,
+      "tasks_per_ms": 10303.88,
+      "tasks_per_sec": 10303880.0
     },
     {
       "seq_len": 5120,
       "num_tiles": 160,
       "tasks_submitted": 79360,
-      "avg_time_ms": 8.116,
-      "min_time_ms": 8.116,
-      "max_time_ms": 8.116,
-      "tasks_per_ms": 9778.22,
-      "tasks_per_sec": 9778220.0
+      "avg_time_ms": 8.179,
+      "min_time_ms": 8.179,
+      "max_time_ms": 8.179,
+      "tasks_per_ms": 9702.9,
+      "tasks_per_sec": 9702900.0
     },
     {
       "seq_len": 6144,
       "num_tiles": 192,
       "tasks_submitted": 113664,
-      "avg_time_ms": 12.823,
-      "min_time_ms": 12.823,
-      "max_time_ms": 12.823,
-      "tasks_per_ms": 8864.07,
-      "tasks_per_sec": 8864070.0
+      "avg_time_ms": 10.815,
+      "min_time_ms": 10.815,
+      "max_time_ms": 10.815,
+      "tasks_per_ms": 10509.85,
+      "tasks_per_sec": 10509850.0
     },
     {
       "seq_len": 7168,
       "num_tiles": 224,
       "tasks_submitted": 154112,
-      "avg_time_ms": 17.686,
-      "min_time_ms": 17.686,
-      "max_time_ms": 17.686,
-      "tasks_per_ms": 8713.78,
-      "tasks_per_sec": 8713780.0
+      "avg_time_ms": 15.376,
+      "min_time_ms": 15.376,
+      "max_time_ms": 15.376,
+      "tasks_per_ms": 10022.89,
+      "tasks_per_sec": 10022890.0
     },
     {
       "seq_len": 8192,
       "num_tiles": 256,
       "tasks_submitted": 200704,
-      "avg_time_ms": 22.609,
-      "min_time_ms": 22.609,
-      "max_time_ms": 22.609,
-      "tasks_per_ms": 8877.17,
-      "tasks_per_sec": 8877170.0
+      "avg_time_ms": 19.716,
+      "min_time_ms": 19.716,
+      "max_time_ms": 19.716,
+      "tasks_per_ms": 10179.75,
+      "tasks_per_sec": 10179750.0
     },
     {
       "seq_len": 9216,
       "num_tiles": 288,
       "tasks_submitted": 253440,
-      "avg_time_ms": 36.207,
-      "min_time_ms": 36.207,
-      "max_time_ms": 36.207,
-      "tasks_per_ms": 6999.75,
-      "tasks_per_sec": 6999750.0
+      "avg_time_ms": 31.602,
+      "min_time_ms": 31.602,
+      "max_time_ms": 31.602,
+      "tasks_per_ms": 8019.75,
+      "tasks_per_sec": 8019750.0
     },
     {
       "seq_len": 10240,
       "num_tiles": 320,
       "tasks_submitted": 312320,
-      "avg_time_ms": 50.379,
-      "min_time_ms": 50.379,
-      "max_time_ms": 50.379,
-      "tasks_per_ms": 6199.41,
-      "tasks_per_sec": 6199410.0
+      "avg_time_ms": 46.428,
+      "min_time_ms": 46.428,
+      "max_time_ms": 46.428,
+      "tasks_per_ms": 6726.98,
+      "tasks_per_sec": 6726980.0
     },
     {
       "seq_len": 11264,
       "num_tiles": 352,
       "tasks_submitted": 377344,
-      "avg_time_ms": 65.683,
-      "min_time_ms": 65.683,
-      "max_time_ms": 65.683,
-      "tasks_per_ms": 5744.93,
-      "tasks_per_sec": 5744930.0
+      "avg_time_ms": 62.68,
+      "min_time_ms": 62.68,
+      "max_time_ms": 62.68,
+      "tasks_per_ms": 6020.17,
+      "tasks_per_sec": 6020170.0
     },
     {
       "seq_len": 12288,
       "num_tiles": 384,
       "tasks_submitted": 448512,
-      "avg_time_ms": 85.275,
-      "min_time_ms": 85.275,
-      "max_time_ms": 85.275,
-      "tasks_per_ms": 5259.6,
-      "tasks_per_sec": 5259600.0
+      "avg_time_ms": 83.613,
+      "min_time_ms": 83.613,
+      "max_time_ms": 83.613,
+      "tasks_per_ms": 5364.14,
+      "tasks_per_sec": 5364140.0
     },
     {
       "seq_len": 13312,
       "num_tiles": 416,
       "tasks_submitted": 525824,
-      "avg_time_ms": 106.689,
-      "min_time_ms": 106.689,
-      "max_time_ms": 106.689,
-      "tasks_per_ms": 4928.57,
-      "tasks_per_sec": 4928570.0
+      "avg_time_ms": 97.311,
+      "min_time_ms": 97.311,
+      "max_time_ms": 97.311,
+      "tasks_per_ms": 5403.54,
+      "tasks_per_sec": 5403540.0
     },
     {
       "seq_len": 14336,
       "num_tiles": 448,
       "tasks_submitted": 609280,
-      "avg_time_ms": 128.023,
-      "min_time_ms": 128.023,
-      "max_time_ms": 128.023,
-      "tasks_per_ms": 4759.14,
-      "tasks_per_sec": 4759140.0
+      "avg_time_ms": 119.06,
+      "min_time_ms": 119.06,
+      "max_time_ms": 119.06,
+      "tasks_per_ms": 5117.42,
+      "tasks_per_sec": 5117420.0
     },
     {
       "seq_len": 15360,
       "num_tiles": 480,
       "tasks_submitted": 698880,
-      "avg_time_ms": 152.854,
-      "min_time_ms": 152.854,
-      "max_time_ms": 152.854,
-      "tasks_per_ms": 4572.21,
-      "tasks_per_sec": 4572210.0
+      "avg_time_ms": 143.611,
+      "min_time_ms": 143.611,
+      "max_time_ms": 143.611,
+      "tasks_per_ms": 4866.48,
+      "tasks_per_sec": 4866480.0
     },
     {
       "seq_len": 16384,
       "num_tiles": 512,
       "tasks_submitted": 794624,
-      "avg_time_ms": 180.4,
-      "min_time_ms": 180.4,
-      "max_time_ms": 180.4,
-      "tasks_per_ms": 4404.79,
-      "tasks_per_sec": 4404790.0
+      "avg_time_ms": 175.31,
+      "min_time_ms": 175.31,
+      "max_time_ms": 175.31,
+      "tasks_per_ms": 4532.68,
+      "tasks_per_sec": 4532680.0
     }
   ],
   "summary": {
-    "avg_tasks_per_ms": 6754.0668749999995,
-    "max_tasks_per_ms": 10029.38,
-    "min_tasks_per_ms": 4404.79
+    "avg_tasks_per_ms": 7498.56625,
+    "max_tasks_per_ms": 10509.85,
+    "min_tasks_per_ms": 4532.68
   }
 }

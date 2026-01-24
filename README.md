@@ -110,11 +110,15 @@ PTO_ISA_Compiler/
 │   │   ├── pto_codegen_arm64.py     # ARM64 NEON backend
 │   │   ├── pto_codegen_cuda.py      # CUDA backend
 │   │   ├── pto_codegen_ascend.py    # Ascend NPU backend
-│   │   └── pto_codegen_ascend_a2a3_sim.py  # Cycle simulator
+│   │   └── pto_codegen_ascend_a2a3_sim.py  # Cycle simulator codegen
 │   └── runtime/
 │       ├── pto_runtime_common.h/c   # Platform-independent runtime
 │       ├── pto_runtime_arm64.h/c    # ARM64 worker threads
-│       └── pto_runtime_a2a3.h/c     # Ascend dual-queue runtime
+│       ├── pto_runtime_a2a3.h/c     # Ascend dual-queue runtime
+│       └── ascend_a2a3_core_model/  # A2A3 Core Simulator (C library)
+│           ├── a2a3_core_model.h/c  # Core model (pipes, sync)
+│           ├── a2a3_incore_sim.h/c  # InCore function simulator
+│           └── Makefile             # Build system
 ├── scripts/
 │   ├── visualize_taskgraph.py       # Task graph visualization tool
 │   ├── run_examples.py              # Batch example runner

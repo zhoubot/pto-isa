@@ -1,6 +1,122 @@
-// InCore function: attention_score_tile_128
-// This function is simulated via task scheduling
-// Estimated cycle cost: 10
+// =============================================================================
+// InCore Function: attention_score_tile_128
+// Core Type: Cube
+// =============================================================================
 
-// Placeholder - InCore functions are executed as tasks
-// with cycle costs estimated by the simulator.
+// Instruction code for core simulator parsing
+static const char* attention_score_tile_128_instructions = 
+    "// PTO Program: attention_score_tile_128\n"
+    "// Target: Ascend A2/A3\n"
+    "// ======================================================================\n"
+    "// TILE BUFFER ANALYSIS: attention_score_tile_128\n"
+    "// ======================================================================\n"
+    "//\n"
+    "// SUMMARY:\n"
+    "//   Total tiles declared:     4\n"
+    "//   Total capacity (no reuse): 262,144 bytes (256.0 KB)\n"
+    "//   Total capacity (w/ reuse): 196,608 bytes (192.0 KB)\n"
+    "//   Reuse savings:            65,536 bytes (25.0%)\n"
+    "//\n"
+    "// ======================================================================\n"
+    "\n"
+    "// Auto-generated Ascend C code from PTO ISA Compiler\n"
+    "// Target: Huawei Ascend A2/A3 (Da Vinci Architecture)\n"
+    "#include \"kernel_operator.h\"\n"
+    "\n"
+    "using namespace AscendC;\n"
+    "\n"
+    "__aicore__ void attention_score_tile_128(__gm__ float* input_q, __gm__ float* input_kt, __gm__ float* output, float scale) {\n"
+    "    __ub__ float q[16384];\n"
+    "    __ub__ float k_t[16384];\n"
+    "    __ub__ float scores[16384];\n"
+    "    __ub__ float scaled_scores[16384];\n"
+    "\n"
+    "    // Loop fusion: 0 loop overheads saved\n"
+    "\n"
+    "    // TLOAD: q = load(input_q[0, 0])\n"
+    "    DataCopy(q, input_q[(0) * 16384], 16384);\n"
+    "\n"
+    "    // TLOAD: k_t = load(input_kt[0, 0])\n"
+    "    DataCopy(k_t, input_kt[(0) * 16384], 16384);\n"
+    "\n"
+    "    // TMATMUL: scores = q @ k_t\n"
+    "    Matmul(scores, q, k_t, 128, 128);\n"
+    "\n"
+    "    // LI: Not implemented\n"
+    "\n"
+    "    // Fused vector operations: 1 operations\n"
+    "    // Tile size: 128x128 = 16384 elements\n"
+    "    Muls(scaled_scores, scores, , 16384);\n"
+    "\n"
+    "    // TSTORE: store(scaled_scores) -> output[0, 0]\n"
+    "    DataCopy(output[(0) * 64], scaled_scores, 64);\n"
+    "\n"
+    "}";
+
+#ifdef A2A3_CORE_SIM_AVAILABLE
+static int attention_score_tile_128_sim_registered = 0;
+
+void register_attention_score_tile_128_sim(IncoreSimulator* sim) {
+    if (!attention_score_tile_128_sim_registered) {
+        a2a3_incore_sim_register_code(sim, "attention_score_tile_128",
+            CORE_TYPE_CUBE, attention_score_tile_128_instructions, 32, 128);
+        attention_score_tile_128_sim_registered = 1;
+    }
+}
+#endif
+
+// Get cycle cost for this function
+int64_t attention_score_tile_128_cycle_cost(int64_t tile_size) {
+    return get_incore_cycle_cost_sim("attention_score_tile_128", tile_size);
+}
+
+/*
+// Actual Ascend Instructions (for physical execution):
+// PTO Program: attention_score_tile_128
+// Target: Ascend A2/A3
+// ======================================================================
+// TILE BUFFER ANALYSIS: attention_score_tile_128
+// ======================================================================
+//
+// SUMMARY:
+//   Total tiles declared:     4
+//   Total capacity (no reuse): 262,144 bytes (256.0 KB)
+//   Total capacity (w/ reuse): 196,608 bytes (192.0 KB)
+//   Reuse savings:            65,536 bytes (25.0%)
+//
+// ======================================================================
+
+// Auto-generated Ascend C code from PTO ISA Compiler
+// Target: Huawei Ascend A2/A3 (Da Vinci Architecture)
+#include "kernel_operator.h"
+
+using namespace AscendC;
+
+__aicore__ void attention_score_tile_128(__gm__ float* input_q, __gm__ float* input_kt, __gm__ float* output, float scale) {
+    __ub__ float q[16384];
+    __ub__ float k_t[16384];
+    __ub__ float scores[16384];
+    __ub__ float scaled_scores[16384];
+
+    // Loop fusion: 0 loop overheads saved
+
+    // TLOAD: q = load(input_q[0, 0])
+    DataCopy(q, input_q[(0) * 16384], 16384);
+
+    // TLOAD: k_t = load(input_kt[0, 0])
+    DataCopy(k_t, input_kt[(0) * 16384], 16384);
+
+    // TMATMUL: scores = q @ k_t
+    Matmul(scores, q, k_t, 128, 128);
+
+    // LI: Not implemented
+
+    // Fused vector operations: 1 operations
+    // Tile size: 128x128 = 16384 elements
+    Muls(scaled_scores, scores, , 16384);
+
+    // TSTORE: store(scaled_scores) -> output[0, 0]
+    DataCopy(output[(0) * 64], scaled_scores, 64);
+
+}
+*/

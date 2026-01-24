@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-01-24T12:33:31.690605",
+  "benchmark_type": "orchestration",
+  "platform": "arm64",
+  "seq_len_range": {
+    "min": 1024,
+    "max": 4096,
+    "step": 1024
+  },
+  "iterations": 1,
+  "results": [
+    {
+      "seq_len": 1024,
+      "num_tiles": 32,
+      "tasks_submitted": 480,
+      "avg_time_ms": 0.245,
+      "min_time_ms": 0.245,
+      "max_time_ms": 0.245,
+      "tasks_per_ms": 1959.18,
+      "tasks_per_sec": 1959180.0
+    },
+    {
+      "seq_len": 2048,
+      "num_tiles": 64,
+      "tasks_submitted": 960,
+      "avg_time_ms": 0.251,
+      "min_time_ms": 0.251,
+      "max_time_ms": 0.251,
+      "tasks_per_ms": 3824.7,
+      "tasks_per_sec": 3824700.0
+    },
+    {
+      "seq_len": 3072,
+      "num_tiles": 96,
+      "tasks_submitted": 1440,
+      "avg_time_ms": 0.387,
+      "min_time_ms": 0.387,
+      "max_time_ms": 0.387,
+      "tasks_per_ms": 3720.93,
+      "tasks_per_sec": 3720930.0
+    },
+    {
+      "seq_len": 4096,
+      "num_tiles": 128,
+      "tasks_submitted": 1920,
+      "avg_time_ms": 0.447,
+      "min_time_ms": 0.447,
+      "max_time_ms": 0.447,
+      "tasks_per_ms": 4295.3,
+      "tasks_per_sec": 4295300.0
+    }
+  ],
+  "summary": {
+    "avg_tasks_per_ms": 3450.0275,
+    "max_tasks_per_ms": 4295.3,
+    "min_tasks_per_ms": 1959.18
+  }
+}

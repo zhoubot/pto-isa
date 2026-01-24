@@ -93,6 +93,9 @@ void pto_runtime_init(PTORuntime* rt) {
 void pto_runtime_shutdown(PTORuntime* rt) {
     if (!rt) return;
     
+    // Cleanup core simulator (if used)
+    pto_cleanup_core_sim();
+    
     // Free tensor map memory pool
     if (rt->tensormap_pool) {
         free(rt->tensormap_pool);
@@ -954,7 +957,18 @@ int pto_runtime_dump_stdout(PTORuntime* rt) {
 // Cycle-Accurate Simulation Implementation
 // =============================================================================
 
-int64_t pto_estimate_cycle_cost(const char* func_name) {
+// A2A3 Core Simulator Integration (optional)
+// When A2A3_CORE_SIM_AVAILABLE is defined and liba2a3_core.a is linked,
+// cycle costs are computed by the cycle-accurate core model.
+// Otherwise, heuristic estimates are used.
+
+#ifdef A2A3_CORE_SIM_AVAILABLE
+#include "ascend_a2a3_core_model/a2a3_sim_integration.h"
+static bool g_core_sim_initialized = false;
+#endif
+
+// Heuristic-based cycle cost estimation (fallback)
+static int64_t pto_estimate_cycle_cost_heuristic(const char* func_name) {
     if (!func_name) return 10;
     
     // MatMul operations (Cube Engine) - most expensive
@@ -1017,6 +1031,35 @@ int64_t pto_estimate_cycle_cost(const char* func_name) {
     
     // Default
     return 10;
+}
+
+// Main cycle cost estimation function
+// Uses core simulator when available, otherwise falls back to heuristics
+int64_t pto_estimate_cycle_cost(const char* func_name) {
+#ifdef A2A3_CORE_SIM_AVAILABLE
+    // Initialize core simulator on first use
+    if (!g_core_sim_initialized) {
+        a2a3_sim_init();
+        g_core_sim_initialized = true;
+    }
+    // Use core simulator for cycle estimation
+    bool is_cube = (func_name && (strstr(func_name, "matmul") || strstr(func_name, "gemm") ||
+                                   strstr(func_name, "MATMUL") || strstr(func_name, "GEMM")));
+    return a2a3_sim_get_task_cycles(func_name, is_cube, 32 * 128);
+#else
+    // Fallback to heuristic estimation
+    return pto_estimate_cycle_cost_heuristic(func_name);
+#endif
+}
+
+// Cleanup function for core simulator (call during runtime shutdown)
+void pto_cleanup_core_sim(void) {
+#ifdef A2A3_CORE_SIM_AVAILABLE
+    if (g_core_sim_initialized) {
+        a2a3_sim_cleanup();
+        g_core_sim_initialized = false;
+    }
+#endif
 }
 
 void pto_simulate_all(PTORuntime* rt) {

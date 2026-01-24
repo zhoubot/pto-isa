@@ -1,0 +1,82 @@
+digraph TaskGraph {
+    rankdir=LR;
+    node [fontname="Helvetica", fontsize=9];
+    edge [fontname="Helvetica", fontsize=7];
+    ranksep=0.5;
+    nodesep=0.1;
+
+    labelloc="t";
+    label="PTO Task Graph\n30 tasks, 4 levels, 16 initially parallel";
+    fontsize=14;
+
+    // Task nodes
+    task0 [label="T0\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task1 [label="T1\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task2 [label="T2\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task3 [label="T3\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task4 [label="T4\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task5 [label="T5\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task6 [label="T6\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task7 [label="T7\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task8 [label="T8\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task9 [label="T9\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task10 [label="T10\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task11 [label="T11\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task12 [label="T12\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task13 [label="T13\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task14 [label="T14\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task15 [label="T15\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task16 [label="T16\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task17 [label="T17\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task18 [label="T18\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task19 [label="T19\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task20 [label="T20\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task21 [label="T21\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task22 [label="T22\ngemm_tile", shape=box, style="filled,bold", fillcolor="#90EE90", penwidth=2];
+    task23 [label="T23\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task24 [label="T24\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task25 [label="T25\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task26 [label="T26\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task27 [label="T27\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task28 [label="T28\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+    task29 [label="T29\ntile_add", shape=box, style="filled", fillcolor="#F5F5F5", penwidth=1];
+
+    // Dependencies (Producer -> Consumer)
+    task0 -> task8;
+    task1 -> task8;
+    task2 -> task9;
+    task3 -> task9;
+    task4 -> task10;
+    task5 -> task10;
+    task6 -> task11;
+    task7 -> task11;
+    task8 -> task12;
+    task9 -> task12;
+    task10 -> task13;
+    task11 -> task13;
+    task12 -> task14;
+    task13 -> task14;
+    task15 -> task23;
+    task16 -> task23;
+    task17 -> task24;
+    task18 -> task24;
+    task19 -> task25;
+    task20 -> task25;
+    task21 -> task26;
+    task22 -> task26;
+    task23 -> task27;
+    task24 -> task27;
+    task25 -> task28;
+    task26 -> task28;
+    task27 -> task29;
+    task28 -> task29;
+
+    // Level 0: 16 parallel tasks
+    { rank=same; task0; task1; task2; task3; task4; task5; task6; task7; task15; task16; task17; task18; task19; task20; task21; task22; }
+    // Level 1: 8 parallel tasks
+    { rank=same; task8; task9; task10; task11; task23; task24; task25; task26; }
+    // Level 2: 4 parallel tasks
+    { rank=same; task12; task13; task27; task28; }
+    // Level 3: 2 parallel tasks
+    { rank=same; task14; task29; }
+}

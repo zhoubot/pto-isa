@@ -1,5 +1,81 @@
 # PTO ISA Compiler - Update Log
 
+## 2026-01-23: A2A3 Core Simulator & Dual-Queue Enhancement
+
+### New: Ascend A2/A3 Core Model Simulator
+
+Created a cycle-accurate core model for simulating InCore function execution on Ascend NPU cores.
+
+**Location:** `src/runtime/ascend_a2a3_core_model/`
+
+**Architecture:**
+
+```
+CUBE CORE                              VECTOR CORE
+┌────────────────────────┐            ┌────────────────────────┐
+│  Scalar | MTE Pipes    │            │  Scalar | MTE Pipes    │
+│         | GM↔L1, L0C   │            │         | GM↔UB        │
+│  ───────┴──────────    │            │  ───────┴──────────    │
+│       CUBE Unit        │            │      Vector Unit       │
+│    (Matrix Multiply)   │            │  (Elem-wise, Reduce)   │
+└────────────────────────┘            └────────────────────────┘
+```
+
+**Features:**
+- Parallel pipe execution model (Scalar, MTE, Compute)
+- Synchronization primitives: SET_FLAG, WAIT_FLAG, PIPE_BARRIER
+- Instruction parsing and cycle estimation
+- InCore function registration and cached simulation
+- Heuristic cycle cost API for runtime integration
+
+**Files:**
+| File | Description |
+|------|-------------|
+| `a2a3_core_model.h/c` | Core model with pipes and sync |
+| `a2a3_incore_sim.h/c` | InCore function simulator |
+| `test_core_sim.c` | Test program |
+| `Makefile` | Build system |
+
+**Test Results:**
+```
+rmsnorm_tile (11 instructions): 144 cycles
+tile_matmul (12 instructions): 276 cycles
+```
+
+### Runtime Integration
+
+The core simulator is integrated with the PTO runtime for cycle-accurate simulation:
+
+**Integration Header:** `src/runtime/ascend_a2a3_core/a2a3_sim_integration.h`
+
+**Usage:**
+```c
+// Compile with core simulator support:
+// -DA2A3_CORE_SIM_AVAILABLE -Isrc/runtime -Lsrc/runtime/ascend_a2a3_core_model -la2a3_core
+
+// Automatic integration via pto_estimate_cycle_cost():
+int64_t cycles = pto_estimate_cycle_cost("rmsnorm_tile");  // Uses core sim if available
+
+// Manual function registration:
+a2a3_sim_register_function("custom_func", false, instruction_code, 32, 128);
+```
+
+**Codegen Enhancement:**
+- `pto_codegen_ascend_a2a3_sim.py` now generates:
+  - Actual Ascend instructions for InCore functions (same as `ascend_a2a3`)
+  - Instruction code as string constants for core simulator parsing
+  - Registration functions for each InCore function
+  - Orchestration code with task submission
+
+**Files Added:**
+| File | Description |
+|------|-------------|
+| `a2a3_sim_integration.h` | Runtime integration header |
+| Updated `pto_runtime_common.c` | `pto_estimate_cycle_cost()` uses core sim |
+| Updated `pto_codegen_ascend_a2a3_sim.py` | Generates Ascend instructions |
+
+---
+
 ## 2026-01-23: Dual-Queue Simulation & Trace Enhancement
 
 ### Major Features

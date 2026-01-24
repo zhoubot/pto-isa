@@ -2,8 +2,8 @@
 """
 PTO Example Configuration Tool
 
-This tool provides a menu-based interface to configure and generate
-run.py scripts for PTO examples.
+This tool provides both an interactive menu and command-line interface to
+configure and generate run.py scripts for PTO examples.
 
 Configuration Options:
 1. Select example directory
@@ -16,13 +16,32 @@ Configuration Options:
 8. Accuracy test case generation
 9. Simulation and trace file generation
 
-Usage:
+Usage (Interactive):
     python config_example.py
+    
+Usage (Command-line):
+    python config_example.py --example llama --platform ascend_a2a3_sim --generate
+    python config_example.py --example bgemm --platform ascend_a2a3_sim --run
+    python config_example.py --help
+
+Command-line Arguments:
+    --example NAME       Example to configure (llama, softmax, bgemm, ...)
+    --platform PLATFORM  Target platform (arm64, cuda, ascend_a2a3_sim, ...)
+    --generate          Generate run script and exit
+    --run               Generate script and run it
+    --seq-len-min N     Minimum sequence length for benchmarking
+    --seq-len-max N     Maximum sequence length for benchmarking
+    --seq-len-step N    Sequence length step size
+    --no-benchmark      Disable benchmarking
+    --no-simulation     Disable simulation
+    --list-examples     List available examples
+    --list-platforms    List available platforms
 """
 
 import os
 import sys
 import json
+import argparse
 from typing import Dict, List, Optional, Any
 
 # =============================================================================
@@ -544,12 +563,12 @@ def run_task_dump():
     platform = CONFIG['target_platform']
     platform_dir = os.path.join(OUTPUT_DIR, platform)
     
-    # Find executable
+    # Find executable (must be a file, not directory)
     exe_file = None
     for f in os.listdir(platform_dir):
         if not f.endswith(('.c', '.cu', '.cpp', '.txt', '.pdf', '.json', '.h')):
             exe_path = os.path.join(platform_dir, f)
-            if os.access(exe_path, os.X_OK):
+            if os.path.isfile(exe_path) and os.access(exe_path, os.X_OK):
                 exe_file = exe_path
                 break
     
@@ -646,8 +665,8 @@ def generate_task_graph_pdf():
         print("  No task graph file found")
         return True
     
-    # Try to use visualize_taskgraph.py if available
-    vis_script = os.path.join(ROOT_DIR, "visualize_taskgraph.py")
+    # Try to use visualize_taskgraph.py if available (in scripts/ directory)
+    vis_script = os.path.join(ROOT_DIR, "scripts", "visualize_taskgraph.py")
     if os.path.exists(vis_script):
         print(f"  Using visualize_taskgraph.py")
         cmd = f"python3 {{vis_script}} {{txt_file}}"
@@ -658,7 +677,7 @@ def generate_task_graph_pdf():
         else:
             print(f"  Warning: PDF generation failed: {{stderr}}")
     else:
-        print("  visualize_taskgraph.py not found")
+        print("  visualize_taskgraph.py not found at {{vis_script}}")
     
     return True
 
@@ -956,13 +975,21 @@ def run_simulation():
         print("  Note: Simulation already completed during task dump step")
         return True
     
-    print(f"  Running simulation: {{os.path.basename(exe_file)}}")
+    # Calculate num_tiles for simulation using max seq_len from config
+    TILE_ROWS = 32  # Must match pto_llama7B_dynamic.py
+    sim_seq_len = CONFIG['test_seq_len_max']
+    sim_num_tiles = sim_seq_len // TILE_ROWS
     
-    # Run with trace enabled
+    print(f"  Running simulation: {{os.path.basename(exe_file)}}")
+    print(f"  Simulation parameters: seq_len={{sim_seq_len}}, num_tiles={{sim_num_tiles}}")
+    
+    # Run with trace enabled and proper parameters
     env = os.environ.copy()
     env['PTO_TRACE_OUTPUT'] = os.path.join(platform_dir, 'trace.json')
     
-    success, stdout, stderr = run_command(exe_file, cwd=platform_dir, timeout=120)
+    # Pass seq_len, tile_rows, num_tiles, zero as arguments
+    sim_cmd = f"{{exe_file}} {{sim_seq_len}} {{TILE_ROWS}} {{sim_num_tiles}} 0"
+    success, stdout, stderr = run_command(sim_cmd, cwd=platform_dir, timeout=120)
     
     if success:
         trace_file = os.path.join(platform_dir, 'trace.json')
@@ -1192,5 +1219,195 @@ def main():
             input("Press Enter to continue...")
 
 
+def list_available_examples(root_dir: str) -> List[str]:
+    """List all available examples."""
+    examples_dir = os.path.join(root_dir, 'examples')
+    examples = []
+    if os.path.exists(examples_dir):
+        for item in os.listdir(examples_dir):
+            item_path = os.path.join(examples_dir, item)
+            if os.path.isdir(item_path):
+                # Check if directory contains pto_*.py files
+                for f in os.listdir(item_path):
+                    if f.startswith('pto_') and f.endswith('.py'):
+                        examples.append(item)
+                        break
+    return sorted(examples)
+
+
+def run_cli(args):
+    """Run in command-line mode."""
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # List examples
+    if args.list_examples:
+        examples = list_available_examples(root_dir)
+        print("Available examples:")
+        for ex in examples:
+            print(f"  - {ex}")
+        return 0
+    
+    # List platforms
+    if args.list_platforms:
+        print("Available platforms:")
+        for key, info in PLATFORM_OPTIONS.items():
+            print(f"  - {key}: {info['name']}")
+        return 0
+    
+    # Validate required arguments
+    if not args.example:
+        print("Error: --example is required")
+        print("Use --list-examples to see available examples")
+        return 1
+    
+    if not args.platform:
+        print("Error: --platform is required")
+        print("Use --list-platforms to see available platforms")
+        return 1
+    
+    # Build configuration
+    config = DEFAULT_CONFIG.copy()
+    config['example_name'] = args.example
+    config['target_platform'] = args.platform
+    
+    # Apply optional arguments
+    if args.seq_len_min is not None:
+        config['test_seq_len_min'] = args.seq_len_min
+    if args.seq_len_max is not None:
+        config['test_seq_len_max'] = args.seq_len_max
+    if args.seq_len_step is not None:
+        config['test_seq_len_step'] = args.seq_len_step
+    if args.no_benchmark:
+        config['benchmark_orchestration'] = False
+        config['benchmark_runtime'] = False
+    if args.no_simulation:
+        config['enable_simulation'] = False
+        config['enable_trace_generation'] = False
+    
+    # Validate example exists
+    examples = list_available_examples(root_dir)
+    if args.example not in examples:
+        print(f"Error: Example '{args.example}' not found")
+        print(f"Available examples: {', '.join(examples)}")
+        return 1
+    
+    # Validate platform
+    if args.platform not in PLATFORM_OPTIONS:
+        print(f"Error: Platform '{args.platform}' not supported")
+        print(f"Available platforms: {', '.join(PLATFORM_OPTIONS.keys())}")
+        return 1
+    
+    print(f"Configuring example: {args.example}")
+    print(f"  Platform: {args.platform}")
+    print(f"  Seq len range: {config['test_seq_len_min']}-{config['test_seq_len_max']} (step {config['test_seq_len_step']})")
+    print(f"  Benchmark: {config['benchmark_orchestration']}")
+    print(f"  Simulation: {config['enable_simulation']}")
+    
+    # Generate run script
+    if args.generate or args.run:
+        print("\nGenerating run script...")
+        script_content = generate_run_script(config, root_dir)
+        
+        # Determine output path
+        example_dir = os.path.join(root_dir, 'examples', args.example)
+        platform_suffix = PLATFORM_OPTIONS[args.platform]['script_suffix']
+        script_name = f"run_{platform_suffix}.py"
+        script_path = os.path.join(example_dir, script_name)
+        
+        # Write script
+        with open(script_path, 'w') as f:
+            f.write(script_content)
+        os.chmod(script_path, 0o755)
+        
+        print(f"  Generated: {script_path}")
+        
+        # Save config
+        config_path = os.path.join(example_dir, 'config.json')
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        print(f"  Config saved: {config_path}")
+    
+    # Run the script
+    if args.run:
+        print(f"\nRunning {script_name}...")
+        print("=" * 60)
+        
+        # Change to example directory and run
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, script_path],
+            cwd=example_dir
+        )
+        return result.returncode
+    
+    return 0
+
+
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="PTO Example Configuration Tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Interactive mode
+  python config_example.py
+  
+  # Generate run script for BGEMM on Ascend simulator
+  python config_example.py --example bgemm --platform ascend_a2a3_sim --generate
+  
+  # Generate and run LLaMA example
+  python config_example.py --example llama --platform ascend_a2a3_sim --run
+  
+  # Configure benchmark range
+  python config_example.py --example bgemm --platform ascend_a2a3_sim \\
+      --seq-len-min 512 --seq-len-max 8192 --seq-len-step 512 --run
+  
+  # List available options
+  python config_example.py --list-examples
+  python config_example.py --list-platforms
+"""
+    )
+    
+    parser.add_argument('--example', '-e', type=str,
+                        help='Example to configure (llama, softmax, bgemm, ...)')
+    parser.add_argument('--platform', '-p', type=str,
+                        help='Target platform (arm64, cuda, ascend_a2a3_sim, ...)')
+    parser.add_argument('--generate', '-g', action='store_true',
+                        help='Generate run script and exit')
+    parser.add_argument('--run', '-r', action='store_true',
+                        help='Generate script and run it')
+    
+    # Benchmark configuration
+    parser.add_argument('--seq-len-min', type=int, metavar='N',
+                        help='Minimum sequence length for benchmarking')
+    parser.add_argument('--seq-len-max', type=int, metavar='N',
+                        help='Maximum sequence length for benchmarking')
+    parser.add_argument('--seq-len-step', type=int, metavar='N',
+                        help='Sequence length step size')
+    parser.add_argument('--no-benchmark', action='store_true',
+                        help='Disable benchmarking')
+    parser.add_argument('--no-simulation', action='store_true',
+                        help='Disable simulation')
+    
+    # Listing options
+    parser.add_argument('--list-examples', action='store_true',
+                        help='List available examples')
+    parser.add_argument('--list-platforms', action='store_true',
+                        help='List available platforms')
+    
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    
+    # If any CLI arguments provided, run in CLI mode
+    if (args.example or args.platform or args.generate or args.run or 
+        args.list_examples or args.list_platforms or
+        args.seq_len_min or args.seq_len_max or args.seq_len_step or
+        args.no_benchmark or args.no_simulation):
+        sys.exit(run_cli(args))
+    else:
+        # Interactive mode
+        main()
