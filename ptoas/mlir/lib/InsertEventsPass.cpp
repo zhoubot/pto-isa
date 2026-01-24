@@ -308,20 +308,61 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     });
 
     mlir::OpBuilder b(module.getContext());
+    int loopId = 0;
+
+    auto opOrNestedHasPipe = [&](mlir::Operation *op, llvm::StringRef wantPipe) -> bool {
+      if (!op)
+        return false;
+      bool found = false;
+      auto visit = [&](mlir::Operation *nested) {
+        if (found)
+          return;
+        if (!isPtoInstrOp(nested))
+          return;
+        auto opcode = stripDialect(nested->getName().getStringRef());
+        auto opEnum = opcodeToOpEnum(opcode, nested, argTypes);
+        if (opEnum.empty())
+          return;
+        auto pipe = pipeForOpEnum(opEnum);
+        if (pipe == wantPipe)
+          found = true;
+      };
+      // Check op itself first.
+      visit(op);
+      if (found)
+        return true;
+      for (auto &r : op->getRegions()) {
+        if (r.empty())
+          continue;
+        r.walk(visit);
+        if (found)
+          return true;
+      }
+      return found;
+    };
 
     // Token allocator:
-    // - Tokens are only 0..7 per (srcPipe,dstPipe) channel.
-    // - We keep a stable mapping per (src_op, dst_op, key) to avoid reuse hazards within the same channel.
+    // - Tokens are only 0..7 per (srcPipe,dstPipe) channel (see EventIdCounter<SrcPipe,DstPipe>).
+    // - IMPORTANT: tokens are pipe-scoped, not opcode-scoped. Different PTO op enums may map to
+    //   the same pipe pair (e.g. TMOV_M2L and TMOV_M2R are both MTE1), so key allocation must
+    //   be based on pipes to avoid collisions that can deadlock.
+    // - We keep a stable mapping per (srcPipe, dstPipe, key) to avoid reuse hazards within the same channel.
     // - If a channel needs >8 distinct keys, we fall back to a hashed slot (still bounded).
     std::map<std::tuple<std::string, std::string, std::string>, std::string> tokenByEdgeKey;
     std::map<std::pair<std::string, std::string>, int> nextTokenByEdge;
     auto allocTokenFor = [&](llvm::StringRef srcOp, llvm::StringRef dstOp, llvm::StringRef key) -> std::string {
-      auto k = std::make_tuple(srcOp.str(), dstOp.str(), key.str());
+      auto srcPipe = pipeForOpEnum(srcOp);
+      auto dstPipe = pipeForOpEnum(dstOp);
+      // If we cannot infer pipes (shouldn't happen for supported ops), fall back to opcode pair.
+      std::string srcCh = !srcPipe.empty() ? srcPipe.str() : srcOp.str();
+      std::string dstCh = !dstPipe.empty() ? dstPipe.str() : dstOp.str();
+
+      auto k = std::make_tuple(srcCh, dstCh, key.str());
       auto it = tokenByEdgeKey.find(k);
       if (it != tokenByEdgeKey.end())
         return it->second;
 
-      auto ch = std::make_pair(srcOp.str(), dstOp.str());
+      auto ch = std::make_pair(srcCh, dstCh);
       int next = nextTokenByEdge[ch];
       if (next < 8) {
         nextTokenByEdge[ch] = next + 1;
@@ -342,6 +383,7 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         auto *consumer = &*it;
         auto opname = consumer->getName().getStringRef();
         if (opname == "scf.for") {
+          int thisLoopId = loopId++;
           // Loop-carried reuse hazards:
           // - Many real kernels reuse the same tile storage across loop iterations.
           // - Since `set_flag` is pipe-scoped (not object-scoped), we insert a conservative
@@ -379,12 +421,24 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           // Insert priming events in the preheader (before the scf.for op).
           b.setInsertionPoint(consumer);
           if (hasM && hasMte1) {
-            auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", "loop_m_to_mte1");
+            auto key = ("loop_m_to_mte1#" + std::to_string(thisLoopId));
+            auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", key);
             insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
           }
           if (hasMte1 && hasMte2) {
-            auto tok = allocTokenFor("TMOV_M2L", "TLOAD", "loop_mte1_to_mte2");
+            auto key = ("loop_mte1_to_mte2#" + std::to_string(thisLoopId));
+            auto tok = allocTokenFor("TMOV_M2L", "TLOAD", key);
             insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TLOAD", tok);
+          }
+          if (hasMte1 && hasM) {
+            // Loop-carried RAW: a common ping-pong GEMM pattern prefetches (MTE1) data for the *next*
+            // iteration and consumes it (M) in the following iteration. Insert a per-iteration MTE1->M
+            // handshake so TMATMUL does not read tiles that are still being produced by TMOV.
+            //
+            // NOTE: Use a loop-unique key so nested loops don't accidentally share the same token.
+            auto key = ("loop_mte1_to_m#" + std::to_string(thisLoopId));
+            auto tok = allocTokenFor("TMOV_M2L", "TMATMUL", key);
+            insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TMATMUL", tok);
           }
 
           // Insert per-iteration waits/records inside the loop body (front block).
@@ -395,18 +449,47 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
             auto *term = body.getTerminator();
 
             if (hasM && hasMte1) {
-              auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", "loop_m_to_mte1");
+              auto key = ("loop_m_to_mte1#" + std::to_string(thisLoopId));
+              auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", key);
               b.setInsertionPointToStart(&body);
               insertEventOp(b, consumer->getLoc(), "wait_event", "TMATMUL", "TMOV_M2L", tok);
-              b.setInsertionPoint(term);
-              insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
+
+              // Record after the last op in the loop body that (transitively) executes TMATMUL (PIPE_M).
+              // This avoids placing `set_flag(PIPE_M, PIPE_MTE1, ...)` before the loop's matmul, which
+              // would be one-iteration behind and can cause L0A/L0B read/write conflicts when ping-pong
+              // buffers are reused across iterations.
+              mlir::Operation *lastMCarrier = nullptr;
+              for (auto &opInBody : body) {
+                mlir::Operation *cur = &opInBody;
+                if (cur == term)
+                  break;
+                if (opOrNestedHasPipe(cur, "M"))
+                  lastMCarrier = cur;
+              }
+              if (lastMCarrier) {
+                b.setInsertionPointAfter(lastMCarrier);
+                insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
+              } else {
+                // Fallback: still insert before the terminator to keep token balance.
+                b.setInsertionPoint(term);
+                insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
+              }
             }
             if (hasMte1 && hasMte2) {
-              auto tok = allocTokenFor("TMOV_M2L", "TLOAD", "loop_mte1_to_mte2");
+              auto key = ("loop_mte1_to_mte2#" + std::to_string(thisLoopId));
+              auto tok = allocTokenFor("TMOV_M2L", "TLOAD", key);
               b.setInsertionPointToStart(&body);
               insertEventOp(b, consumer->getLoc(), "wait_event", "TMOV_M2L", "TLOAD", tok);
               b.setInsertionPoint(term);
               insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TLOAD", tok);
+            }
+            if (hasMte1 && hasM) {
+              auto key = ("loop_mte1_to_m#" + std::to_string(thisLoopId));
+              auto tok = allocTokenFor("TMOV_M2L", "TMATMUL", key);
+              b.setInsertionPointToStart(&body);
+              insertEventOp(b, consumer->getLoc(), "wait_event", "TMOV_M2L", "TMATMUL", tok);
+              b.setInsertionPoint(term);
+              insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TMATMUL", tok);
             }
           }
 

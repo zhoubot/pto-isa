@@ -221,6 +221,45 @@ bash run.sh -r npu -v Ascend910B1
 test success
 ```
 
+## Python Runner（sim + NPU，偏性能）
+
+本目录提供一个 Python runner，用于：
+
+- 将 `gemm_performance_kernel.cpp` 编译为可调用的 `libgemm_performance.so`（fatobj）。
+- NPU 模式通过 `acl` Python 绑定在真实 NPU 上运行；sim 模式通过 CA model 的二进制构建运行。
+- 输出平均耗时与粗略 TFLOPS 估算。
+- 可选做轻量正确性校验（随机采样点对比）。
+
+NPU 运行：
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 0 --warmup 5 --iters 20 --no-check
+```
+
+Simulator 运行：
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode sim --soc-version Ascend910B1
+```
+
+开启采样校验（numpy 参考；只从 device 读取少量采样点的 float32）：
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 0 --warmup 5 --iters 20 --check-samples 16
+```
+
+全量 numpy 校验（仅适用于较小的 `m/k/n`）：
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 0 --m 512 --k 256 --n 1536 --check-full --iters 3 --warmup 1
+```
+
+说明：
+
+- 默认将构建/运行产物写到 `/tmp/pto-isa-gemm-performance/{npu,sim}/`，可用 `--work-dir` 覆盖。
+- NPU 性能在不同 device 上可能略有差异；本机可尝试 `--device 7` 复现 ~300 TFLOPS。
+- 如果使用 `--skip-build`，runner 会校验已有 `.so` 是否与当前 `m/k/n` 等常量一致；不一致会报错并提示重新构建。
+
 ## 变更记录
 
 | 日期       | 变更 |

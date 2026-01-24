@@ -46,6 +46,7 @@ nav:
       - Event: docs/coding/Event.md
       - Tutorial: docs/coding/tutorial.md
       - Tutorials: docs/coding/tutorials/README.md
+      - "教程（中文）": docs/coding/tutorials/README_zh.md
       - "Example: Vec Add": docs/coding/tutorials/vec-add.md
       - "Example: Row Softmax": docs/coding/tutorials/row-softmax.md
       - "Example: GEMM": docs/coding/tutorials/gemm.md

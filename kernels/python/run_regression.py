@@ -112,7 +112,14 @@ def _run_kernel_file_e2e(
 
     # NPU run (sim or real).
     if run_mode == "sim":
-        pipeline.configure_ascend_sim_env(ascend_home=ascend_home, soc=_soc_from_alias(soc))
+        camodel = outdir / "camodel_logs"
+        camodel.mkdir(parents=True, exist_ok=True)
+        os.environ["CAMODEL_LOG_PATH"] = str(camodel)
+        soc_full = _soc_from_alias(soc)
+        runtime_lib = "runtime_camodel"
+    else:
+        soc_full = None
+        runtime_lib = "runtime"
 
     cfg = pipeline.CompileConfig(
         ptoas=ptoas,
@@ -122,8 +129,28 @@ def _run_kernel_file_e2e(
         insert_events=insert_events,
     )
     cce_cpp, _bin = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=outdir, cfg=cfg)
+    # Emit a small summary of inserted events for debugging deadlocks.
+    try:
+        summary = pipeline.summarize_cce_events(cce_path=cce_cpp)
+        (outdir / "event_summary.txt").write_text(str(summary) + "\n", encoding="utf-8")
+        snippet = pipeline.extract_cce_set_wait_lines(cce_path=cce_cpp, limit=200)
+        (outdir / "set_wait_snippet.txt").write_text("\n".join(snippet) + ("\n" if snippet else ""), encoding="utf-8")
+        if run_mode == "sim":
+            sys.stdout.write(
+                f"  events: set={summary.get('set_total')} wait={summary.get('wait_total')} (see {outdir / 'event_summary.txt'})\n"
+            )
+            sys.stdout.write(f"  set/wait snippet: {outdir / 'set_wait_snippet.txt'}\n")
+    except Exception:
+        pass
     npu_so = outdir / f"lib{spec.name}_{run_mode}.so"
-    pipeline.build_fatobj_so_from_cce(cce_path=cce_cpp, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
+    pipeline.build_fatobj_so_from_cce(
+        cce_path=cce_cpp,
+        out_so=npu_so,
+        arch=cfg.arch,
+        ascend_home=cfg.ascend_home,
+        runtime_lib=runtime_lib,
+        soc=soc_full,
+    )
 
     npu_arrays = [a.copy() for a in base_arrays]
     npu_out = pipeline.run_npu_kernel_from_so(
@@ -160,6 +187,9 @@ def main() -> int:
     if not args.ascend_home or not args.ascend_home.exists():
         print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
         return 2
+
+    if args.run_mode == "sim":
+        pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=_soc_from_alias(args.soc))
 
     cases = _cases()
     if args.cases:

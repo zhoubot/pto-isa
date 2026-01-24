@@ -95,7 +95,20 @@ def _compile_and_run_case(*, case: Case, target: Target, args: argparse.Namespac
         )
         cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=outdir, cfg=cfg)
         npu_so = outdir / f"lib{case.name}_npu.so"
-        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
+        if getattr(args, "run_mode", "npu") == "sim":
+            soc_full = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
+            runtime_lib = "runtime_camodel"
+        else:
+            soc_full = None
+            runtime_lib = "runtime"
+        pipeline.build_fatobj_so_from_cce(
+            cce_path=cce_path,
+            out_so=npu_so,
+            arch=cfg.arch,
+            ascend_home=cfg.ascend_home,
+            runtime_lib=runtime_lib,
+            soc=soc_full,
+        )
         npu_out = pipeline.run_npu_kernel_from_so(
             so_path=npu_so, host_spec=host_spec, host_arrays=[a.copy() for a in base], device_id=args.device, block_dim=args.block_dim
         )
@@ -171,7 +184,7 @@ def main() -> int:
             return 2
         if args.run_mode == "sim":
             soc = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
-            pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
+            pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
 
     case = CASES[args.case]
     for t in targets:

@@ -13,6 +13,80 @@ import numpy as np
 
 from .host_spec import HostSpec, HostTensorArg, infer_host_spec_from_pto, parse_host_spec_from_pto
 
+
+_EVENT_RE = re.compile(
+    r"\b(?P<kind>set_flag|wait_flag)\(\s*(?P<src>PIPE_[A-Z0-9_]+)\s*,\s*(?P<dst>PIPE_[A-Z0-9_]+)\s*,\s*"
+    r"static_cast<event_t>\(\s*(?P<tok>\d+)\s*\)\s*\)"
+)
+
+
+def summarize_cce_events(*, cce_path: Path) -> dict[str, object]:
+    """
+    Best-effort summary of inserted event ops from generated CCE C++.
+
+    This is meant as a quick sanity check for simulator/NPU runs where missing or
+    mismatched set/wait pairs can lead to hangs.
+    """
+    text = cce_path.read_text(encoding="utf-8", errors="replace")
+    matches = list(_EVENT_RE.finditer(text))
+    by_edge: dict[tuple[str, str], dict[str, set[int] | int]] = {}
+    total_set = 0
+    total_wait = 0
+    for m in matches:
+        kind = m.group("kind")
+        src = m.group("src")
+        dst = m.group("dst")
+        tok = int(m.group("tok"))
+        key = (src, dst)
+        st = by_edge.setdefault(key, {"set": set(), "wait": set(), "set_n": 0, "wait_n": 0})
+        if kind == "set_flag":
+            total_set += 1
+            st["set_n"] = int(st["set_n"]) + 1
+            cast = st["set"]
+            assert isinstance(cast, set)
+            cast.add(tok)
+        else:
+            total_wait += 1
+            st["wait_n"] = int(st["wait_n"]) + 1
+            cast = st["wait"]
+            assert isinstance(cast, set)
+            cast.add(tok)
+
+    edges: list[dict[str, object]] = []
+    for (src, dst), st in sorted(by_edge.items()):
+        edges.append(
+            {
+                "src": src,
+                "dst": dst,
+                "set_n": int(st["set_n"]),
+                "wait_n": int(st["wait_n"]),
+                "set_tokens": sorted(int(x) for x in (st["set"] or [])),
+                "wait_tokens": sorted(int(x) for x in (st["wait"] or [])),
+            }
+        )
+
+    return {
+        "set_total": total_set,
+        "wait_total": total_wait,
+        "edges": edges,
+    }
+
+
+def extract_cce_set_wait_lines(*, cce_path: Path, limit: int = 200) -> list[str]:
+    """
+    Extract a few `set_flag(...)` / `wait_flag(...)` lines from generated CCE.
+    """
+    if limit <= 0:
+        return []
+    out: list[str] = []
+    for ln in cce_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = ln.strip()
+        if "set_flag(" in s or "wait_flag(" in s:
+            out.append(s)
+            if len(out) >= limit:
+                break
+    return out
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -96,27 +170,122 @@ def _source_setenv_bash(setenv_path: Path) -> dict[str, str]:
     return env
 
 
+def ensure_ascend_sim_env(*, ascend_home: Path, soc: str) -> None:
+    """
+    Ensure the *current process* is started with a simulator-friendly environment.
+
+    Important:
+    - glibc's dynamic loader reads `LD_LIBRARY_PATH` at process start; mutating
+      `os.environ['LD_LIBRARY_PATH']` inside Python is not sufficient for later
+      `dlopen()` calls (e.g. `ctypes.CDLL`, `import acl`).
+    - Therefore, when running on simulator from Python, we re-exec the current
+      process once with the desired environment.
+    """
+    if os.environ.get("_PTOAS_SIM_ENV_READY", "") == "1":
+        return
+
+    env = dict(os.environ)
+    env["_PTOAS_SIM_ENV_READY"] = "1"
+
+    # Keep consistent toolchain/root.
+    env["ASCEND_HOME_PATH"] = str(ascend_home)
+
+    # Pull in toolkit defaults (compiler/runtime/HCCL/OPP paths, etc.)
+    setenv_path = ascend_home / "bin" / "setenv.bash"
+    try:
+        sourced = _source_setenv_bash(setenv_path)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"failed to source {setenv_path}: {e.stderr.decode('utf-8', errors='ignore')}") from e
+    env.update(sourced)
+    env["ASCEND_HOME_PATH"] = str(ascend_home)
+
+    # Prefer LD_LIBRARY_PATH over any embedded RPATH in fatobj .so's.
+    env.setdefault("PTOAS_DISABLE_RPATH", "1")
+
+    # Default to quiet runs (show build/run output only on failure).
+    env.setdefault("PTOAS_QUIET", "1")
+
+    # More useful progress logs when debugging under simulator.
+    env.setdefault("PTOAS_VERBOSE_RUN", "0")
+
+    # Simulator logs: use CAMODEL_LOG_PATH if available (used by Ascend simulator runtime).
+    env.setdefault("CAMODEL_LOG_PATH", "/tmp/camodel_logs")
+    try:
+        Path(env["CAMODEL_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    # Ascend logging runtime (libascendalog.so): default to file logs only.
+    verbose_run = env.get("PTOAS_VERBOSE_RUN", "") in ("1", "true", "True", "yes", "YES")
+    if verbose_run:
+        env.setdefault("ASCEND_SLOG_PRINT_TO_STDOUT", "1")
+        env.setdefault("ASCEND_GLOBAL_LOG_LEVEL", "2")  # 0=trace, 2=info
+    else:
+        env.setdefault("ASCEND_SLOG_PRINT_TO_STDOUT", "0")
+    env.setdefault("ASCEND_PROCESS_LOG_PATH", env["CAMODEL_LOG_PATH"])
+    try:
+        Path(env["ASCEND_PROCESS_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    sim_lib = resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
+    ld = env.get("LD_LIBRARY_PATH", "")
+    env["LD_LIBRARY_PATH"] = f"{sim_lib}:{ld}" if ld else str(sim_lib)
+
+    if env.get("PTO_USE_RUNTIME_STUB", "0") == "1":
+        stub = ascend_home / "runtime/lib64/stub"
+        if stub.exists():
+            env["LD_LIBRARY_PATH"] = f"{stub}:{env.get('LD_LIBRARY_PATH', '')}"
+
+    # Re-exec under the new environment (so the dynamic loader sees LD_LIBRARY_PATH).
+    os.execvpe(sys.executable, [sys.executable] + sys.argv, env)
+
+
 def configure_ascend_sim_env(*, ascend_home: Path, soc: str) -> None:
     """
     Configure process env vars for Ascend simulator runs.
 
-    This mirrors the behavior in `tests/script/run_st.py`:
-      - remove any existing `/runtime/lib64` entries from LD_LIBRARY_PATH
-      - add `$ASCEND_HOME_PATH/runtime/lib64/stub`
+    This is intended to mirror `tests/script/run_st.py`:
       - source `$ASCEND_HOME_PATH/bin/setenv.bash` (if present)
-      - add `$ASCEND_HOME_PATH/tools/simulator/<soc>/lib`
+      - add `$ASCEND_HOME_PATH/tools/simulator/<soc>/lib` (or arch-specific equivalents)
+
+    Optional:
+      - if `PTO_USE_RUNTIME_STUB=1`, also prepend `$ASCEND_HOME_PATH/runtime/lib64/stub`.
+        Some toolkit builds may crash if runtime stubs take precedence, so this is
+        opt-in instead of default.
+
+    Note: this function mutates `os.environ` in-process. For Python flows that use
+    `dlopen()` (ctypes / `import acl`), prefer `ensure_ascend_sim_env()` so the
+    process starts with the desired `LD_LIBRARY_PATH`.
     """
     if not ascend_home or not ascend_home.exists():
         raise ValueError("ascend_home must exist")
 
     # Many scripts key off ASCEND_HOME_PATH; ensure it is set consistently.
-    os.environ.setdefault("ASCEND_HOME_PATH", str(ascend_home))
+    os.environ["ASCEND_HOME_PATH"] = str(ascend_home)
 
-    # Start from a "sim-friendly" LD_LIBRARY_PATH (avoid mixing stub/real runtime).
-    ld = os.environ.get("LD_LIBRARY_PATH", "")
-    if ld:
-        filtered = [p for p in ld.split(":") if "/runtime/lib64" not in p]
-        os.environ["LD_LIBRARY_PATH"] = ":".join(filtered)
+    # Prefer LD_LIBRARY_PATH (stub + simulator libs) over any embedded RPATH in fatobj .so's.
+    os.environ.setdefault("PTOAS_DISABLE_RPATH", "1")
+
+    # More useful progress logs when running under simulator.
+    os.environ.setdefault("PTOAS_VERBOSE_RUN", "1")
+
+    # Simulator logs: use CAMODEL_LOG_PATH if available (used by Ascend simulator runtime).
+    # Keep a stable default so users get logs even if callers don't set it.
+    os.environ.setdefault("CAMODEL_LOG_PATH", "/tmp/camodel_logs")
+    try:
+        Path(os.environ["CAMODEL_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    # Ascend logging: prefer printing + per-process log directory.
+    # These env vars are parsed by Ascend logging runtime (libascendalog.so).
+    os.environ.setdefault("ASCEND_SLOG_PRINT_TO_STDOUT", "1")
+    os.environ.setdefault("ASCEND_GLOBAL_LOG_LEVEL", "2")  # 0=trace, 2=info (matches simulator toml defaults)
+    os.environ.setdefault("ASCEND_PROCESS_LOG_PATH", os.environ["CAMODEL_LOG_PATH"])
+    try:
+        Path(os.environ["ASCEND_PROCESS_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
 
     # setenv.bash may set ASCEND_HOME_PATH and a bunch of runtime/compiler vars (including LD_LIBRARY_PATH).
     setenv_path = ascend_home / "bin/setenv.bash"
@@ -127,16 +296,38 @@ def configure_ascend_sim_env(*, ascend_home: Path, soc: str) -> None:
     for k, v in sourced.items():
         os.environ[k] = v
 
-    # Ensure stub + simulator libs are present after sourcing.
-    stub = ascend_home / "runtime/lib64/stub"
-    if stub.exists():
-        os.environ["LD_LIBRARY_PATH"] = f"{stub}:{os.environ.get('LD_LIBRARY_PATH', '')}"
+    # Ensure ASCEND_HOME_PATH survives setenv overrides.
+    os.environ["ASCEND_HOME_PATH"] = str(ascend_home)
 
-    sim_lib = ascend_home / "tools/simulator" / soc / "lib"
-    if sim_lib.exists():
-        os.environ["LD_LIBRARY_PATH"] = f"{sim_lib}:{os.environ.get('LD_LIBRARY_PATH', '')}"
-    else:
-        raise RuntimeError(f"simulator lib dir not found: {sim_lib} (check --soc and your toolkit install)")
+    sim_lib = resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
+
+    ld = os.environ.get("LD_LIBRARY_PATH", "")
+    os.environ["LD_LIBRARY_PATH"] = f"{sim_lib}:{ld}" if ld else str(sim_lib)
+
+    if os.environ.get("PTO_USE_RUNTIME_STUB", "0") == "1":
+        stub = ascend_home / "runtime/lib64/stub"
+        if stub.exists():
+            os.environ["LD_LIBRARY_PATH"] = f"{stub}:{os.environ.get('LD_LIBRARY_PATH', '')}"
+
+
+def resolve_ascend_simulator_lib_dir(*, ascend_home: Path, soc: str) -> Path:
+    sim_lib_candidates = (
+        ascend_home / "tools" / "simulator" / soc / "lib",
+        ascend_home / "tools" / "simulator" / soc / "lib64",
+        ascend_home / "simulator" / soc / "lib",
+        ascend_home / "simulator" / soc / "lib64",
+        ascend_home / "aarch64-linux" / "simulator" / soc / "lib",
+        ascend_home / "aarch64-linux" / "simulator" / soc / "lib64",
+        ascend_home / "x86_64-linux" / "simulator" / soc / "lib",
+        ascend_home / "x86_64-linux" / "simulator" / soc / "lib64",
+    )
+    sim_lib = next((p for p in sim_lib_candidates if p.exists()), None)
+    if sim_lib is None:
+        raise RuntimeError(
+            "simulator lib dir not found (check --soc and your toolkit install). Tried:\n"
+            + "\n".join(f"  - {p}" for p in sim_lib_candidates)
+        )
+    return sim_lib
 
 
 def _sanitize_kernel_name(name: str) -> str:
@@ -184,8 +375,8 @@ def compile_pto_to_cce_and_bin(
         str(cfg.ascend_home),
         f"--emit-bin={bin_path}",
     ]
-    if cfg.insert_events:
-        args.append("--insert-events")
+    if not cfg.insert_events:
+        args.append("--no-insert-events")
     _run(args, cwd=repo_root())
     return cce_path, bin_path
 
@@ -238,8 +429,8 @@ def compile_pto_to_device_cpp(
         "--repo-root",
         str(repo_root()),
     ]
-    if insert_events:
-        args.append("--insert-events")
+    if not insert_events:
+        args.append("--no-insert-events")
     if assign_tile_addrs:
         args.append("--assign-tile-addrs")
     _run(args, cwd=repo_root())
@@ -279,7 +470,15 @@ def build_cpu_so_from_cpp(*, cpp_path: Path, out_so: Path) -> None:
 
 
 def build_fatobj_so_from_cce(
-    *, cce_path: Path, out_so: Path, arch: str, ascend_home: Path, fixed_block_dim: int | None = None
+    *,
+    cce_path: Path,
+    out_so: Path,
+    arch: str,
+    ascend_home: Path,
+    fixed_block_dim: int | None = None,
+    runtime_lib: str = "runtime",
+    soc: str | None = None,
+    cce_extra_flags: list[str] | None = None,
 ) -> None:
     include_dirs = ascend_include_dirs(ascend_home) + [str(repo_root() / "include")]
 
@@ -363,7 +562,10 @@ def build_fatobj_so_from_cce(
         combined_o = td_path / "combined.o"
 
         bisheng = _resolve_bisheng(ascend_home)
-        common = [bisheng, "-xcce", f"--cce-aicore-arch={arch}", "-std=c++17", "-fPIC"]
+        # Match CMake examples: optimize by default for performance-sensitive kernels.
+        common = [bisheng, "-xcce", f"--cce-aicore-arch={arch}", "-std=c++17", "-fPIC", "-O2"]
+        if cce_extra_flags:
+            common += list(cce_extra_flags)
         incs = [f"-I{d}" for d in include_dirs]
         _run(common + incs + ["-c", str(combined_path), "-o", str(combined_o)], cwd=td_path)
 
@@ -371,9 +573,24 @@ def build_fatobj_so_from_cce(
         link = [bisheng, "-shared", "--cce-fatobj-link", "-o", str(out_so), str(combined_o)]
         lib64 = ascend_home / "lib64"
         if lib64.exists():
-            link += [f"-L{lib64}", f"-Wl,-rpath,{lib64}"]
+            link += [f"-L{lib64}"]
+            # For simulator runs we usually want the stub runtime to win via LD_LIBRARY_PATH.
+            # Some linkers emit DT_RPATH (higher priority than LD_LIBRARY_PATH), which can
+            # accidentally force loading the real runtime and hang/crash under simulator.
+            disable_rpath = os.environ.get("PTOAS_DISABLE_RPATH", "") in ("1", "true", "True", "yes", "YES")
+            if not disable_rpath:
+                link += [f"-Wl,-rpath,{lib64}"]
+        if runtime_lib not in ("runtime", "runtime_camodel", "runtime_cmodel"):
+            raise ValueError(f"unsupported runtime_lib: {runtime_lib}")
+
+        if runtime_lib in ("runtime_camodel", "runtime_cmodel"):
+            if not soc:
+                raise ValueError(f"soc must be provided when runtime_lib={runtime_lib}")
+            sim_lib = resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
+            link += [f"-L{sim_lib}"]
+
         link += [
-            "-lruntime",
+            f"-l{runtime_lib}",
             "-lascendcl",
             "-ltiling_api",
             "-lplatform",
@@ -464,6 +681,7 @@ def run_npu_kernel_from_so(
 ) -> list[np.ndarray]:
     import ctypes
     import acl
+    import time
 
     def _recent() -> str:
         try:
@@ -477,43 +695,69 @@ def run_npu_kernel_from_so(
         msg = _recent()
         raise RuntimeError(f"{what} failed (ret={ret})" + (f": {msg}" if msg else ""))
 
+    verbose = os.environ.get("PTOAS_VERBOSE_RUN", "") in ("1", "true", "True", "yes", "YES")
+
+    def _log(msg: str) -> None:
+        if not verbose:
+            return
+        sys.stderr.write(f"[ptoas][run] {msg}\n")
+        sys.stderr.flush()
+
     stream = None
     dev_ptrs: list[int] = []
     try:
+        t0 = time.perf_counter()
+        _log("acl.init() ...")
         acl.init()
+        _log(f"acl.init() OK ({time.perf_counter() - t0:.2f}s)")
+        _log(f"acl.rt.set_device({device_id}) ...")
         acl.rt.set_device(device_id)
+        _log("acl.rt.set_device OK")
+        _log("acl.rt.create_stream() ...")
         stream, ret = acl.rt.create_stream()
         _check(ret, "acl.rt.create_stream")
+        _log("acl.rt.create_stream OK")
 
         for i, a in enumerate(host_arrays):
+            _log(f"acl.rt.malloc(arg{i}, {int(a.nbytes)} bytes) ...")
             p, r = acl.rt.malloc(int(a.nbytes), 0)
             _check(r, f"acl.rt.malloc(arg{i})")
             dev_ptrs.append(int(p))
+            _log(f"acl.rt.malloc(arg{i}) OK (ptr=0x{int(p):x})")
 
         for i, (a, dev) in enumerate(zip(host_arrays, dev_ptrs)):
             if host_spec.args[i].role == "out":
                 continue
+            _log(f"acl.rt.memcpy(arg{i} H2D, {int(a.nbytes)} bytes) ...")
             _check(
                 acl.rt.memcpy(dev, int(a.nbytes), int(a.ctypes.data), int(a.nbytes), _acl_h2d()),
                 f"acl.rt.memcpy(arg{i} H2D)",
             )
+            _log(f"acl.rt.memcpy(arg{i} H2D) OK")
 
+        _log(f"ctypes.CDLL({so_path}) ...")
         lib = ctypes.CDLL(str(so_path))
         launch = lib.ptoas_launch
         launch.argtypes = [ctypes.c_void_p, ctypes.c_uint32] + [ctypes.c_void_p] * len(dev_ptrs)
         launch.restype = None
+        _log(f"launch(block_dim={block_dim}, argc={len(dev_ptrs)}) ...")
         launch(ctypes.c_void_p(stream), int(block_dim), *[ctypes.c_void_p(p) for p in dev_ptrs])
+        _log("launch OK")
 
+        _log("acl.rt.synchronize_stream() ...")
         _check(acl.rt.synchronize_stream(stream), "acl.rt.synchronize_stream")
+        _log("acl.rt.synchronize_stream OK")
 
         out: list[np.ndarray] = []
         for i in host_spec.output_indices():
             a = host_arrays[i]
             tmp = np.empty_like(a)
+            _log(f"acl.rt.memcpy(arg{i} D2H, {int(tmp.nbytes)} bytes) ...")
             _check(
                 acl.rt.memcpy(int(tmp.ctypes.data), int(tmp.nbytes), dev_ptrs[i], int(tmp.nbytes), _acl_d2h()),
                 f"acl.rt.memcpy(arg{i} D2H)",
             )
+            _log(f"acl.rt.memcpy(arg{i} D2H) OK")
             out.append(tmp)
         return out
     finally:

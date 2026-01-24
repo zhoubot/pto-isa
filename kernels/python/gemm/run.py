@@ -69,8 +69,12 @@ def main() -> int:
             print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
             return 2
         if args.run_mode == "sim":
-            soc = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
-            pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
+            soc_full = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
+            pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc_full)
+            runtime_lib = "runtime_camodel"
+        else:
+            runtime_lib = "runtime"
+            soc_full = None
         cfg = pipeline.CompileConfig(
             ptoas=args.ptoas,
             ascend_home=args.ascend_home,
@@ -80,7 +84,14 @@ def main() -> int:
         )
         cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
         npu_so = args.outdir / "libgemm16_npu.so"
-        pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
+        pipeline.build_fatobj_so_from_cce(
+            cce_path=cce_path,
+            out_so=npu_so,
+            arch=cfg.arch,
+            ascend_home=cfg.ascend_home,
+            runtime_lib=runtime_lib,
+            soc=soc_full,
+        )
 
         npu_arrays = [a.copy() for a in base]
         npu_out = pipeline.run_npu_kernel_from_so(

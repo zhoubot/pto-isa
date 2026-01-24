@@ -29,6 +29,34 @@ This document is a fast, practical orientation for agents working in this repo: 
 - Demos: `demos/` (CPU demos used by `tests/run_cpu.py --demo ...`)
 - Kernels: `kernels/` (self-contained kernel/operator mini-projects)
   - Python GEMM end-to-end example (CPU + NPU): `kernels/custom/gemm_python/`
+  - A3 GEMM performance kernel + runner: `kernels/manual/a2a3/gemm_performance/`
+
+## GEMM Performance (A3, 24 cube cores)
+
+Reference kernel: `kernels/manual/a2a3/gemm_performance/gemm_performance_kernel.cpp`.
+
+Runner: `kernels/manual/a2a3/gemm_performance/run.py` (writes artifacts under `/tmp/pto-isa-gemm-performance/{npu,sim}/` by default).
+
+NPU performance (device timestamps via ACL events):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --soc-version Ascend910B1 --device 7 --warmup 20 --iters 50 --no-check
+```
+
+NPU correctness validation (numpy, without full output D2H):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --soc-version Ascend910B1 --device 7 --warmup 5 --iters 20 --check-samples 16
+```
+
+Full numpy validation (only feasible for small sizes; example that matches the kernel tiling constraints):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 7 --m 512 --k 256 --n 1536 --check-full --iters 3 --warmup 1
+```
+
+Simulator (CA model) note: sim mode builds and runs the CMake binary and can be very slow; use `--sim-timeout-sec` to bound runtime.
+Tip: `--skip-build` only works if the existing `.so` matches the requested constants; otherwise rebuild (or use a different `--out-so`).
 
 ## Run: CPU Simulator (Recommended First)
 
@@ -95,11 +123,31 @@ source $HOME/Ascend/ascend-toolkit/latest/bin/setenv.bash
 
 `tests/script/run_st.py` expects `ASCEND_HOME_PATH` to be set (usually done by `setenv.bash`).
 
+### Local Environment Notes (from a working setup)
+
+This repo is designed to “just work” if a standard Ascend Toolkit install is present. In one verified local setup:
+
+- `ASCEND_HOME_PATH=/home/<user>/Ascend/ascend-toolkit/latest` is set (and `tests/script/run_st.py` also auto-falls back to `~/Ascend/ascend-toolkit/latest` if unset).
+- Common related env vars are present: `ASCEND_TOOLKIT_HOME`, `ASCEND_OPP_PATH`, `ASCEND_AICPU_PATH`, `ASCEND_HOME_PATH`.
+- Toolkit layout may provide `tools/simulator` as a symlink to an arch-specific directory (e.g. `aarch64-linux/simulator`); `run_st.py` searches multiple candidate paths to find `simulator/<SOC>/lib{,64}`.
+- `sim` runs default to *not* prepending runtime stub libs because some toolkit builds can crash during static init when stubs are forced.
+  - Opt-in via `PTO_USE_RUNTIME_STUB=1` if you need stubs (see `tests/script/run_st.py:set_env_variables`).
+
 ## Common Pitfalls (And How This Repo Handles Them)
 
 - **GTest ABI mismatch on Linux**: some systems have `libgtest*.a` built with `_GLIBCXX_USE_CXX11_ABI=0`.
   - CPU and NPU ST CMake projects support `PTO_GLIBCXX_USE_CXX11_ABI=auto|0|1` and auto-detect when possible.
 - **`sim` open-files limit**: simulator runs may require a higher `ulimit -n` (see `docs/getting-started.md` and `build.sh`).
+
+## Where Simulator Logs/Dumps Go (and how to keep them quiet)
+
+`tests/script/run_st.py` behavior that’s useful when you want less noise:
+
+- It always rebuilds into a fresh `tests/npu/<soc>/src/st/build/` (the `build/` dir is deleted each run), so old dumps are cleared automatically.
+- For `-r sim` **single-case** runs (when `-g <GTEST_FILTER>` is provided), it **avoids generating heavy simulator dumps by default**.
+  - Set `PTO_ST_LOGS=1` to force `CAMODEL_LOG_PATH=build/<GTEST_FILTER>/` and emit simulator artifacts (e.g. `*.instr_log.dump`, `*.ccu.fixp_issque.dump`).
+  - If a single-case run fails, the script automatically re-runs once with `CAMODEL_LOG_PATH` enabled to collect logs for debugging.
+- When logs are enabled (explicitly or via auto-retry), the script prints a short summary of `SET_FLAG` / `WAIT_FLAG` lines found in `*.instr_log.dump` (see `tests/script/run_st.py:_summarize_set_wait_flags`).
 
 ## PTO-AS + `ptoas` Tooling (Assembly → CCE → BIN)
 

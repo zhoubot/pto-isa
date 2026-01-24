@@ -16,3 +16,6 @@ __pycache__/
 *.log
 tests/npu/a2a3/src/st/build
 tests/npu/a5/src/st/build
+kernels/manual/a2a3/gemm_performance/build*/
+kernels/manual/a2a3/gemm_performance/input/
+kernels/manual/a2a3/gemm_performance/output/

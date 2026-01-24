@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +54,11 @@ def main() -> int:
     ap.add_argument("--soc", default="a3", help="Simulator SoC (a3|a5|Ascend910B1|Ascend910_9599|...)")
     ap.add_argument("--device", type=int, default=0)
     ap.add_argument("--block-dim", type=int, default=1)
+    ap.add_argument(
+        "--dump-instr",
+        action="store_true",
+        help="Also compile+run the generated host.cpp to produce simulator dumps and summarize SET_FLAG/WAIT_FLAG.",
+    )
     args = ap.parse_args()
 
     if not args.py.exists():
@@ -63,6 +70,9 @@ def main() -> int:
     if not args.ascend_home or not args.ascend_home.exists():
         print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
         return 2
+
+    soc = _soc_from_alias(args.soc)
+    pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
 
     source = args.py.read_text(encoding="utf-8")
     kernel_name = args.kernel
@@ -100,10 +110,14 @@ def main() -> int:
     cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
 
     so_path = args.outdir / f"lib{kernel.name}_sim.so"
-    pipeline.build_fatobj_so_from_cce(cce_path=cce_path, out_so=so_path, arch=cfg.arch, ascend_home=cfg.ascend_home)
-
-    soc = _soc_from_alias(args.soc)
-    pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
+    pipeline.build_fatobj_so_from_cce(
+        cce_path=cce_path,
+        out_so=so_path,
+        arch=cfg.arch,
+        ascend_home=cfg.ascend_home,
+        runtime_lib="runtime_camodel",
+        soc=soc,
+    )
 
     # Compare sim-NPU output against CPU output for the same inputs.
     host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
@@ -124,6 +138,72 @@ def main() -> int:
     )
     out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
     pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
+
+    if args.dump_instr:
+        outdir = args.outdir
+        sim_lib = pipeline.resolve_ascend_simulator_lib_dir(ascend_home=args.ascend_home, soc=soc)
+        host_exe = outdir / f"host_sim_{kernel.name}"
+
+        cmd = [
+            "g++",
+            str(outdir / "host.cpp"),
+            "-o",
+            str(host_exe),
+            "-O2",
+            "-std=c++17",
+            f"-I{args.ascend_home / 'include'}",
+            f"-I{args.ascend_home / 'pkg_inc'}",
+            f"-I{args.ascend_home / 'pkg_inc' / 'runtime' / 'runtime'}",
+            f"-I{args.ascend_home / 'pkg_inc' / 'profiling'}",
+            f"-L{args.ascend_home / 'lib64'}",
+            f"-L{sim_lib}",
+            f"-Wl,-rpath,{args.ascend_home / 'lib64'}",
+            f"-Wl,-rpath,{sim_lib}",
+            "-lruntime_camodel",
+            "-lnpu_drv_camodel",
+            "-lascendcl",
+            "-ltiling_api",
+            "-lplatform",
+            "-lc_sec",
+            "-ldl",
+            "-lm",
+            "-lstdc++",
+            "-lpthread",
+        ]
+        subprocess.run(cmd, check=True)
+
+        dump_dir = outdir / "host_camodel_logs"
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env["CAMODEL_LOG_PATH"] = str(dump_dir)
+        env["LD_LIBRARY_PATH"] = f"{sim_lib}:{args.ascend_home / 'lib64'}:{env.get('LD_LIBRARY_PATH', '')}"
+        subprocess.run(
+            [str(host_exe), "--so", str(so_path), "--device", str(args.device), "--block-dim", str(args.block_dim)],
+            cwd=str(outdir),
+            env=env,
+            check=True,
+        )
+
+        set_count = 0
+        wait_count = 0
+        samples: list[str] = []
+        for f in sorted(dump_dir.glob("*.instr_log.dump")):
+            try:
+                with f.open("r", errors="ignore") as fp:
+                    for line in fp:
+                        if "SET_FLAG" in line:
+                            set_count += 1
+                            if len(samples) < 6:
+                                samples.append(f"{f.name}: {line.strip()}")
+                        if "WAIT_FLAG" in line:
+                            wait_count += 1
+                            if len(samples) < 6:
+                                samples.append(f"{f.name}: {line.strip()}")
+            except OSError:
+                continue
+        print(f"SIM dumps: {dump_dir}  SET_FLAG={set_count}  WAIT_FLAG={wait_count}")
+        for s in samples:
+            print("  " + s)
 
     print(
         f"OK: {kernel.name} (sim soc={soc}) artifacts: "

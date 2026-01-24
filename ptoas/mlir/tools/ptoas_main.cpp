@@ -41,8 +41,10 @@ int main(int argc, char **argv) {
                                          llvm::cl::desc("Repo root path (for -I<repo>/include)"));
   llvm::cl::opt<std::string> ascendHomeOpt("ascend-home", llvm::cl::init(""),
                                            llvm::cl::desc("ASCEND_HOME_PATH (for bisheng includes)"));
-  llvm::cl::opt<bool> insertEvents("insert-events", llvm::cl::init(false),
-                                   llvm::cl::desc("Insert record_event/wait_event for cross-pipe deps (prototype)"));
+  llvm::cl::opt<bool> insertEvents("insert-events", llvm::cl::init(true),
+                                   llvm::cl::desc("Insert record_event/wait_event for cross-pipe deps (NPU default)"));
+  llvm::cl::opt<bool> noInsertEvents("no-insert-events", llvm::cl::init(false),
+                                     llvm::cl::desc("Disable event insertion (may crash on NPU)"));
   llvm::cl::opt<bool> assignTileAddrs("assign-tile-addrs", llvm::cl::init(true),
                                       llvm::cl::desc("Assign default addresses to tiles (prototype)"));
 
@@ -56,11 +58,12 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (assignTileAddrs || insertEvents) {
+  bool doInsertEvents = (target == "npu") && insertEvents && !noInsertEvents;
+  if (assignTileAddrs || doInsertEvents) {
     mlir::PassManager pm(&ctx);
     if (assignTileAddrs)
       pm.addPass(ptoas::createAssignTileAddressesPass());
-    if (insertEvents)
+    if (doInsertEvents)
       pm.addPass(ptoas::createInsertEventsPass());
     if (mlir::failed(pm.run(module))) {
       llvm::errs() << "pass pipeline failed\n";

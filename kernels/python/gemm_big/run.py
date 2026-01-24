@@ -197,7 +197,12 @@ def main() -> int:
     if args.run_mode == "sim":
         if not args.ascend_home or not args.ascend_home.exists():
             raise SystemExit("error: set --ascend-home or ASCEND_HOME_PATH for simulator mode")
-        pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=_soc_from_alias(args.soc))
+        soc_full = _soc_from_alias(args.soc)
+        pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc_full)
+        runtime_lib = "runtime_camodel"
+    else:
+        runtime_lib = "runtime"
+        soc_full = None
 
     cfg = GemmConfig(m=args.m, n=args.n, k=args.k, bm=args.bm, bn=args.bn, bk=args.bk)
     spec = make_gemm_f16f16f32_kernel(cfg=cfg)
@@ -226,6 +231,8 @@ def main() -> int:
         arch=cfg_compile.arch,
         ascend_home=args.ascend_home,
         fixed_block_dim=int(block_dim),
+        runtime_lib=runtime_lib,
+        soc=soc_full,
     )
     print(f"built: {so_path}", file=sys.stderr, flush=True)
 

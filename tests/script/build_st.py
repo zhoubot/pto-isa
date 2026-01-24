@@ -14,11 +14,16 @@ import sys
 import subprocess
 import shutil
 import argparse
+from pathlib import Path
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
 
 def run_command(command, cwd=None, check=True):
     try:
-        print(f"run command: {' '.join(command)}")
-        result = subprocess.run(
+        log(f"run command: {' '.join(command)}")
+        subprocess.run(
             command,
             cwd=cwd,
             check=check,
@@ -28,8 +33,60 @@ def run_command(command, cwd=None, check=True):
         )
         return ""
     except subprocess.CalledProcessError as e:
-        print(f"run command failed with return code {e.returncode}")
+        log(f"run command failed with return code {e.returncode}")
         raise
+
+
+def resolve_ascend_home() -> str:
+    ascend_home = os.environ.get("ASCEND_HOME_PATH")
+    if not ascend_home:
+        candidate = Path.home() / "Ascend" / "ascend-toolkit" / "latest"
+        if candidate.exists():
+            ascend_home = str(candidate)
+            os.environ["ASCEND_HOME_PATH"] = ascend_home
+        else:
+            raise EnvironmentError(
+                "ASCEND_HOME_PATH is not set and default ~/Ascend/ascend-toolkit/latest does not exist"
+            )
+    if not Path(ascend_home).exists():
+        raise EnvironmentError(f"ASCEND_HOME_PATH does not exist: {ascend_home}")
+    return ascend_home
+
+
+def source_setenv(ascend_home: str) -> None:
+    setenv_path = Path(ascend_home) / "bin" / "setenv.bash"
+    if not setenv_path.exists():
+        log(f"warning: not found {setenv_path}")
+        return
+
+    log(f"run env shell: {setenv_path}")
+    result = subprocess.run(
+        ["bash", "-lc", f"source '{setenv_path}' >/dev/null 2>&1 && env -0"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"failed to source {setenv_path} (rc={result.returncode}): {result.stderr.decode(errors='ignore')}"
+        )
+    for item in result.stdout.split(b"\x00"):
+        if not item:
+            continue
+        if b"=" not in item:
+            continue
+        key, _, value = item.partition(b"=")
+        key_str = key.decode(errors="ignore")
+        if not key_str:
+            continue
+        os.environ[key_str] = value.decode(errors="ignore")
+
+    os.environ["ASCEND_HOME_PATH"] = ascend_home
+
+
+def set_env_variables(run_mode: str) -> None:
+    ascend_home = resolve_ascend_home()
+    source_setenv(ascend_home)
 
 
 def build_project(run_mode, soc_version, testcase = "all"):
@@ -72,10 +129,10 @@ def build_project(run_mode, soc_version, testcase = "all"):
             stderr=subprocess.STDOUT,
             text=True
         )
-        print("compile process:\n", result.stdout)
+        log("compile process:\n" + result.stdout)
 
     except subprocess.CalledProcessError as e:
-        print(f"build failed: {e.stdout}")
+        log(f"build failed: {e.stdout}")
         raise
     finally:
         os.chdir(original_dir)
@@ -111,11 +168,14 @@ def main():
         print(f"target_dir: {target_dir}")
         os.chdir(target_dir)
 
+        # 设置环境变量（确保 ccec/acl 等可用）
+        set_env_variables(args.run_mode)
+
         # 执行构建
         build_project(args.run_mode, default_soc_version, args.testcase)
 
     except Exception as e:
-        print(f"run failed: {str(e)}", file=sys.stderr)
+        log(f"run failed: {str(e)}")
         sys.exit(1)
     os.chdir(original_dir)
 

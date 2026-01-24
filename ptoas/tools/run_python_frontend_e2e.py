@@ -35,7 +35,11 @@ def main() -> int:
 
     if args.run_mode == "sim":
         soc = "Ascend910B1" if args.soc == "a3" else ("Ascend910_9599" if args.soc == "a5" else args.soc)
-        pipeline.configure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
+        pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
+        runtime_lib = "runtime_camodel"
+    else:
+        runtime_lib = "runtime"
+        soc = None
 
     add_pto = args.outdir / "py_add16.pto"
     gemm_pto = args.outdir / "py_gemm16.pto"
@@ -65,7 +69,14 @@ def main() -> int:
         cfg = pipeline.CompileConfig(ptoas=args.ptoas, ascend_home=args.ascend_home, arch=arch)
         npu_cpp, npu_bin = pipeline.compile_pto_to_cce_and_bin(pto_path=pto, outdir=args.outdir, cfg=cfg)
         npu_so = args.outdir / f"lib{name}_npu.so"
-        pipeline.build_fatobj_so_from_cce(cce_path=npu_cpp, out_so=npu_so, arch=arch, ascend_home=args.ascend_home)
+        pipeline.build_fatobj_so_from_cce(
+            cce_path=npu_cpp,
+            out_so=npu_so,
+            arch=arch,
+            ascend_home=args.ascend_home,
+            runtime_lib=runtime_lib,
+            soc=soc,
+        )
         npu_out = pipeline.run_npu_kernel_from_so(
             so_path=npu_so, host_spec=host_spec, host_arrays=npu_arrays, device_id=args.device, block_dim=args.block_dim
         )
