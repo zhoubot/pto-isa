@@ -7,13 +7,13 @@ def add16():
     pto = PTO("add16")
     pto.prologue()
 
-    x = pto.tensor("x", (16, 16), dtype="f16", role="in")
-    y = pto.tensor("y", (16, 16), dtype="f16", role="in")
-    z = pto.tensor("z", (16, 16), dtype="f16", role="out")
+    x = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    y = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    z = pto.tensor(dtype="f16", shape=(16, 16), role="out")
 
-    tx = pto.vec_tile("tx", dtype="f16", shape=(16, 16))
-    ty = pto.vec_tile("ty", dtype="f16", shape=(16, 16))
-    tz = pto.vec_tile("tz", dtype="f16", shape=(16, 16))
+    tx = pto.vec(dtype="f16", shape=(16, 16))
+    ty = pto.vec(dtype="f16", shape=(16, 16))
+    tz = pto.vec(dtype="f16", shape=(16, 16))
 
     tx = pto.load(x)
     ty = pto.load(y)

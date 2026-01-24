@@ -16,6 +16,7 @@ if str(_REPO_ROOT) not in sys.path:
 from ptoas.python import pipeline  # noqa: E402
 from ptoas.python import binding  # noqa: E402
 from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
+from ptoas.python.host_codegen import TensorSpec, emit_acl_host_cpp  # noqa: E402
 
 from kernels.python.gemm_performance.kernel import make_gemm_performance_kernel  # noqa: E402
 
@@ -64,6 +65,67 @@ def _summarize_camodel_set_wait_flags(*, log_dir: Path) -> tuple[int, int, list[
     return (set_count, wait_count, samples)
 
 
+def _build_and_run_sim_dump_instr(
+    *,
+    outdir: Path,
+    so_path: Path,
+    host_specs: list[TensorSpec],
+    ascend_home: Path,
+    soc: str,
+    device: int,
+    block_dim: int,
+) -> Path:
+    import subprocess
+
+    host_cpp = outdir / "host.cpp"
+    host_cpp.write_text(emit_acl_host_cpp(so_basename=str(so_path), args=host_specs), encoding="utf-8")
+
+    sim_lib = pipeline.resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
+    host_exe = outdir / "host_sim_gemm_performance"
+
+    cmd = [
+        "g++",
+        str(host_cpp),
+        "-o",
+        str(host_exe),
+        "-O2",
+        "-std=c++17",
+        f"-I{ascend_home / 'include'}",
+        f"-I{ascend_home / 'pkg_inc'}",
+        f"-I{ascend_home / 'pkg_inc' / 'runtime' / 'runtime'}",
+        f"-I{ascend_home / 'pkg_inc' / 'profiling'}",
+        f"-L{ascend_home / 'lib64'}",
+        f"-L{sim_lib}",
+        f"-Wl,-rpath,{ascend_home / 'lib64'}",
+        f"-Wl,-rpath,{sim_lib}",
+        "-lruntime_camodel",
+        "-lnpu_drv_camodel",
+        "-lascendcl",
+        "-ltiling_api",
+        "-lplatform",
+        "-lc_sec",
+        "-ldl",
+        "-lm",
+        "-lstdc++",
+        "-lpthread",
+    ]
+    subprocess.run(cmd, check=True)
+
+    dump_dir = outdir / "host_camodel_logs"
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env["CAMODEL_LOG_PATH"] = str(dump_dir)
+    env["ASCEND_PROCESS_LOG_PATH"] = str(dump_dir)
+    env["LD_LIBRARY_PATH"] = f"{sim_lib}:{ascend_home / 'lib64'}:{env.get('LD_LIBRARY_PATH', '')}"
+    subprocess.run(
+        [str(host_exe), "--so", str(so_path), "--device", str(int(device)), "--block-dim", str(int(block_dim))],
+        cwd=str(outdir),
+        env=env,
+        check=True,
+    )
+    return dump_dir
+
+
 def _read_device_f32(acl, *, dev_ptr: int, offset_bytes: int) -> float:
     import ctypes
     import struct
@@ -87,12 +149,22 @@ def _check_samples_device(
     seed: int,
     rtol: float,
     atol: float,
+    m_limit: int | None = None,
+    n_limit: int | None = None,
 ) -> None:
     rng = np.random.default_rng(int(seed))
     m, k = a.shape
     n = b_t.shape[0]
+    m_lim = int(m_limit) if m_limit is not None else int(m)
+    n_lim = int(n_limit) if n_limit is not None else int(n)
+    if m_lim <= 0 or m_lim > m:
+        raise ValueError(f"invalid m_limit: {m_limit} (m={m})")
+    if n_lim <= 0 or n_lim > n:
+        raise ValueError(f"invalid n_limit: {n_limit} (n={n})")
     rs = rng.integers(0, m, size=(samples,), dtype=np.int64)
     cs = rng.integers(0, n, size=(samples,), dtype=np.int64)
+    rs = rs % m_lim
+    cs = cs % n_lim
     a32 = a.astype(np.float32, copy=False)
     b32 = b_t.astype(np.float32, copy=False)
     for r, col in zip(rs, cs):
@@ -160,9 +232,9 @@ def _benchmark_so(
         launch(
             ctypes.c_void_p(int(stream)),
             ctypes.c_uint32(int(block_dim)),
-            ctypes.c_void_p(int(c_dev)),
             ctypes.c_void_p(int(a_dev)),
             ctypes.c_void_p(int(b_dev)),
+            ctypes.c_void_p(int(c_dev)),
         )
 
     for _ in range(int(warmup)):
@@ -213,22 +285,47 @@ def main() -> int:
     ap.add_argument("--m", type=int, default=6144)
     ap.add_argument("--n", type=int, default=6144)
     ap.add_argument("--k", type=int, default=6144)
-    ap.add_argument("--block-dim", type=int, default=24)
+    ap.add_argument("--grid-m", type=int, default=4)
+    ap.add_argument("--grid-n", type=int, default=6)
+    ap.add_argument("--block-dim", type=int, default=None, help="Launch blockDim (default: grid_m*grid_n)")
+    ap.add_argument(
+        "--allow-unaligned",
+        action="store_true",
+        help="Allow unaligned (m,n,k) by padding inputs to tiling multiples and validating only the original region.",
+    )
 
     ap.add_argument("--emit-bin", action="store_true", help="Also emit *.bin via ptoas (slower; not needed to benchmark).")
+    ap.add_argument(
+        "--emit-exe",
+        action="store_true",
+        help="Also build a standalone executable (links fatobj; no dlopen .so) under the case outdir.",
+    )
     ap.add_argument("--skip-build", action="store_true", help="Reuse existing built .so if present in outdir.")
     ap.add_argument("--compile-only", action="store_true", help="Only build artifacts, do not run the kernel.")
+    ap.add_argument(
+        "--dump-instr",
+        action="store_true",
+        help="(sim mode) Also run a generated host.cpp to produce *.instr_log.dump and summarize SET_FLAG/WAIT_FLAG.",
+    )
+    ap.add_argument("--dump-instr-only", action="store_true", help="(sim mode) Only run the host.cpp dump flow, skip Python launch.")
 
     ap.add_argument(
         "--camodel-log-path",
         type=Path,
         default=None,
-        help="Simulator CAMODEL_LOG_PATH (default: <outdir>/<case>/camodel_logs when --run-mode=sim).",
+        help="Simulator CAMODEL_LOG_PATH (enables simulator dumps when --run-mode=sim).",
+    )
+    ap.add_argument(
+        "--enable-camodel-logs",
+        action="store_true",
+        help="(sim mode) Enable simulator dumps under <outdir>/<case>/camodel_logs (can be very slow).",
     )
 
     ap.add_argument("--iters", type=int, default=50)
     ap.add_argument("--warmup", type=int, default=20)
-    ap.add_argument("--no-check", dest="check", action="store_false", default=True)
+    ap.add_argument("--check", dest="check", action="store_true", help="Enable sampled output checks (default).")
+    ap.add_argument("--no-check", dest="check", action="store_false", help="Disable sampled output checks.")
+    ap.set_defaults(check=True)
     ap.add_argument("--check-samples", type=int, default=16)
     ap.add_argument("--check-rtol", type=float, default=2e-2)
     ap.add_argument("--check-atol", type=float, default=5e-2)
@@ -241,6 +338,42 @@ def main() -> int:
         print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
         return 2
 
+    block_dim = int(args.block_dim) if args.block_dim is not None else int(args.grid_m) * int(args.grid_n)
+    if block_dim <= 0:
+        print("error: block_dim must be > 0", file=sys.stderr)
+        return 2
+
+    def _ceil_div(a: int, b: int) -> int:
+        return (int(a) + int(b) - 1) // int(b)
+
+    m_req = int(args.m)
+    n_req = int(args.n)
+    k_req = int(args.k)
+    base_m = 128
+    base_n = 256
+    base_k = 64
+    tile_m = int(args.grid_m) * int(base_m)
+    tile_n = int(args.grid_n) * int(base_n)
+    m_pad = _ceil_div(m_req, tile_m) * tile_m if args.allow_unaligned else m_req
+    n_pad = _ceil_div(n_req, tile_n) * tile_n if args.allow_unaligned else n_req
+    k_pad = _ceil_div(k_req, base_k) * base_k if args.allow_unaligned else k_req
+
+    pad_tag = ""
+    if args.allow_unaligned and (m_pad != m_req or n_pad != n_req or k_pad != k_req):
+        pad_tag = f"_mp{m_pad}_np{n_pad}_kp{k_pad}"
+
+    case_dir = args.outdir / (
+        f"m{m_req}_n{n_req}_k{k_req}{pad_tag}_gm{int(args.grid_m)}_gn{int(args.grid_n)}_bd{block_dim}_{args.run_mode}"
+    )
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.run_mode == "sim" and (args.enable_camodel_logs or args.camodel_log_path is not None):
+        # Must be set *before* ensure_ascend_sim_env re-execs.
+        log_dir = args.camodel_log_path or (case_dir / "camodel_logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["CAMODEL_LOG_PATH"] = str(log_dir)
+        os.environ["ASCEND_PROCESS_LOG_PATH"] = str(log_dir)
+
     if args.run_mode == "sim":
         soc_full = _soc_from_alias(str(args.soc))
         pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc_full)
@@ -249,11 +382,14 @@ def main() -> int:
         runtime_lib = "runtime"
         soc_full = None
 
-    case_dir = args.outdir / f"m{int(args.m)}_n{int(args.n)}_k{int(args.k)}_bd{int(args.block_dim)}_{args.run_mode}"
-    case_dir.mkdir(parents=True, exist_ok=True)
-
     # Build PTO-AS from Python.
-    spec = make_gemm_performance_kernel(m=int(args.m), k=int(args.k), n=int(args.n))
+    spec = make_gemm_performance_kernel(
+        m=int(m_pad),
+        k=int(k_pad),
+        n=int(n_pad),
+        grid_m=int(args.grid_m),
+        grid_n=int(args.grid_n),
+    )
     pto_path = case_dir / "gemm_performance.pto"
     pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=binding.default_host_spec(spec))
     pto_path.write_text(pto_text, encoding="utf-8")
@@ -269,6 +405,7 @@ def main() -> int:
 
     cce_path = case_dir / "gemm_performance.cpp"
     so_path = case_dir / f"libgemm_performance_{args.run_mode}.so"
+    exe_path = case_dir / f"gemm_performance_{args.run_mode}"
     bin_path = case_dir / "gemm_performance.bin"
 
     if not (args.skip_build and so_path.exists()):
@@ -291,7 +428,7 @@ def main() -> int:
             out_so=so_path,
             arch=cfg.arch,
             ascend_home=cfg.ascend_home,
-            fixed_block_dim=int(args.block_dim),
+            fixed_block_dim=int(block_dim),
             runtime_lib=runtime_lib,
             soc=soc_full,
             cce_extra_flags=[
@@ -308,6 +445,33 @@ def main() -> int:
             ],
         )
 
+        if args.emit_exe:
+            host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
+            host_specs = [TensorSpec(dtype=a.dtype, shape=(int(a.shape[0]), int(a.shape[1]))) for a in host_spec.args]
+            pipeline.build_fatobj_exe_from_cce(
+                cce_path=cce_path,
+                out_exe=exe_path,
+                arch=cfg.arch,
+                ascend_home=cfg.ascend_home,
+                host_specs=host_specs,
+                fixed_block_dim=int(block_dim),
+                runtime_lib=runtime_lib,
+                soc=soc_full,
+                add_rpath=True,
+                cce_extra_flags=[
+                    "-mllvm",
+                    "-cce-aicore-stack-size=0x8000",
+                    "-mllvm",
+                    "-cce-aicore-function-stack-size=0x8000",
+                    "-mllvm",
+                    "-cce-aicore-record-overflow=true",
+                    "-mllvm",
+                    "-cce-aicore-addr-transform",
+                    "-mllvm",
+                    "-cce-aicore-dcci-insert-for-scalar=false",
+                ],
+            )
+
     # Keep a quick summary of inserted set/wait flags for debugging.
     try:
         summary = pipeline.summarize_cce_events(cce_path=cce_path)
@@ -320,27 +484,43 @@ def main() -> int:
         pass
 
     if args.compile_only:
-        print(f"OK: built so={so_path} outdir={case_dir}")
+        extra = f" exe={exe_path.name}" if args.emit_exe else ""
+        print(f"OK: built so={so_path}{extra} outdir={case_dir}")
         return 0
 
-    log_dir: Path | None = None
-    if args.run_mode == "sim":
-        log_dir = args.camodel_log_path or (case_dir / "camodel_logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
-        os.environ["CAMODEL_LOG_PATH"] = str(log_dir)
-        os.environ.setdefault("ASCEND_PROCESS_LOG_PATH", os.environ["CAMODEL_LOG_PATH"])
+    if args.run_mode == "sim" and args.dump_instr:
+        host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
+        host_specs = [TensorSpec(dtype=a.dtype, shape=(int(a.shape[0]), int(a.shape[1]))) for a in host_spec.args]
+        dump_dir = _build_and_run_sim_dump_instr(
+            outdir=case_dir,
+            so_path=so_path,
+            host_specs=host_specs,
+            ascend_home=args.ascend_home,
+            soc=_soc_from_alias(str(args.soc)),
+            device=int(args.device),
+            block_dim=int(block_dim),
+        )
+        s, w, samples = _summarize_camodel_set_wait_flags(log_dir=dump_dir)
+        (case_dir / "host_camodel_set_wait_summary.txt").write_text(
+            f"CAMODEL_LOG_PATH={dump_dir}\nSET_FLAG={s}\nWAIT_FLAG={w}\n"
+            + ("\n".join(samples) + ("\n" if samples else "")),
+            encoding="utf-8",
+        )
+        print(f"sim_dump: dir={dump_dir}  SET_FLAG={s}  WAIT_FLAG={w}")
+        if args.dump_instr_only:
+            return 0
 
     # Host inputs.
     rng = np.random.default_rng(19)
-    a_i16 = rng.integers(-1000, 1000, size=(int(args.m), int(args.k)), dtype=np.int16)
-    a = a_i16.astype(np.float16, copy=False)
-    a = (a / np.float16(256.0)).astype(np.float16, copy=False)
+    a = np.zeros((int(m_pad), int(k_pad)), dtype=np.float16)
+    a_i16 = rng.integers(-1000, 1000, size=(int(m_req), int(k_req)), dtype=np.int16)
+    a[: int(m_req), : int(k_req)] = (a_i16.astype(np.float16) / np.float16(256.0)).astype(np.float16, copy=False)
     del a_i16
 
     # DN tensor is backed by a physical [n, k] row-major buffer (host passes B^T contiguous).
-    b_t_i16 = rng.integers(-1000, 1000, size=(int(args.n), int(args.k)), dtype=np.int16)
-    b_t = b_t_i16.astype(np.float16, copy=False)
-    b_t = (b_t / np.float16(256.0)).astype(np.float16, copy=False)
+    b_t = np.zeros((int(n_pad), int(k_pad)), dtype=np.float16)
+    b_t_i16 = rng.integers(-1000, 1000, size=(int(n_req), int(k_req)), dtype=np.int16)
+    b_t[: int(n_req), : int(k_req)] = (b_t_i16.astype(np.float16) / np.float16(256.0)).astype(np.float16, copy=False)
     del b_t_i16
 
     # Benchmark + optional sampled validation.
@@ -348,7 +528,7 @@ def main() -> int:
     avg_ms, c_dev, state = _benchmark_so(
         so_path=so_path,
         device_id=int(args.device),
-        block_dim=int(args.block_dim),
+        block_dim=int(block_dim),
         a=a,
         b_t=b_t,
         iters=int(args.iters),
@@ -370,20 +550,12 @@ def main() -> int:
                 seed=20,
                 rtol=float(args.check_rtol),
                 atol=float(args.check_atol),
+                m_limit=int(m_req),
+                n_limit=int(n_req),
             )
             print(f"check: OK (samples={int(args.check_samples)})")
     finally:
         _cleanup_npu(acl, stream, a_dev, b_dev, c_dev, device_id=int(args.device))
-
-    if args.run_mode == "sim":
-        assert log_dir is not None
-        s, w, samples = _summarize_camodel_set_wait_flags(log_dir=log_dir)
-        (case_dir / "camodel_set_wait_summary.txt").write_text(
-            f"CAMODEL_LOG_PATH={log_dir}\nSET_FLAG={s}\nWAIT_FLAG={w}\n"
-            + ("\n".join(samples) + ("\n" if samples else "")),
-            encoding="utf-8",
-        )
-        print(f"sim_log: CAMODEL_LOG_PATH={log_dir}  SET_FLAG={s}  WAIT_FLAG={w}")
 
     extra = f" bin={bin_path.name}" if args.emit_bin else ""
     print(f"OK: outdir={case_dir}{extra}")

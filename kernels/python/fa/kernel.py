@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from ptoas.python.ast_frontend import KernelSpec, compile_kernel_spec_from_source
+from pto_as import PTO
+from ptoas.python.ast_frontend import KernelSpec, compile_kernel_spec
 
 
-def make_fa16_kernel(*, target: str) -> KernelSpec:
-    # This is a minimal "FA" placeholder kernel for validating the end-to-end Python->PTO-AS->CPU flow.
+def fa16():
+    # Minimal "FA" placeholder kernel for validating the end-to-end flow.
+    pto = PTO("fa16")
+    pto.prologue()
+
     # Signature (tensor args):
     #   arg0: q f16[16,16]
     #   arg1: k f16[16,16]
@@ -13,32 +17,31 @@ def make_fa16_kernel(*, target: str) -> KernelSpec:
     #
     # Compute:
     #   out = q + k + v
-    src = r"""
-def fa16():
-    prologue()
+    q = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    k = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    v = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    out = pto.tensor(dtype="f16", shape=(16, 16), role="out")
 
-    q = tensor(dtype="f16", shape=(16, 16))
-    k = tensor(dtype="f16", shape=(16, 16))
-    v = tensor(dtype="f16", shape=(16, 16))
-    out = tensor(dtype="f16", shape=(16, 16))
+    tq = pto.vec(dtype="f16", shape=(16, 16))
+    tk = pto.vec(dtype="f16", shape=(16, 16))
+    tv = pto.vec(dtype="f16", shape=(16, 16))
+    to = pto.vec(dtype="f16", shape=(16, 16))
 
-    tq = tile(loc="Vec", dtype="f16", rows=16, cols=16)
-    tk = tile(loc="Vec", dtype="f16", rows=16, cols=16)
-    tv = tile(loc="Vec", dtype="f16", rows=16, cols=16)
-    to = tile(loc="Vec", dtype="f16", rows=16, cols=16)
+    tq = pto.load(q)
+    tk = pto.load(k)
+    to = pto.tadd(tq, tk)
+    tv = pto.load(v)
+    to = pto.tadd(to, tv)
+    pto.store(out, to)
 
-    tload(tq, q, 0, 0)
-    tload(tk, k, 0, 0)
-    tadd(to, tq, tk)
-    tload(tv, v, 0, 0)
-    tadd(to, to, tv)
-    tstore(out, 0, 0, to)
+    pto.epilogue()
+    return pto.program()
 
-    epilogue()
-"""
+
+def make_fa16_kernel(*, target: str) -> KernelSpec:
     if target not in ("cpu", "npu"):
         raise ValueError("target must be cpu|npu")
-    return compile_kernel_spec_from_source(src, func_name="fa16")
+    return compile_kernel_spec(fa16)
 
 
 def make_fa16_pto(*, target: str) -> str:

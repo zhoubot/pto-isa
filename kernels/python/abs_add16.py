@@ -3,9 +3,9 @@ from __future__ import annotations
 from pto_as import PTO
 
 
-def pto_aten_ir_primitives():
-    # Upstream ref: `~/github/pto-isa/examples/pto_aten_ir_primitives.py`
-    pto = PTO("pto_aten_ir_primitives")
+def abs_add16():
+    # z = abs(x) + y
+    pto = PTO("abs_add16")
     pto.prologue()
 
     x = pto.tensor(dtype="f32", shape=(16, 16), role="in")
@@ -14,12 +14,15 @@ def pto_aten_ir_primitives():
 
     tx = pto.vec(dtype="f32", shape=(16, 16))
     ty = pto.vec(dtype="f32", shape=(16, 16))
-    tz = pto.vec(dtype="f32", shape=(16, 16))
+    ax = pto.vec(dtype="f32", shape=(16, 16))
+    out = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tz = pto.tmul(tx, ty)
-    pto.store(z, tz)
+    ax = pto.tabs(tx)
+    out = pto.tadd(ax, ty)
+    pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
+

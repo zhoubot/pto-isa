@@ -46,6 +46,11 @@ class PTO:
         self.name = name
         self._p = PTOProgram()
         self._next_arg = 0
+        self._next_tmp = 0
+
+    def _fresh(self, prefix: str) -> str:
+        self._next_tmp += 1
+        return f"{prefix}{self._next_tmp}"
 
     # --- High-level structure ---
 
@@ -68,8 +73,8 @@ class PTO:
 
     def tensor(
         self,
-        name: str,
-        shape: tuple[int, int],
+        name: str | tuple[int, int] | None = None,
+        shape: tuple[int, int] | None = None,
         *,
         dtype: str,
         stride: tuple[int, int] | None = None,
@@ -79,6 +84,14 @@ class PTO:
     ) -> Tensor:
         # `role` is host-metadata only; stored externally by the AST frontend. Kept here for API parity.
         _ = role
+        if shape is None and isinstance(name, tuple):
+            shape = name
+            name = None
+        if shape is None:
+            raise TypeError("tensor(...) requires shape=(H, W)")
+
+        if name is None:
+            name = self._fresh("v")
         view = f"%{name}"
         ty = TensorType(dtype=dtype, shape=shape, stride=stride, layout=layout)
         if arg is None:
@@ -89,7 +102,7 @@ class PTO:
 
     def _tile(
         self,
-        name: str,
+        name: str | None = None,
         *,
         loc: str,
         dtype: str,
@@ -123,24 +136,43 @@ class PTO:
             fractal=fractal,
             pad=pad,
         )
+        if name is None:
+            name = self._fresh("t")
         ref = f"%{name}"
         self._p.alloc_tile(ref, ty, addr=str(addr) if addr is not None else None)
         return Tile(ref=ref)
 
-    def vec_tile(self, name: str, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+    def vec_tile(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
         return self._tile(name, loc="Vec", dtype=dtype, shape=shape, blayout="RowMajor", slayout="NoneBox", **kw)
 
-    def mat_tile(self, name: str, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+    def mat_tile(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
         return self._tile(name, loc="Mat", dtype=dtype, shape=shape, blayout="ColMajor", slayout="RowMajor", **kw)
 
-    def left_tile(self, name: str, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+    def left_tile(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
         return self._tile(name, loc="Left", dtype=dtype, shape=shape, blayout="RowMajor", slayout="RowMajor", **kw)
 
-    def right_tile(self, name: str, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+    def right_tile(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
         return self._tile(name, loc="Right", dtype=dtype, shape=shape, blayout="RowMajor", slayout="ColMajor", **kw)
 
-    def acc_tile(self, name: str, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+    def acc_tile(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
         return self._tile(name, loc="Acc", dtype=dtype, shape=shape, blayout="ColMajor", slayout="RowMajor", **kw)
+
+    # --- Short "grammar candy" aliases (supported by the AST frontend) ---
+
+    def vec(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+        return self.vec_tile(name, dtype=dtype, shape=shape, **kw)
+
+    def mat(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+        return self.mat_tile(name, dtype=dtype, shape=shape, **kw)
+
+    def left(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+        return self.left_tile(name, dtype=dtype, shape=shape, **kw)
+
+    def right(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+        return self.right_tile(name, dtype=dtype, shape=shape, **kw)
+
+    def acc(self, name: str | None = None, *, dtype: str, shape: tuple[int, int], **kw: Any) -> Tile:
+        return self.acc_tile(name, dtype=dtype, shape=shape, **kw)
 
     # --- Constants ---
 
@@ -189,4 +221,3 @@ class PTO:
             return self._emit_dst_first(opcode, operands)
 
         return _op
-

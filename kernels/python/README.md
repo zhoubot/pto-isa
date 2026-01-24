@@ -26,3 +26,9 @@ Run everything:
 Run a single case:
 
 `python3 kernels/python/run_regression.py --run-mode npu --cases pto_fused_softmax`
+
+## SPMD / multi-block cases
+
+Some kernels (e.g. `spmd_tiled_add256`, `spmd_tiled_transpose256`, `spmd_tiled_rowsum256`) are intended to
+run with `block_dim > 1`. The regression runner supports this via per-case overrides in
+`kernels/python/run_regression.py` (cases can carry a `block_dim` field).

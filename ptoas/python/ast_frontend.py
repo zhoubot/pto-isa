@@ -30,11 +30,14 @@ Supported kernel authoring styles:
    ```
    def build():
        pto = PTO("my_kernel")
-       x = pto.tensor("x", (16, 16), dtype="f16")
-       tx = pto.vec_tile("tx", dtype="f16", shape=(16, 16))
-       pto.tload(tx, x)     # defaults to [0,0]
+       x = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+       y = pto.tensor(dtype="f16", shape=(16, 16), role="out")
+       tx = pto.vec(dtype="f16", shape=(16, 16))
+       ty = pto.vec(dtype="f16", shape=(16, 16))
+       tx = pto.load(x)     # defaults to [0,0]
+       ty = pto.tadd(tx, tx)
        ...
-       pto.tstore(x, tx)    # defaults to [0,0]
+       pto.store(y, ty)     # defaults to [0,0]
    ```
 """
 
@@ -114,7 +117,7 @@ class _Text:
 
 
 class _Compiler:
-    def __init__(self) -> None:
+    def __init__(self, *, consts: dict[str, Any] | None = None) -> None:
         self._t = _Text()
         self._sym: dict[str, _Sym] = {}
         self._tmp_i = 0
@@ -128,6 +131,36 @@ class _Compiler:
         self._tensor_arg_names: dict[int, str] = {}
         self._tensor_arg_roles: dict[int, str | None] = {}
         self._explicit_kernel_name: str | None = None
+        if consts:
+            self._seed_consts(consts)
+
+    def _seed_consts(self, consts: dict[str, Any]) -> None:
+        """
+        Seed compile-time constants for the current compilation.
+
+        This enables parameterized kernels without Python string templating:
+
+          def my_kernel():
+              A = tensor(dtype="f16", shape=(m, k))
+              ...
+
+          compile_kernel_spec(my_kernel, consts={"m": 4096, "k": 4096})
+
+        Notes:
+        - All values are available to `_eval_static(...)` via `_const_env`.
+        - For scalar ints/bools/floats, we also seed `_literal` so they can be used
+          as immediate operands in index expressions (e.g. `x = m // 16`).
+        """
+        for name, value in consts.items():
+            if not isinstance(name, str) or not name:
+                raise FrontendError("consts keys must be non-empty strings")
+            self._const_env[name] = value
+            if isinstance(value, bool):
+                self._literal[name] = "1" if value else "0"
+            elif isinstance(value, int):
+                self._literal[name] = str(int(value))
+            elif isinstance(value, float):
+                self._literal[name] = repr(float(value))
 
     def _tmp(self) -> _Sym:
         self._tmp_i += 1
@@ -143,7 +176,7 @@ class _Compiler:
     def _bind_sym(self, py_name: str, pto_name: str) -> _Sym:
         # Bind a Python variable name to a specific PTO-AS SSA name.
         # This is used by the object DSL when the first argument is an explicit name:
-        #   centered = pto.vec_tile("scores_centered", ...)
+        #   centered = pto.vec("scores_centered", ...)
         self._sym[py_name] = _Sym(pto_name)
         return self._sym[py_name]
 
@@ -481,7 +514,7 @@ class _Compiler:
 
     def _declare_tile_sugar(self, target: str, call: ast.Call, *, loc: str) -> None:
         # New object-DSL helpers:
-        #   q_tile = pto.vec_tile("q_tile", dtype="f32", shape=(s,d))
+        #   q_tile = pto.vec("q_tile", dtype="f32", shape=(s,d))
         declared_name: str | None = None
         dtype: str | None = None
         shape: Any | None = None
@@ -622,6 +655,15 @@ class _Compiler:
                 raise FrontendError('comment("...") expects one string argument')
             for line in text.splitlines():
                 self._t.line(f"; {line}" if line else ";")
+            return
+
+        if fn in ("kernel", "kernel_name"):
+            if len(call.args) != 1:
+                raise FrontendError('kernel("name") expects one string argument')
+            name0 = self._eval_const(call.args[0])
+            if not isinstance(name0, str) or not name0:
+                raise FrontendError('kernel("name") expects one non-empty string argument')
+            self._explicit_kernel_name = name0
             return
 
         if fn == "program":
@@ -776,6 +818,10 @@ class _Compiler:
                     }
                     self._declare_tile_sugar(dst, stmt.value, loc=loc_map[fn])
                     return
+                if fn in ("vec", "mat", "left", "right", "acc"):
+                    loc_map = {"vec": "Vec", "mat": "Mat", "left": "Left", "right": "Right", "acc": "Acc"}
+                    self._declare_tile_sugar(dst, stmt.value, loc=loc_map[fn])
+                    return
                 if fn == "const":
                     # `scale = pto.const("scale", 1.0 / sqrt(d), scalar("f32"))`
                     if len(stmt.value.args) < 2:
@@ -863,6 +909,21 @@ def compile_kernel_spec_from_source(source: str, *, func_name: str) -> KernelSpe
     return _Compiler().compile_funcdef(fns[0])
 
 
+def compile_kernel_spec_from_source_with_consts(source: str, *, func_name: str, consts: dict[str, Any]) -> KernelSpec:
+    """
+    Like `compile_kernel_spec_from_source`, but with injected compile-time constants.
+
+    Prefer `compile_kernel_spec(..., consts=...)` when starting from a function object.
+    """
+    m = ast.parse(textwrap.dedent(source))
+    fns = [n for n in m.body if isinstance(n, ast.FunctionDef) and n.name == func_name]
+    if not fns:
+        raise FrontendError(f"function not found: {func_name}")
+    if len(fns) != 1:
+        raise FrontendError(f"ambiguous function: {func_name}")
+    return _Compiler(consts=consts).compile_funcdef(fns[0])
+
+
 def compile_kernel_spec_from_file(path: Path, *, func_name: str) -> KernelSpec:
     return compile_kernel_spec_from_source(path.read_text(encoding="utf-8"), func_name=func_name)
 
@@ -874,6 +935,13 @@ def compile_kernel_from_source(source: str, *, func_name: str) -> str:
 def compile_kernel(func: Callable[..., Any]) -> str:
     src = inspect.getsource(func)
     return compile_kernel_from_source(src, func_name=func.__name__)
+
+
+def compile_kernel_spec(func: Callable[..., Any], *, consts: dict[str, Any] | None = None) -> KernelSpec:
+    src = inspect.getsource(func)
+    if consts is None:
+        return compile_kernel_spec_from_source(src, func_name=func.__name__)
+    return compile_kernel_spec_from_source_with_consts(src, func_name=func.__name__, consts=consts)
 
 
 def make_add16_program() -> str:
@@ -917,7 +985,7 @@ def gemm16():
     a_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
     b_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
 
-    a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="RowMajor")
+    a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
     b_right = tile(loc="Right", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="ColMajor")
     c_acc = tile(loc="Acc", dtype="f32", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
 

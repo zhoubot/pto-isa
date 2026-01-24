@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pto_as import PTO
+from pto_as import PTO, scalar
 
 
-def pto_aten_ir_primitives():
-    # Upstream ref: `~/github/pto-isa/examples/pto_aten_ir_primitives.py`
-    pto = PTO("pto_aten_ir_primitives")
+def axpy16():
+    # z = alpha * x + y
+    pto = PTO("axpy16")
     pto.prologue()
 
     x = pto.tensor(dtype="f32", shape=(16, 16), role="in")
@@ -14,12 +14,17 @@ def pto_aten_ir_primitives():
 
     tx = pto.vec(dtype="f32", shape=(16, 16))
     ty = pto.vec(dtype="f32", shape=(16, 16))
-    tz = pto.vec(dtype="f32", shape=(16, 16))
+    tmp = pto.vec(dtype="f32", shape=(16, 16))
+    out = pto.vec(dtype="f32", shape=(16, 16))
+
+    alpha = pto.const("alpha", 0.25, scalar("f32"))
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tz = pto.tmul(tx, ty)
-    pto.store(z, tz)
+    tmp = pto.tmuls(tx, alpha)
+    out = pto.tadd(tmp, ty)
+    pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
+

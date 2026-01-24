@@ -2,9 +2,37 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ptoas.python.ast_frontend import KernelSpec, compile_kernel_spec_from_source
+from pto_as import PTO
+from ptoas.python.ast_frontend import KernelSpec, compile_kernel_spec
 
 Target = Literal["cpu", "npu"]
+
+
+def gemm16():
+    pto = PTO("gemm16")
+    pto.prologue()
+
+    a = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    b = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    c = pto.tensor(dtype="f32", shape=(16, 16), role="out")
+
+    a_mat = pto.mat(dtype="f16", shape=(16, 16))
+    b_mat = pto.mat(dtype="f16", shape=(16, 16))
+
+    # Use a Left layout that matches both CPU simulator and NPU cube core.
+    a_left = pto.left(dtype="f16", shape=(16, 16), blayout="ColMajor", slayout="RowMajor")
+    b_right = pto.right(dtype="f16", shape=(16, 16))
+    c_acc = pto.acc(dtype="f32", shape=(16, 16))
+
+    a_mat = pto.load(a)
+    b_mat = pto.load(b)
+    a_left = pto.mov(a_mat)
+    b_right = pto.mov(b_mat)
+    c_acc = pto.tmatmul(a_left, b_right)
+    pto.store(c, c_acc)
+
+    pto.epilogue()
+    return pto.program()
 
 
 def make_gemm16_kernel(*, target: Target) -> KernelSpec:
@@ -13,31 +41,7 @@ def make_gemm16_kernel(*, target: Target) -> KernelSpec:
 
     # Single cross-platform PTO kernel for both CPU and NPU.
     # (CPU TMATMUL accepts broader layouts; see include/pto/cpu/TMatmul.hpp.)
-    src = r"""
-def gemm16():
-    prologue()
-
-    a = tensor(dtype="f16", shape=(16, 16))
-    b = tensor(dtype="f16", shape=(16, 16))
-    c = tensor(dtype="f32", shape=(16, 16))
-
-    a_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-    b_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-
-    a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="RowMajor")
-    b_right = tile(loc="Right", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="ColMajor")
-    c_acc = tile(loc="Acc", dtype="f32", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-
-    tload(a_mat, a, 0, 0)
-    tload(b_mat, b, 0, 0)
-    tmov(a_left, a_mat)
-    tmov(b_right, b_mat)
-    tmatmul(c_acc, a_left, b_right)
-    tstore(c, 0, 0, c_acc)
-
-    epilogue()
-"""
-    return compile_kernel_spec_from_source(src, func_name="gemm16")
+    return compile_kernel_spec(gemm16)
 
 
 def make_gemm16_pto(*, target: Target) -> str:

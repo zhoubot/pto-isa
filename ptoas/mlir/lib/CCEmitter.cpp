@@ -938,6 +938,33 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       return ss.str();
     }
 
+    if (opcode == "tsync") {
+      // Prototype: explicit PIPE barrier for back-to-back vector ops.
+      // InsertEventsPass emits `pto.tsync {pipe="V"}`.
+      auto pipeA = op->getAttrOfType<mlir::StringAttr>("pipe");
+      auto pipe = pipeA ? trim(pipeA.getValue().str()) : std::string("V");
+      if (pipe.empty())
+        pipe = "V";
+      auto pipeConst = [&]() -> std::string {
+        if (pipe == "S")
+          return "PIPE_S";
+        if (pipe == "FIX")
+          return "PIPE_FIX";
+        if (pipe == "V")
+          return "PIPE_V";
+        if (pipe == "MTE1")
+          return "PIPE_MTE1";
+        if (pipe == "MTE2")
+          return "PIPE_MTE2";
+        if (pipe == "MTE3")
+          return "PIPE_MTE3";
+        if (pipe == "M")
+          return "PIPE_M";
+        return "PIPE_V";
+      }();
+      return "  pipe_barrier(" + pipeConst + ");\n";
+    }
+
     // Explicit event primitives (prototype): lower to set_flag/wait_flag.
     auto pipeForOpEnum = [&](llvm::StringRef opEnum) -> llvm::StringRef {
       if (opEnum == "TLOAD")
@@ -1672,9 +1699,7 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         os << indentExtra(emitSubviewStmt(&op), extra);
         continue;
       }
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.record_event" || name == "pto.wait_event" ||
-          name == "pto.tsync" ||
-          name == "pto.make_tensor_view" || name == "pto.alloc_tile")
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.alloc_tile")
         continue;
 
       if (name == "scf.for") {

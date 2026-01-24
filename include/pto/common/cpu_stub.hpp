@@ -15,6 +15,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <cstring>
 #include <cassert>
 #include <cstdio>
+#include <cstdint>
 
 // CPU simulator assertion helper (always enabled).
 #define PTO_CPU_STUB_ASSERT(cond)                                                                    \
@@ -85,5 +86,23 @@ static inline void aclrtMallocHost(void**p, size_t sz){
 
 typedef int event_t;
 #define EVENT_ID0 0
+
+// --- SPMD helpers for CPU simulator ---
+//
+// When ptoas emits `get_block_idx()` / `get_block_num()` in CPU-simulator mode,
+// we provide a simple single-threaded "multi-block" model:
+// - Python test harness sets `pto_cpu_block_num` and iterates `pto_cpu_block_idx`
+//   before invoking the generated `pto_kernel_cpu(...)`.
+// - The kernel can partition work using these accessors, matching NPU behavior.
+//
+// Use weak definitions so multiple CPU-simulator translation units can include
+// this header without ODR/link errors.
+extern "C" {
+__attribute__((weak, visibility("default"))) uint32_t pto_cpu_block_idx = 0;
+__attribute__((weak, visibility("default"))) uint32_t pto_cpu_block_num = 1;
+}
+
+static inline uint32_t get_block_idx() { return pto_cpu_block_idx; }
+static inline uint32_t get_block_num() { return pto_cpu_block_num; }
 
 #endif

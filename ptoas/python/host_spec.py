@@ -15,6 +15,10 @@ class HostTensorArg:
     dtype: str
     shape: tuple[int, int]
     role: TensorRole = "in"
+    # Optional view metadata; used by host array generator for non-ND tensors (e.g. DN).
+    # When omitted, callers should assume a contiguous ND buffer with default row-major strides.
+    layout: str = "ND"
+    stride: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,26 @@ class HostSpec:
     block_dim: int = 1
     kernel_name: str = "pto_kernel"
 
+    def to_dict(self) -> dict:
+        return {
+            "kernel_name": str(self.kernel_name),
+            "seed": int(self.seed),
+            "block_dim": int(self.block_dim),
+            "args": [
+                {
+                    "dtype": str(a.dtype),
+                    "shape": [int(a.shape[0]), int(a.shape[1])],
+                    "role": a.role,
+                    "layout": str(a.layout),
+                    "stride": ([int(a.stride[0]), int(a.stride[1])] if a.stride is not None else None),
+                }
+                for a in self.args
+            ],
+        }
+
+    def to_json(self, *, indent: int | None = None) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, indent=indent)
+
     def output_indices(self) -> list[int]:
         return [i for i, a in enumerate(self.args) if a.role in ("out", "inout")]
 
@@ -45,7 +69,16 @@ def encode_host_spec(spec: HostSpec) -> str:
         "kernel_name": spec.kernel_name,
         "seed": int(spec.seed),
         "block_dim": int(spec.block_dim),
-        "args": [{"dtype": a.dtype, "shape": [int(a.shape[0]), int(a.shape[1])], "role": a.role} for a in spec.args],
+        "args": [
+            {
+                "dtype": a.dtype,
+                "shape": [int(a.shape[0]), int(a.shape[1])],
+                "role": a.role,
+                "layout": str(a.layout),
+                "stride": ([int(a.stride[0]), int(a.stride[1])] if a.stride is not None else None),
+            }
+            for a in spec.args
+        ],
     }
     # Keep this readable in diffs by formatting with 2-space indents.
     body = json.dumps(payload, sort_keys=True, indent=2)
@@ -77,7 +110,19 @@ def parse_host_spec_from_pto(pto: str) -> HostSpec | None:
     args: list[HostTensorArg] = []
     for a in payload.get("args", []):
         shape = a["shape"]
-        args.append(HostTensorArg(dtype=a["dtype"], shape=(int(shape[0]), int(shape[1])), role=a.get("role", "in")))
+        stride = a.get("stride", None)
+        stride2 = None
+        if stride is not None:
+            stride2 = (int(stride[0]), int(stride[1]))
+        args.append(
+            HostTensorArg(
+                dtype=a["dtype"],
+                shape=(int(shape[0]), int(shape[1])),
+                role=a.get("role", "in"),
+                layout=str(a.get("layout", "ND")),
+                stride=stride2,
+            )
+        )
 
     return HostSpec(
         args=tuple(args),
@@ -96,7 +141,8 @@ def infer_host_spec_from_pto(*, pto: str) -> HostSpec:
       - marks the last arg as output
     """
     pat = re.compile(
-        r"%[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*pto\.make_tensor_view\s+%arg(\d+)\s*,\s*dtype=([a-z0-9]+)\s*,\s*shape=\[(\d+),(\d+)\]"
+        r"%[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*pto\.make_tensor_view\s+%arg(\d+)\s*,\s*dtype=([a-z0-9]+)\s*,\s*"
+        r"shape=\[(\d+),(\d+)\]\s+strides=\[(\d+),(\d+)\]\s*,\s*layout=([A-Z0-9_]+)"
     )
     found: dict[int, HostTensorArg] = {}
     for m in pat.finditer(pto):
@@ -104,7 +150,11 @@ def infer_host_spec_from_pto(*, pto: str) -> HostSpec:
         dt = m.group(2)
         h = int(m.group(3))
         w = int(m.group(4))
-        found[idx] = HostTensorArg(dtype=dt, shape=(h, w), role="in")
+        s0 = int(m.group(5))
+        s1 = int(m.group(6))
+        layout = str(m.group(7))
+        stride = None if (layout == "ND" and s0 == w and s1 == 1) else (s0, s1)
+        found[idx] = HostTensorArg(dtype=dt, shape=(h, w), role="in", layout=layout, stride=stride)
     if not found:
         raise ValueError("failed to infer host args from .pto (no pto.make_tensor_view %argN found)")
 

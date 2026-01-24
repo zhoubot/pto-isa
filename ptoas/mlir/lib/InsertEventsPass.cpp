@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include <string>
@@ -122,9 +123,10 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
 
   if (opcode == "tstore") {
     auto operands = readOperands(op);
-    if (operands.size() != 2)
+    // Support indexed form: [dstTensor, (optional indices...), srcTile].
+    if (operands.size() < 2)
       return "";
-    auto src = stripIndexing(operands[1]);
+    auto src = stripIndexing(operands.back());
     auto it = argTypes.find(src);
     if (it == argTypes.end())
       return "TSTORE_VEC";
@@ -212,10 +214,10 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
   if (operands.empty())
     return {};
 
-  // tstore: operands = [dstTensor, srcTile]
+  // tstore: operands = [dstTensor, (optional indices...), srcTile]
   if (opcode == "tstore") {
     if (operands.size() >= 2)
-      return {stripIndexing(trim(operands[1]))};
+      return {stripIndexing(trim(operands.back()))};
     return {};
   }
 
@@ -239,13 +241,13 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
   return {};
 }
 
-static void insertEventOp(mlir::OpBuilder &b, mlir::Location loc, llvm::StringRef kind, llvm::StringRef srcOp,
-                          llvm::StringRef dstOp, llvm::StringRef token) {
+static mlir::Operation *insertEventOp(mlir::OpBuilder &b, mlir::Location loc, llvm::StringRef kind,
+                                      llvm::StringRef srcOp, llvm::StringRef dstOp, llvm::StringRef token) {
   mlir::OperationState st(loc, ("pto." + kind).str());
   st.addAttribute("src_op", b.getStringAttr(srcOp));
   st.addAttribute("dst_op", b.getStringAttr(dstOp));
   st.addAttribute("token", b.getStringAttr(token));
-  b.create(st);
+  return b.create(st);
 }
 
 static bool hasEquivalentRecordEventAfter(mlir::Operation *producer, llvm::StringRef srcOp, llvm::StringRef dstOp,
@@ -284,7 +286,9 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
       return;
 
     // Collect tile types so we can choose TMOV/TSTORE enum variants correctly.
+    // Also collect constants so we can prove some loops execute at least once.
     std::map<std::string, std::string> argTypes;
+    std::map<std::string, std::string> constMap;
     module.walk([&](mlir::Operation *op) {
       auto name = op->getName().getStringRef();
       if (name == "pto.arg") {
@@ -305,10 +309,39 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         argTypes[trim(operands[0])] = typeSig.getValue().str();
         return;
       }
+      if (name == "pto.const") {
+        auto n = op->getAttrOfType<mlir::StringAttr>("name");
+        auto v = op->getAttrOfType<mlir::StringAttr>("value");
+        if (!n || !v)
+          return;
+        constMap[n.getValue().str()] = trim(v.getValue().str());
+        return;
+      }
     });
 
     mlir::OpBuilder b(module.getContext());
     int loopId = 0;
+
+    auto canonicalOpEnumForPipe = [&](llvm::StringRef pipe) -> llvm::StringRef {
+      // Pick a stable representative op enum for each pipe so event insertion can
+      // conservatively synchronize by pipe when the exact producer op is ambiguous
+      // across control-flow merges.
+      if (pipe == "MTE2")
+        return "TLOAD";
+      if (pipe == "MTE1")
+        return "TMOV_M2L";
+      if (pipe == "MTE3")
+        return "TSTORE_VEC";
+      if (pipe == "M")
+        return "TMATMUL";
+      if (pipe == "V")
+        return "TMOV_V2V";
+      if (pipe == "FIX")
+        return "TSTORE_ACC";
+      if (pipe == "S")
+        return "TCI";
+      return "";
+    };
 
     auto opOrNestedHasPipe = [&](mlir::Operation *op, llvm::StringRef wantPipe) -> bool {
       if (!op)
@@ -342,48 +375,55 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     };
 
     // Token allocator:
-    // - Tokens are only 0..7 per (srcPipe,dstPipe) channel (see EventIdCounter<SrcPipe,DstPipe>).
-    // - IMPORTANT: tokens are pipe-scoped, not opcode-scoped. Different PTO op enums may map to
-    //   the same pipe pair (e.g. TMOV_M2L and TMOV_M2R are both MTE1), so key allocation must
-    //   be based on pipes to avoid collisions that can deadlock.
-    // - We keep a stable mapping per (srcPipe, dstPipe, key) to avoid reuse hazards within the same channel.
-    // - If a channel needs >8 distinct keys, we fall back to a hashed slot (still bounded).
-    std::map<std::tuple<std::string, std::string, std::string>, std::string> tokenByEdgeKey;
-    std::map<std::pair<std::string, std::string>, int> nextTokenByEdge;
-    auto allocTokenFor = [&](llvm::StringRef srcOp, llvm::StringRef dstOp, llvm::StringRef key) -> std::string {
-      auto srcPipe = pipeForOpEnum(srcOp);
-      auto dstPipe = pipeForOpEnum(dstOp);
-      // If we cannot infer pipes (shouldn't happen for supported ops), fall back to opcode pair.
-      std::string srcCh = !srcPipe.empty() ? srcPipe.str() : srcOp.str();
-      std::string dstCh = !dstPipe.empty() ? dstPipe.str() : dstOp.str();
-
-      auto k = std::make_tuple(srcCh, dstCh, key.str());
-      auto it = tokenByEdgeKey.find(k);
-      if (it != tokenByEdgeKey.end())
-        return it->second;
-
-      auto ch = std::make_pair(srcCh, dstCh);
-      int next = nextTokenByEdge[ch];
-      if (next < 8) {
-        nextTokenByEdge[ch] = next + 1;
-        return tokenByEdgeKey.emplace(k, std::to_string(next)).first->second;
-      }
-
-      // Fallback: keep within [0,7] but avoid crashing. This may reduce overlap.
-      uint32_t h = 2166136261u;
-      for (char c : key.str()) {
-        h ^= static_cast<uint8_t>(c);
-        h *= 16777619u;
-      }
-      return tokenByEdgeKey.emplace(k, std::to_string(h % 8)).first->second;
+    // - Hardware only provides 8 event IDs per (srcPipe, dstPipe) channel.
+    // - Always recycle tokens in [0..7] in a round-robin fashion.
+    // - Insert record+wait as an adjacent pair so tokens are not live across dynamic paths.
+    std::map<std::pair<std::string, std::string>, int> nextTokenByPipePair;
+    auto allocTokenForPipes = [&](llvm::StringRef srcPipe, llvm::StringRef dstPipe) -> std::string {
+      auto k = std::make_pair(srcPipe.str(), dstPipe.str());
+      int &next = nextTokenByPipePair[k];
+      int tok = next & 7;
+      next = (next + 1) & 7;
+      return std::to_string(tok);
     };
 
-    auto processBlock = [&](mlir::Block &block, std::map<std::string, TileSyncState> &tileState, auto &&self) -> void {
-      for (auto it = block.begin(); it != block.end(); ++it) {
-        auto *consumer = &*it;
-        auto opname = consumer->getName().getStringRef();
-        if (opname == "scf.for") {
-          int thisLoopId = loopId++;
+    auto insertFencePairBefore = [&](mlir::Operation *anchor, llvm::StringRef srcPipe, llvm::StringRef dstPipe,
+                                     llvm::StringRef srcOpEnum, llvm::StringRef dstOpEnum) -> void {
+      if (!anchor)
+        return;
+      if (srcPipe.empty() || dstPipe.empty())
+        return;
+      if (srcPipe == dstPipe)
+        return;
+
+      auto srcOp = !srcOpEnum.empty() ? srcOpEnum : canonicalOpEnumForPipe(srcPipe);
+      auto dstOp = !dstOpEnum.empty() ? dstOpEnum : canonicalOpEnumForPipe(dstPipe);
+      if (srcOp.empty() || dstOp.empty())
+        return;
+
+      auto tok = allocTokenForPipes(srcPipe, dstPipe);
+      b.setInsertionPoint(anchor);
+      insertEventOp(b, anchor->getLoc(), "record_event", srcOp, dstOp, tok);
+      insertEventOp(b, anchor->getLoc(), "wait_event", srcOp, dstOp, tok);
+    };
+
+    auto insertTsyncVBefore = [&](mlir::Operation *anchor) -> void {
+      if (!anchor)
+        return;
+      b.setInsertionPoint(anchor);
+      mlir::OperationState st(anchor->getLoc(), "pto.tsync");
+      st.addAttribute("pipe", b.getStringAttr("V"));
+      b.create(st);
+    };
+
+	    auto processBlock = [&](mlir::Block &block, std::map<std::string, TileSyncState> &tileState, auto &&self) -> void {
+        std::string lastPipe;
+	      for (auto it = block.begin(); it != block.end(); ++it) {
+	        auto *consumer = &*it;
+	        auto opname = consumer->getName().getStringRef();
+	        if (opname == "scf.for") {
+            lastPipe.clear();
+	          int thisLoopId = loopId++;
           // Loop-carried reuse hazards:
           // - Many real kernels reuse the same tile storage across loop iterations.
           // - Since `set_flag` is pipe-scoped (not object-scoped), we insert a conservative
@@ -398,6 +438,7 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           bool hasM = false;
           bool hasMte1 = false;
           bool hasMte2 = false;
+          bool hasMte3 = false;
           for (auto &r : consumer->getRegions()) {
             if (r.empty())
               continue;
@@ -415,94 +456,94 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
                 hasMte1 = true;
               else if (pipe == "MTE2")
                 hasMte2 = true;
+              else if (pipe == "MTE3")
+                hasMte3 = true;
             });
           }
 
-          // Insert priming events in the preheader (before the scf.for op).
-          b.setInsertionPoint(consumer);
-          if (hasM && hasMte1) {
-            auto key = ("loop_m_to_mte1#" + std::to_string(thisLoopId));
-            auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", key);
-            insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
-          }
-          if (hasMte1 && hasMte2) {
-            auto key = ("loop_mte1_to_mte2#" + std::to_string(thisLoopId));
-            auto tok = allocTokenFor("TMOV_M2L", "TLOAD", key);
-            insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TLOAD", tok);
-          }
-          if (hasMte1 && hasM) {
-            // Loop-carried RAW: a common ping-pong GEMM pattern prefetches (MTE1) data for the *next*
-            // iteration and consumes it (M) in the following iteration. Insert a per-iteration MTE1->M
-            // handshake so TMATMUL does not read tiles that are still being produced by TMOV.
-            //
-            // NOTE: Use a loop-unique key so nested loops don't accidentally share the same token.
-            auto key = ("loop_mte1_to_m#" + std::to_string(thisLoopId));
-            auto tok = allocTokenFor("TMOV_M2L", "TMATMUL", key);
-            insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TMATMUL", tok);
-          }
-
-          // Insert per-iteration waits/records inside the loop body (front block).
+          // Insert per-iteration pipe fences at loop body start.
+          // Keep them as adjacent record+wait pairs so they are balanced on all paths.
           for (auto &r : consumer->getRegions()) {
             if (r.empty())
               continue;
             auto &body = r.front();
-            auto *term = body.getTerminator();
-
-            if (hasM && hasMte1) {
-              auto key = ("loop_m_to_mte1#" + std::to_string(thisLoopId));
-              auto tok = allocTokenFor("TMATMUL", "TMOV_M2L", key);
-              b.setInsertionPointToStart(&body);
-              insertEventOp(b, consumer->getLoc(), "wait_event", "TMATMUL", "TMOV_M2L", tok);
-
-              // Record after the last op in the loop body that (transitively) executes TMATMUL (PIPE_M).
-              // This avoids placing `set_flag(PIPE_M, PIPE_MTE1, ...)` before the loop's matmul, which
-              // would be one-iteration behind and can cause L0A/L0B read/write conflicts when ping-pong
-              // buffers are reused across iterations.
-              mlir::Operation *lastMCarrier = nullptr;
-              for (auto &opInBody : body) {
-                mlir::Operation *cur = &opInBody;
-                if (cur == term)
-                  break;
-                if (opOrNestedHasPipe(cur, "M"))
-                  lastMCarrier = cur;
-              }
-              if (lastMCarrier) {
-                b.setInsertionPointAfter(lastMCarrier);
-                insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
-              } else {
-                // Fallback: still insert before the terminator to keep token balance.
-                b.setInsertionPoint(term);
-                insertEventOp(b, consumer->getLoc(), "record_event", "TMATMUL", "TMOV_M2L", tok);
-              }
-            }
-            if (hasMte1 && hasMte2) {
-              auto key = ("loop_mte1_to_mte2#" + std::to_string(thisLoopId));
-              auto tok = allocTokenFor("TMOV_M2L", "TLOAD", key);
-              b.setInsertionPointToStart(&body);
-              insertEventOp(b, consumer->getLoc(), "wait_event", "TMOV_M2L", "TLOAD", tok);
-              b.setInsertionPoint(term);
-              insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TLOAD", tok);
-            }
-            if (hasMte1 && hasM) {
-              auto key = ("loop_mte1_to_m#" + std::to_string(thisLoopId));
-              auto tok = allocTokenFor("TMOV_M2L", "TMATMUL", key);
-              b.setInsertionPointToStart(&body);
-              insertEventOp(b, consumer->getLoc(), "wait_event", "TMOV_M2L", "TMATMUL", tok);
-              b.setInsertionPoint(term);
-              insertEventOp(b, consumer->getLoc(), "record_event", "TMOV_M2L", "TMATMUL", tok);
-            }
+            auto *anchor = body.empty() ? nullptr : &*body.begin();
+            if (!anchor)
+              continue;
+            if (hasM && hasMte1)
+              insertFencePairBefore(anchor, "M", "MTE1", "TMATMUL", "TMOV_M2L");
+            if (hasMte1 && hasMte2)
+              insertFencePairBefore(anchor, "MTE1", "MTE2", "TMOV_M2L", "TLOAD");
+            if (hasMte3 && hasMte2)
+              insertFencePairBefore(anchor, "MTE3", "MTE2", "TSTORE_VEC", "TLOAD");
+            if (hasMte1 && hasM)
+              insertFencePairBefore(anchor, "MTE1", "M", "TMOV_M2L", "TMATMUL");
           }
 
-          // Process the loop region with a snapshot of the current tile state, then conservatively
-          // merge by invalidating tile defs (loop may execute 0 times).
-          for (auto &r : consumer->getRegions())
-            if (!r.empty()) {
-              auto inner = tileState;
-              self(r.front(), inner, self);
-            }
-          continue;
-        }
+	          // Process the loop region with a snapshot of the current tile state.
+	          // If we can prove the loop executes at least once (constant bounds), propagate the
+	          // resulting tile defs to the outer scope so consumers after the loop (e.g. tstore)
+	          // can see producers inside the loop.
+	          auto resolveInt = [&](std::string s) -> std::optional<int64_t> {
+	            s = trim(s);
+	            if (s.empty())
+	              return std::nullopt;
+	            if (s[0] == '%') {
+	              auto itC = constMap.find(s);
+	              if (itC == constMap.end())
+	                return std::nullopt;
+	              s = trim(itC->second);
+	            }
+	            char *end = nullptr;
+	            long long v = std::strtoll(s.c_str(), &end, 10);
+	            if (!end || *end != '\0')
+	              return std::nullopt;
+	            return static_cast<int64_t>(v);
+	          };
+
+	          bool mustRunAtLeastOnce = false;
+	          auto loopOperands = readOperands(consumer);
+	          if (loopOperands.size() == 4) {
+	            auto lb = resolveInt(loopOperands[1]);
+	            auto ub = resolveInt(loopOperands[2]);
+	            auto step = resolveInt(loopOperands[3]);
+	            if (lb && ub && step && *step > 0 && *lb < *ub)
+	              mustRunAtLeastOnce = true;
+	          }
+
+	          for (auto &r : consumer->getRegions())
+	            if (!r.empty()) {
+	              auto incoming = tileState;
+	              auto inner = tileState;
+	              self(r.front(), inner, self);
+	              if (mustRunAtLeastOnce) {
+	                std::map<std::string, TileSyncState> out = std::move(inner);
+	                for (auto &kv : out) {
+	                  auto itIn = incoming.find(kv.first);
+	                  bool changed = (itIn == incoming.end());
+	                  if (!changed) {
+	                    auto &a = itIn->second.def;
+	                    auto &b2 = kv.second.def;
+	                    changed = (a.op != b2.op) || (a.opEnum != b2.opEnum) || (a.pipe != b2.pipe);
+	                  }
+	                  if (!changed)
+	                    continue;
+	                  if (kv.second.def.pipe.empty() || kv.second.def.opEnum.empty())
+	                    continue;
+	                  auto canon = canonicalOpEnumForPipe(kv.second.def.pipe);
+	                  if (!canon.empty())
+	                    kv.second.def.opEnum = canon.str();
+	                  kv.second.def.op = consumer; // anchor to the loop op (runs to completion)
+	                  kv.second.waitedPipes.clear();
+	                  kv.second.waitedPipes.insert(kv.second.def.pipe);
+	                }
+	                tileState = std::move(out);
+	              }
+	            }
+	          continue;
+	        }
         if (opname == "scf.if") {
+          lastPipe.clear();
           // Process then/else with independent states; merge conservatively.
           std::map<std::string, TileSyncState> thenState = tileState;
           std::map<std::string, TileSyncState> elseState = tileState;
@@ -521,23 +562,58 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           for (auto &k : keys) {
             auto itT = thenState.find(k);
             auto itE = elseState.find(k);
+            auto itIn = tileState.find(k);
+
+            // In this prototype, `%x = pto.tmov ...` style "rebindings" are treated as a mutable symbol table
+            // rather than strict SSA. That means a tile may be *updated* in only one branch, while the other
+            // branch keeps the previous value. Dropping the key here loses dependency info and can produce
+            // missing waits in common ping-pong GEMM patterns (leading to L0 conflicts / deadlocks).
+
+            auto considerMerge = [&](const TileSyncState &a, const TileSyncState &b) -> bool {
+              if (a.def.pipe.empty() || b.def.pipe.empty())
+                return false;
+              if (a.def.pipe != b.def.pipe)
+                return false;
+              auto pipe = a.def.pipe;
+              std::string opEnum;
+              if (!a.def.opEnum.empty() && a.def.opEnum == b.def.opEnum) {
+                opEnum = a.def.opEnum;
+              } else if (!a.def.opEnum.empty() && pipeForOpEnum(a.def.opEnum) == pipe) {
+                opEnum = a.def.opEnum;
+              } else {
+                auto canon = canonicalOpEnumForPipe(pipe);
+                if (canon.empty())
+                  return false;
+                opEnum = canon.str();
+              }
+
+              TileSyncState out;
+              // Anchor to the scf.if op itself so inserted record_event is unconditional after the merge.
+              out.def = DefInfo{consumer, opEnum, pipe};
+              out.waitedPipes.clear();
+              out.waitedPipes.insert(pipe);
+              merged[k] = std::move(out);
+              return true;
+            };
+
             if (itT == thenState.end() || itE == elseState.end()) {
-              // Defined/updated in only one branch: invalidate to avoid generating unmatched waits.
-              merged.erase(k);
+              // Defined/updated in only one branch: if the symbol existed before the `scf.if`, treat the missing
+              // branch as "kept previous value" and merge by pipe. Otherwise, invalidate.
+              if (itIn == tileState.end()) {
+                merged.erase(k);
+                continue;
+              }
+              const TileSyncState &t = (itT != thenState.end()) ? itT->second : itIn->second;
+              const TileSyncState &e = (itE != elseState.end()) ? itE->second : itIn->second;
+              if (!considerMerge(t, e))
+                merged.erase(k);
               continue;
             }
+
             auto &t = itT->second;
             auto &e = itE->second;
-            if (t.def.opEnum == e.def.opEnum && t.def.pipe == e.def.pipe && !t.def.opEnum.empty() && !t.def.pipe.empty()) {
-              TileSyncState out;
-              // Anchor to the scf.if op itself so the record_event is unconditional.
-              out.def = DefInfo{consumer, t.def.opEnum, t.def.pipe};
-              out.waitedPipes.clear();
-              out.waitedPipes.insert(out.def.pipe);
-              merged[k] = std::move(out);
-              continue;
-            }
-            merged.erase(k);
+            if (!considerMerge(t, e))
+              merged.erase(k);
           }
           tileState = std::move(merged);
           continue;
@@ -554,51 +630,78 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         if (consPipe.empty())
           continue;
 
-        // Insert waits for cross-pipe RAW tile dependencies (producer -> consumer).
-        // This is conservative and pipe-scoped per the hardware contract: `set_flag` releases all
-        // prior ops on srcPipe, so we must avoid inserting multiple `wait_flag` on the same token.
-        for (auto &useSym : opcodeTileUses(consOpcode, consumer, argTypes)) {
-          auto use = stripIndexing(trim(useSym));
-          auto defIt = tileState.find(use);
-          if (defIt == tileState.end())
-            continue;
-          auto &defState = defIt->second;
-          auto &def = defState.def;
-          if (!def.op || def.pipe.empty() || def.opEnum.empty())
-            continue;
-          if (def.pipe == consPipe)
-            continue;
+        // Back-to-back vector ops need an explicit PIPE_V barrier.
+        if (lastPipe == "V" && consPipe == "V")
+          insertTsyncVBefore(consumer);
 
-          // Only wait once per (tile, consumer pipe) for the current definition site.
-          if (defState.waitedPipes.count(consPipe.str()))
-            continue;
-          auto token = allocTokenFor(def.opEnum, consEnum, use);
-
-          // Ensure record_event exists on the producer path.
-          if (!hasEquivalentRecordEventAfter(def.op, def.opEnum, consEnum, token)) {
-            b.setInsertionPointAfter(def.op);
-            insertEventOp(b, def.op->getLoc(), "record_event", def.opEnum, consEnum, token);
-          }
-
-          // Ensure wait_event exists before consumer.
-          if (!hasEquivalentWaitEventBefore(consumer, def.opEnum, consEnum, token)) {
-            b.setInsertionPoint(consumer);
-            insertEventOp(b, consumer->getLoc(), "wait_event", def.opEnum, consEnum, token);
-          }
-          defState.waitedPipes.insert(consPipe.str());
-        }
-
-        // Update last-def for tile results.
+        // Reverse (overwrite) hazards: if this op defines a tile that was last accessed on a different pipe,
+        // fence the pipes before overwriting the tile storage.
         if (opcodeDefinesTile(consOpcode)) {
           auto operands = readOperands(consumer);
           if (!operands.empty()) {
             auto dst = stripIndexing(trim(operands[0]));
+            auto itPrev = tileState.find(dst);
+            if (itPrev != tileState.end()) {
+              auto &prev = itPrev->second;
+              if (prev.def.op && !prev.def.pipe.empty() && prev.def.pipe != consPipe &&
+                  !prev.waitedPipes.count(consPipe.str())) {
+                insertFencePairBefore(consumer, prev.def.pipe, consPipe, prev.def.opEnum, consEnum);
+                prev.waitedPipes.insert(consPipe.str());
+              }
+            }
+          }
+        }
+
+        // Insert fences for cross-pipe RAW tile dependencies (producer -> consumer).
+        // Insert record+wait as a pair immediately before the consumer so it is balanced on all dynamic paths.
+        {
+          std::set<std::pair<std::string, std::string>> insertedPairs;
+          for (auto &useSym : opcodeTileUses(consOpcode, consumer, argTypes)) {
+            auto use = stripIndexing(trim(useSym));
+            auto defIt = tileState.find(use);
+            if (defIt == tileState.end())
+              defIt = tileState.emplace(use, TileSyncState{}).first;
+            auto &defState = defIt->second;
+            auto &def = defState.def;
+            if (def.op && !def.pipe.empty() && def.pipe != consPipe) {
+              if (defState.waitedPipes.count(consPipe.str()))
+                continue;
+              auto k = std::make_pair(def.pipe, consPipe.str());
+              if (!insertedPairs.count(k)) {
+                insertFencePairBefore(consumer, def.pipe, consPipe, def.opEnum, consEnum);
+                insertedPairs.insert(k);
+              }
+              defState.waitedPipes.insert(consPipe.str());
+            }
+          }
+        }
+
+        // Treat `tstore(src_tile)` as a pipe access to that tile storage. Later overwrites must wait
+        // for the store pipe to finish reading from it (WAR hazard across iterations/tiles).
+        if (consOpcode == "tstore") {
+          auto operands = readOperands(consumer);
+          if (operands.size() >= 2) {
+            auto src = stripIndexing(trim(operands.back()));
+            TileSyncState st;
+            st.def = DefInfo{consumer, consEnum, consPipe.str()};
+            st.waitedPipes.insert(consPipe.str());
+            tileState[src] = std::move(st);
+          }
+        }
+
+	        // Update last-def for tile results.
+	        if (opcodeDefinesTile(consOpcode)) {
+	          auto operands = readOperands(consumer);
+	          if (!operands.empty()) {
+	            auto dst = stripIndexing(trim(operands[0]));
             TileSyncState st;
             st.def = DefInfo{consumer, consEnum, consPipe.str()};
             st.waitedPipes.insert(consPipe.str());
             tileState[dst] = std::move(st);
           }
         }
+
+        lastPipe = consPipe.str();
       }
     };
 

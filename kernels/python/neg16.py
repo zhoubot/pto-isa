@@ -3,20 +3,21 @@ from __future__ import annotations
 from pto_as import PTO
 
 
-def transpose16():
-    pto = PTO("transpose16")
+def neg16():
+    # y = -x
+    pto = PTO("neg16")
     pto.prologue()
 
     x = pto.tensor(dtype="f32", shape=(16, 16), role="in")
     y = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
     tx = pto.vec(dtype="f32", shape=(16, 16))
-    ty = pto.vec(dtype="f32", shape=(16, 16))
-    tmp = pto.vec(dtype="f32", shape=(16, 16))
+    out = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
-    ty = pto.ttrans(tx, tmp)
-    pto.store(y, ty)
+    out = pto.tneg(tx)
+    pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
+

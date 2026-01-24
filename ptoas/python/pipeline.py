@@ -208,25 +208,27 @@ def ensure_ascend_sim_env(*, ascend_home: Path, soc: str) -> None:
     # More useful progress logs when debugging under simulator.
     env.setdefault("PTOAS_VERBOSE_RUN", "0")
 
-    # Simulator logs: use CAMODEL_LOG_PATH if available (used by Ascend simulator runtime).
-    env.setdefault("CAMODEL_LOG_PATH", "/tmp/camodel_logs")
-    try:
-        Path(env["CAMODEL_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
+    # Simulator logs: only enable dumps when caller sets CAMODEL_LOG_PATH.
+    camodel_log_path = env.get("CAMODEL_LOG_PATH", "")
+    if camodel_log_path:
+        try:
+            Path(camodel_log_path).mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
-    # Ascend logging runtime (libascendalog.so): default to file logs only.
+    # Ascend logging runtime (libascendalog.so).
     verbose_run = env.get("PTOAS_VERBOSE_RUN", "") in ("1", "true", "True", "yes", "YES")
     if verbose_run:
         env.setdefault("ASCEND_SLOG_PRINT_TO_STDOUT", "1")
         env.setdefault("ASCEND_GLOBAL_LOG_LEVEL", "2")  # 0=trace, 2=info
     else:
         env.setdefault("ASCEND_SLOG_PRINT_TO_STDOUT", "0")
-    env.setdefault("ASCEND_PROCESS_LOG_PATH", env["CAMODEL_LOG_PATH"])
-    try:
-        Path(env["ASCEND_PROCESS_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
+    if camodel_log_path:
+        env.setdefault("ASCEND_PROCESS_LOG_PATH", camodel_log_path)
+        try:
+            Path(env["ASCEND_PROCESS_LOG_PATH"]).mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
     sim_lib = resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
     ld = env.get("LD_LIBRARY_PATH", "")
@@ -563,7 +565,17 @@ def build_fatobj_so_from_cce(
 
         bisheng = _resolve_bisheng(ascend_home)
         # Match CMake examples: optimize by default for performance-sensitive kernels.
-        common = [bisheng, "-xcce", f"--cce-aicore-arch={arch}", "-std=c++17", "-fPIC", "-O2"]
+        common = [
+            bisheng,
+            "-xcce",
+            f"--cce-aicore-arch={arch}",
+            "-std=c++17",
+            "-fPIC",
+            "-O2",
+            # Ascend Clang may warn that address-space attributes (e.g. `__gm__`, `__ubuf__`)
+            # are ignored when they appear in type expressions/casts in host stubs.
+            "-Wno-ignored-attributes",
+        ]
         if cce_extra_flags:
             common += list(cce_extra_flags)
         incs = [f"-I{d}" for d in include_dirs]
@@ -602,6 +614,177 @@ def build_fatobj_so_from_cce(
         _run(link, cwd=td_path)
 
 
+def build_fatobj_exe_from_cce(
+    *,
+    cce_path: Path,
+    out_exe: Path,
+    arch: str,
+    ascend_home: Path,
+    host_specs: list["TensorSpec"],
+    fixed_block_dim: int | None = None,
+    runtime_lib: str = "runtime",
+    soc: str | None = None,
+    cce_extra_flags: list[str] | None = None,
+    add_rpath: bool | None = True,
+) -> None:
+    """
+    Build a host executable (not a .so) that links the generated fatobj kernel and provides a `main()`.
+
+    Note: this does *not* produce a fully-static binary (Ascend runtime libs are shared), but it avoids
+    runtime `dlopen()` of a separately-built kernel .so by linking the fatobj object into the executable.
+    """
+    from .host_codegen import TensorSpec, emit_acl_host_cpp_static
+
+    if not host_specs:
+        raise ValueError("host_specs must be non-empty")
+    if not all(isinstance(s, TensorSpec) for s in host_specs):
+        raise TypeError("host_specs must be a list[TensorSpec]")
+
+    include_dirs = ascend_include_dirs(ascend_home) + [str(repo_root() / "include")]
+
+    kernel_src = cce_path.read_text(encoding="utf-8")
+
+    def strip_outer_cce_guard(text: str) -> str:
+        lines = text.splitlines()
+        first = None
+        for i, ln in enumerate(lines):
+            s = ln.strip()
+            if not s or s.startswith("//"):
+                continue
+            first = i
+            break
+        if first is None:
+            return text
+        last = None
+        for i in range(len(lines) - 1, -1, -1):
+            s = lines[i].strip()
+            if not s:
+                continue
+            last = i
+            break
+        if last is None:
+            return text
+        if lines[first].strip() != "#if defined(__CCE_AICORE__)":
+            return text
+        if lines[last].strip() != "#endif":
+            return text
+        new_lines = lines[:first] + lines[first + 1 : last] + lines[last + 1 :]
+        return "\n".join(new_lines).rstrip() + "\n"
+
+    kernel_src = strip_outer_cce_guard(kernel_src)
+
+    m = re.search(r'extern\s+"C"\s+__global__\s+AICORE\s+void\s+(\w+)\s*\(([^)]*)\)', kernel_src)
+    if not m:
+        raise RuntimeError(f"failed to infer kernel signature from: {cce_path}")
+    kernel_name = m.group(1)
+    params = [p.strip() for p in m.group(2).split(",") if p.strip()]
+    arg_count = len(params)
+
+    host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
+    kernel_args = ", ".join([f"(GM_ADDR)arg{i}" for i in range(arg_count)])
+
+    if fixed_block_dim is not None:
+        if fixed_block_dim <= 0:
+            raise ValueError("fixed_block_dim must be > 0")
+        block_expr = str(int(fixed_block_dim))
+        block_param = "uint32_t blockDim"
+        block_unused = "    (void)blockDim;\n"
+    else:
+        block_expr = "blockDim"
+        block_param = "uint32_t blockDim"
+        block_unused = ""
+
+    combined = (
+        "#include \"kernel.cpp\"\n"
+        "#include <cstdint>\n\n"
+        f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
+        "{\n"
+        f"{block_unused}"
+        f"    {kernel_name}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n"
+        "}\n"
+    )
+
+    with tempfile.TemporaryDirectory(prefix="ptoas_exe_") as td:
+        td_path = Path(td)
+        (td_path / "kernel.cpp").write_text(kernel_src, encoding="utf-8")
+        combined_path = td_path / "combined.cpp"
+        combined_path.write_text(combined, encoding="utf-8")
+        combined_o = td_path / "combined.o"
+
+        host_main = td_path / "host_main.cpp"
+        host_main.write_text(emit_acl_host_cpp_static(args=list(host_specs)), encoding="utf-8")
+        host_o = td_path / "host_main.o"
+
+        bisheng = _resolve_bisheng(ascend_home)
+        common = [
+            bisheng,
+            "-xcce",
+            f"--cce-aicore-arch={arch}",
+            "-std=c++17",
+            "-fPIC",
+            "-O2",
+            "-Wno-ignored-attributes",
+        ]
+        if cce_extra_flags:
+            common += list(cce_extra_flags)
+        incs = [f"-I{d}" for d in include_dirs]
+        _run(common + incs + ["-c", str(combined_path), "-o", str(combined_o)], cwd=td_path)
+
+        host_inc_candidates = [
+            ascend_home / "include",
+            ascend_home / "pkg_inc",
+            ascend_home / "pkg_inc" / "runtime" / "runtime",
+            ascend_home / "pkg_inc" / "profiling",
+        ]
+        host_includes = [f"-I{p}" for p in host_inc_candidates if p.exists()]
+        subprocess.run(
+            ["g++", "-O2", "-std=c++17", *host_includes, "-c", str(host_main), "-o", str(host_o)],
+            check=True,
+            cwd=str(td_path),
+        )
+
+        def _want_rpath() -> bool:
+            if add_rpath is None:
+                return os.environ.get("PTOAS_DISABLE_RPATH", "") not in ("1", "true", "True", "yes", "YES")
+            return bool(add_rpath)
+
+        out_exe.parent.mkdir(parents=True, exist_ok=True)
+        link = [bisheng, "--cce-fatobj-link", "-o", str(out_exe), str(host_o), str(combined_o)]
+        if _want_rpath():
+            # Use legacy DT_RPATH (transitive) so simulator libs required by e.g. libruntime_camodel.so
+            # are discovered without needing LD_LIBRARY_PATH. DT_RUNPATH is not transitive.
+            link += ["-Wl,--disable-new-dtags"]
+
+        lib64 = ascend_home / "lib64"
+        if lib64.exists():
+            link += [f"-L{lib64}"]
+            if _want_rpath():
+                link += [f"-Wl,-rpath,{lib64}"]
+
+        if runtime_lib not in ("runtime", "runtime_camodel", "runtime_cmodel"):
+            raise ValueError(f"unsupported runtime_lib: {runtime_lib}")
+        if runtime_lib in ("runtime_camodel", "runtime_cmodel"):
+            if not soc:
+                raise ValueError(f"soc must be provided when runtime_lib={runtime_lib}")
+            sim_lib = resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
+            link += [f"-L{sim_lib}"]
+            if _want_rpath():
+                link += [f"-Wl,-rpath,{sim_lib}"]
+
+        link += [
+            f"-l{runtime_lib}",
+            "-lascendcl",
+            "-ltiling_api",
+            "-lplatform",
+            "-lc_sec",
+            "-ldl",
+            "-lm",
+            "-lpthread",
+            "-lstdc++",
+        ]
+        _run(link, cwd=td_path)
+
+
 def _acl_h2d() -> int:
     return 1  # ACL_MEMCPY_HOST_TO_DEVICE
 
@@ -632,17 +815,26 @@ def _default_tol(dtype: str) -> tuple[float, float]:
 
 def make_host_arrays(spec: HostSpec) -> list[np.ndarray]:
     rng = np.random.default_rng(int(spec.seed))
+
+    def _storage_shape(a: HostTensorArg) -> tuple[int, int]:
+        h, w = int(a.shape[0]), int(a.shape[1])
+        layout = getattr(a, "layout", "ND")
+        if layout == "DN":
+            return (w, h)
+        return (h, w)
+
     arrays: list[np.ndarray] = []
     for a in spec.args:
         dt = _np_dtype(a.dtype)
+        shape = _storage_shape(a)
         if a.role == "out":
-            arr = np.zeros(a.shape, dtype=dt)
+            arr = np.zeros(shape, dtype=dt)
         else:
             # Keep values small to reduce numerical drift across backends.
             if dt == np.float16 or dt == np.float32:
-                arr = (rng.random(a.shape, dtype=np.float32) - 0.5).astype(dt)
+                arr = (rng.random(shape, dtype=np.float32) - 0.5).astype(dt)
             else:
-                arr = rng.integers(low=0, high=7, size=a.shape, dtype=dt)
+                arr = rng.integers(low=0, high=7, size=shape, dtype=dt)
         arrays.append(arr)
     return arrays
 
@@ -663,7 +855,26 @@ def run_cpu_kernel_from_so(*, so_path: Path, host_spec: HostSpec, host_arrays: l
     fn.restype = None
 
     args = [ctypes.c_void_p(int(a.ctypes.data)) for a in host_arrays]
-    fn(*args)
+    block_dim = int(getattr(host_spec, "block_dim", 1) or 1)
+    if block_dim <= 1:
+        fn(*args)
+    else:
+        # Best-effort: if the CPU-simulator kernel uses get_block_idx/get_block_num,
+        # drive it as a single-threaded multi-block loop.
+        try:
+            bidx = ctypes.c_uint32.in_dll(lib, "pto_cpu_block_idx")
+            bnum = ctypes.c_uint32.in_dll(lib, "pto_cpu_block_num")
+            bnum.value = int(block_dim)
+            for i in range(int(block_dim)):
+                bidx.value = int(i)
+                fn(*args)
+            # Restore defaults (helps keep interactive debugging sane).
+            bidx.value = 0
+            bnum.value = 1
+        except Exception:
+            # If the kernel doesn't export the stub symbols (older generated code),
+            # fall back to single-block execution.
+            fn(*args)
 
     out: list[np.ndarray] = []
     for i in host_spec.output_indices():

@@ -1,22 +1,25 @@
 from __future__ import annotations
 
-from pto_as import PTO
+from pto_as import PTO, scalar
 
 
-def transpose16():
-    pto = PTO("transpose16")
+def scale16():
+    # y = beta * x
+    pto = PTO("scale16")
     pto.prologue()
 
     x = pto.tensor(dtype="f32", shape=(16, 16), role="in")
     y = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
     tx = pto.vec(dtype="f32", shape=(16, 16))
-    ty = pto.vec(dtype="f32", shape=(16, 16))
-    tmp = pto.vec(dtype="f32", shape=(16, 16))
+    out = pto.vec(dtype="f32", shape=(16, 16))
+
+    beta = pto.const("beta", 3.0, scalar("f32"))
 
     tx = pto.load(x)
-    ty = pto.ttrans(tx, tmp)
-    pto.store(y, ty)
+    out = pto.tmuls(tx, beta)
+    pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
+

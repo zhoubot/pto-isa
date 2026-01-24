@@ -3,71 +3,80 @@ from __future__ import annotations
 # Example Python kernel definitions for the AST frontend.
 # These functions are parsed (not executed) by ptoas/python/ast_frontend.py.
 
-from ptoas.python.dsl import epilogue, prologue, tensor, tile, tadd, tload, tmatmul, tmov, tstore
+from pto_as import PTO
 
 
 def add16():
-    prologue()
+    pto = PTO("add16")
+    pto.prologue()
 
-    x = tensor(dtype="f16", shape=(16, 16))
-    y = tensor(dtype="f16", shape=(16, 16))
-    z = tensor(dtype="f16", shape=(16, 16))
+    x = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    y = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    z = pto.tensor(dtype="f16", shape=(16, 16), role="out")
 
-    tx = tile(loc="Vec", dtype="f16", rows=16, cols=16)
-    ty = tile(loc="Vec", dtype="f16", rows=16, cols=16)
-    tz = tile(loc="Vec", dtype="f16", rows=16, cols=16)
+    tx = pto.vec(dtype="f16", shape=(16, 16))
+    ty = pto.vec(dtype="f16", shape=(16, 16))
+    tz = pto.vec(dtype="f16", shape=(16, 16))
 
-    tload(tx, x, 0, 0)
-    tload(ty, y, 0, 0)
-    tadd(tz, tx, ty)
-    tstore(z, 0, 0, tz)
+    tx = pto.load(x)
+    ty = pto.load(y)
+    tz = pto.tadd(tx, ty)
+    pto.store(z, tz)
 
-    epilogue()
+    pto.epilogue()
+    return pto.program()
 
 
 def gemm16_cpu():
-    prologue()
+    pto = PTO("gemm16_cpu")
+    pto.prologue()
 
-    a = tensor(dtype="f16", shape=(16, 16))
-    b = tensor(dtype="f16", shape=(16, 16))
-    c = tensor(dtype="f32", shape=(16, 16))
+    a = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    b = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    c = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
-    a_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-    b_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
+    a_mat = pto.mat(dtype="f16", shape=(16, 16))
+    b_mat = pto.mat(dtype="f16", shape=(16, 16))
 
-    a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-    b_right = tile(loc="Right", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="ColMajor")
-    c_acc = tile(loc="Acc", dtype="f32", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
+    # CPU simulator uses different matrix fractal constraints for TMATMUL. Keep this
+    # explicit to match existing include/pto/cpu/TMatmul.hpp constraints.
+    a_left = pto.left(dtype="f16", shape=(16, 16), blayout="ColMajor", slayout="RowMajor")
+    b_right = pto.right(dtype="f16", shape=(16, 16))
+    c_acc = pto.acc(dtype="f32", shape=(16, 16))
 
-    tload(a_mat, a, 0, 0)
-    tload(b_mat, b, 0, 0)
-    tmov(a_left, a_mat)
-    tmov(b_right, b_mat)
-    tmatmul(c_acc, a_left, b_right)
-    tstore(c, 0, 0, c_acc)
+    a_mat = pto.load(a)
+    b_mat = pto.load(b)
+    a_left = pto.mov(a_mat)
+    b_right = pto.mov(b_mat)
+    c_acc = pto.tmatmul(a_left, b_right)
+    pto.store(c, c_acc)
 
-    epilogue()
+    pto.epilogue()
+    return pto.program()
 
 
 def gemm16():
-    prologue()
+    pto = PTO("gemm16")
+    pto.prologue()
 
-    a = tensor(dtype="f16", shape=(16, 16))
-    b = tensor(dtype="f16", shape=(16, 16))
-    c = tensor(dtype="f32", shape=(16, 16))
+    a = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    b = pto.tensor(dtype="f16", shape=(16, 16), role="in")
+    c = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
-    a_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
-    b_mat = tile(loc="Mat", dtype="f16", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
+    a_mat = pto.mat(dtype="f16", shape=(16, 16))
+    b_mat = pto.mat(dtype="f16", shape=(16, 16))
 
-    a_left = tile(loc="Left", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="RowMajor")
-    b_right = tile(loc="Right", dtype="f16", rows=16, cols=16, blayout="RowMajor", slayout="ColMajor")
-    c_acc = tile(loc="Acc", dtype="f32", rows=16, cols=16, blayout="ColMajor", slayout="RowMajor")
+    # Use a Left layout that matches both CPU simulator and NPU cube core.
+    a_left = pto.left(dtype="f16", shape=(16, 16), blayout="ColMajor", slayout="RowMajor")
+    b_right = pto.right(dtype="f16", shape=(16, 16))
+    c_acc = pto.acc(dtype="f32", shape=(16, 16))
 
-    tload(a_mat, a, 0, 0)
-    tload(b_mat, b, 0, 0)
-    tmov(a_left, a_mat)
-    tmov(b_right, b_mat)
-    tmatmul(c_acc, a_left, b_right)
-    tstore(c, 0, 0, c_acc)
+    a_mat = pto.load(a)
+    b_mat = pto.load(b)
+    a_left = pto.mov(a_mat)
+    b_right = pto.mov(b_mat)
+    c_acc = pto.tmatmul(a_left, b_right)
+    pto.store(c, c_acc)
 
-    epilogue()
+    pto.epilogue()
+    return pto.program()

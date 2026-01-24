@@ -41,9 +41,9 @@ def gemm256():
     pto = PTO("gemm256")
     pto.prologue()
 
-    a = pto.tensor("a", (256, 256), dtype="f16", role="in")
-    b = pto.tensor("b", (256, 256), dtype="f16", role="in")
-    c = pto.tensor("c", (256, 256), dtype="f32", role="out")
+    a = pto.tensor(dtype="f16", shape=(256, 256), role="in")
+    b = pto.tensor(dtype="f16", shape=(256, 256), role="in")
+    c = pto.tensor(dtype="f32", shape=(256, 256), role="out")
 
     # allocate tiles, then loop in (M,N,K) tiles...
     for mi in range(0, 256, 16):

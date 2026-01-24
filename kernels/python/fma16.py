@@ -3,23 +3,29 @@ from __future__ import annotations
 from pto_as import PTO
 
 
-def pto_aten_ir_primitives():
-    # Upstream ref: `~/github/pto-isa/examples/pto_aten_ir_primitives.py`
-    pto = PTO("pto_aten_ir_primitives")
+def fma16():
+    # z = x * y + b
+    pto = PTO("fma16")
     pto.prologue()
 
     x = pto.tensor(dtype="f32", shape=(16, 16), role="in")
     y = pto.tensor(dtype="f32", shape=(16, 16), role="in")
+    b = pto.tensor(dtype="f32", shape=(16, 16), role="in")
     z = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
     tx = pto.vec(dtype="f32", shape=(16, 16))
     ty = pto.vec(dtype="f32", shape=(16, 16))
-    tz = pto.vec(dtype="f32", shape=(16, 16))
+    tb = pto.vec(dtype="f32", shape=(16, 16))
+    prod = pto.vec(dtype="f32", shape=(16, 16))
+    out = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tz = pto.tmul(tx, ty)
-    pto.store(z, tz)
+    tb = pto.load(b)
+    prod = pto.tmul(tx, ty)
+    out = pto.tadd(prod, tb)
+    pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
+

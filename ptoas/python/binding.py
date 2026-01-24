@@ -48,8 +48,14 @@ def default_host_spec(spec: KernelSpec) -> HostSpec:
         if not any(r in ("out", "inout") for r in roles):
             roles[-1] = "out"
 
-    host_args = tuple(HostTensorArg(dtype=a.ty.dtype, shape=a.ty.shape2(), role=roles[i]) for i, a in enumerate(args))
-    return HostSpec(args=host_args, seed=0, block_dim=1, kernel_name="pto_kernel")
+    host_args: list[HostTensorArg] = []
+    for i, a in enumerate(args):
+        h, w = a.ty.shape2()
+        s0, s1 = a.ty.stride2()
+        layout = str(a.ty.layout)
+        stride = None if (a.ty.stride is None and layout == "ND") else (int(s0), int(s1))
+        host_args.append(HostTensorArg(dtype=a.ty.dtype, shape=(h, w), role=roles[i], layout=layout, stride=stride))
+    return HostSpec(args=tuple(host_args), seed=0, block_dim=1, kernel_name="pto_kernel")
 
 
 def write_pto(

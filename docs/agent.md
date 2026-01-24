@@ -380,14 +380,15 @@ python3 ptoas/tools/python_to_pto.py ptoas/examples/python_kernels.py --kernel a
 Recommended kernel authoring style (object DSL):
 
 - Import: `from pto_as import PTO, scalar`
-- Declare args/tiles with explicit names:
-  - `q = pto.tensor("q", (S, D), dtype="f32")`
-  - `q_tile = pto.vec_tile("q_tile", dtype="f32", shape=(S, D))`
-- Use dest-first instruction calls:
-  - `pto.tload(q_tile, q)` (defaults to `[0,0]`)
-  - `pto.tstore(o, out_acc)` (defaults to `[0,0]`)
+- Declare args/tiles without repeating names:
+  - `q = pto.tensor(dtype="f32", shape=(S, D), role="in")`
+  - `o = pto.tensor(dtype="f32", shape=(S, D), role="out")`
+  - `q_tile = pto.vec(dtype="f32", shape=(S, D))` (shorthand for `vec_tile`)
+- Use “grammar candy” instruction aliases:
+  - `q_tile = pto.load(q)` (defaults to `[0,0]`)
+  - `pto.store(o, out_acc)` (defaults to `[0,0]`)
 - Compile-time constants via `pto.const(...)` support basic arithmetic and `sqrt(...)` folding (AST-only).
-- Python variables can alias PTO-AS names, e.g. `centered = pto.vec_tile("scores_centered", ...)`.
+- Python variables can alias PTO-AS names, but you usually don't need explicit string names.
 
 Example: `ptoas/examples/pypto_flash_attention.py`
 
@@ -409,6 +410,13 @@ Example (uses `ptoas/examples/python_kernels.py`):
 ```bash
 python3 ptoas/tools/python_kernel_flow.py ptoas/examples/python_kernels.py --kernel add16 --outdir /tmp/ptoas_py_kernel
 python3 ptoas/tools/python_kernel_flow.py ptoas/examples/python_kernels.py --kernel gemm16 --arch dav-c220-cube --build-so --ascend-home "$ASCEND_HOME_PATH"
+```
+
+Recommended end-to-end runner (CPU ref + NPU run + timeout + optional simulator fallback):
+
+```bash
+python3 ptoas/tools/python_kernel_e2e.py kernels/python/add16.py --kernel add16 --arch dav-c220-vec --run-mode npu --timeout-sec 120
+python3 ptoas/tools/python_kernel_e2e.py kernels/python/gemm16.py --kernel gemm16 --arch dav-c220-cube --run-mode npu --timeout-sec 120
 ```
 
 ### Run On NPU Simulator (`sim` / A3) (Python Kernel → Compare Against CPU)
@@ -534,6 +542,12 @@ python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "
 
 # Real NPU
 python3 kernels/python/run_regression.py --run-mode npu --ascend-home "$ASCEND_HOME_PATH"
+
+# Add per-case timeout (kills hung NPU runs) and retry transient failures:
+python3 kernels/python/run_regression.py --run-mode npu --timeout-sec 180 --retries 2 --ascend-home "$ASCEND_HOME_PATH"
+
+# If a case times out on NPU, rerun it under simulator to collect logs:
+python3 kernels/python/run_regression.py --run-mode npu --timeout-sec 180 --sim-on-timeout --ascend-home "$ASCEND_HOME_PATH"
 
 # Run a subset
 python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --cases add16,softmax16,gemm16

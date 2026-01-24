@@ -171,10 +171,7 @@ def make_gemm16_program(*, target: str = "npu") -> str:
 
     a_mat = TileType("Mat", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
     b_mat = TileType("Mat", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
-    if target == "cpu":
-        a_left = TileType("Left", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
-    else:
-        a_left = TileType("Left", "f16", 16, 16, blayout="RowMajor", slayout="RowMajor")
+    a_left = TileType("Left", "f16", 16, 16, blayout="ColMajor", slayout="RowMajor")
     b_right = TileType("Right", "f16", 16, 16, blayout="RowMajor", slayout="ColMajor")
     c_acc = TileType("Acc", "f32", 16, 16, blayout="ColMajor", slayout="RowMajor")
 
@@ -193,4 +190,3 @@ def make_gemm16_program(*, target: str = "npu") -> str:
 
     prog.epilogue()
     return prog.emit()
-

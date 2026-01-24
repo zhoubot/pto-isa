@@ -3,9 +3,9 @@ from __future__ import annotations
 from pto_as import PTO
 
 
-def pto_torch_tensor():
-    # Upstream ref: `~/github/pto-isa/examples/pto_torch_tensor.py`
-    pto = PTO("pto_torch_tensor")
+def mul16_f16():
+    # z = x * y
+    pto = PTO("mul16_f16")
     pto.prologue()
 
     x = pto.tensor(dtype="f16", shape=(16, 16), role="in")
@@ -14,12 +14,13 @@ def pto_torch_tensor():
 
     tx = pto.vec(dtype="f16", shape=(16, 16))
     ty = pto.vec(dtype="f16", shape=(16, 16))
-    tz = pto.vec(dtype="f16", shape=(16, 16))
+    out = pto.vec(dtype="f16", shape=(16, 16))
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tz = pto.tadd(tx, ty)
-    pto.store(z, tz)
+    out = pto.tmul(tx, ty)
+    pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
+

@@ -48,18 +48,18 @@ def gemm256():
     pto = PTO("gemm256")
     pto.prologue()
 
-    a = pto.tensor("a", (256, 256), dtype="f16", role="in")
-    b = pto.tensor("b", (256, 256), dtype="f16", role="in")
-    c = pto.tensor("c", (256, 256), dtype="f32", role="out")
+    a = pto.tensor(dtype="f16", shape=(256, 256), role="in")
+    b = pto.tensor(dtype="f16", shape=(256, 256), role="in")
+    c = pto.tensor(dtype="f32", shape=(256, 256), role="out")
 
-    a_mat = pto.mat_tile("a_mat", dtype="f16", shape=(16, 16))
-    b_mat = pto.mat_tile("b_mat", dtype="f16", shape=(16, 16))
+    a_mat = pto.mat(dtype="f16", shape=(16, 16))
+    b_mat = pto.mat(dtype="f16", shape=(16, 16))
 
-    a_left_0 = pto.left_tile("a_left_0", dtype="f16", shape=(16, 16))
-    a_left_1 = pto.left_tile("a_left_1", dtype="f16", shape=(16, 16))
-    b_right_0 = pto.right_tile("b_right_0", dtype="f16", shape=(16, 16))
-    b_right_1 = pto.right_tile("b_right_1", dtype="f16", shape=(16, 16))
-    c_acc = pto.acc_tile("c_acc", dtype="f32", shape=(16, 16))
+    a_left_0 = pto.left(dtype="f16", shape=(16, 16), blayout="ColMajor", slayout="RowMajor")
+    a_left_1 = pto.left(dtype="f16", shape=(16, 16), blayout="ColMajor", slayout="RowMajor")
+    b_right_0 = pto.right(dtype="f16", shape=(16, 16))
+    b_right_1 = pto.right(dtype="f16", shape=(16, 16))
+    c_acc = pto.acc(dtype="f32", shape=(16, 16))
 
     for mi in range(0, 256, 16):
         for nj in range(0, 256, 16):

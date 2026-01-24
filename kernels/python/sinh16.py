@@ -8,15 +8,15 @@ def sinh16():
     pto = PTO("sinh16")
     pto.prologue()
 
-    x = pto.tensor("x", (16, 16), dtype="f32", role="in")
-    y = pto.tensor("y", (16, 16), dtype="f32", role="out")
+    x = pto.tensor(dtype="f32", shape=(16, 16), role="in")
+    y = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
-    tx = pto.vec_tile("tx", dtype="f32", shape=(16, 16))
-    neg_x = pto.vec_tile("neg_x", dtype="f32", shape=(16, 16))
-    exp_x = pto.vec_tile("exp_x", dtype="f32", shape=(16, 16))
-    exp_neg_x = pto.vec_tile("exp_neg_x", dtype="f32", shape=(16, 16))
-    diff = pto.vec_tile("diff", dtype="f32", shape=(16, 16))
-    out = pto.vec_tile("out", dtype="f32", shape=(16, 16))
+    tx = pto.vec(dtype="f32", shape=(16, 16))
+    neg_x = pto.vec(dtype="f32", shape=(16, 16))
+    exp_x = pto.vec(dtype="f32", shape=(16, 16))
+    exp_neg_x = pto.vec(dtype="f32", shape=(16, 16))
+    diff = pto.vec(dtype="f32", shape=(16, 16))
+    out = pto.vec(dtype="f32", shape=(16, 16))
 
     half = pto.const("half", 0.5, scalar("f32"))
 
