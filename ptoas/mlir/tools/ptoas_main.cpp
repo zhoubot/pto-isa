@@ -47,6 +47,8 @@ int main(int argc, char **argv) {
                                      llvm::cl::desc("Disable event insertion (may crash on NPU)"));
   llvm::cl::opt<bool> assignTileAddrs("assign-tile-addrs", llvm::cl::init(true),
                                       llvm::cl::desc("Assign default addresses to tiles (prototype)"));
+  llvm::cl::opt<bool> splitKernels("split-kernels", llvm::cl::init(false),
+                                   llvm::cl::desc("Split PTO-AS into multiple kernels using pto.stage_* markers"));
 
   llvm::cl::ParseCommandLineOptions(argc, argv, "ptoas (MLIR-based prototype)\n");
 
@@ -59,8 +61,10 @@ int main(int argc, char **argv) {
   }
 
   bool doInsertEvents = (target == "npu") && insertEvents && !noInsertEvents;
-  if (assignTileAddrs || doInsertEvents) {
+  if (assignTileAddrs || splitKernels || doInsertEvents) {
     mlir::PassManager pm(&ctx);
+    if (splitKernels)
+      pm.addPass(ptoas::createSplitKernelsPass());
     if (assignTileAddrs)
       pm.addPass(ptoas::createAssignTileAddressesPass());
     if (doInsertEvents)

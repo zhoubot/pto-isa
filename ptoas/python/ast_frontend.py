@@ -261,6 +261,10 @@ class _Compiler:
             if lit is not None:
                 return lit
             return self._sym_for(node.id).pto
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            # Support enum-like spellings in operands, e.g.:
+            #   RoundMode.CAST_ROUND  ->  RoundMode::CAST_ROUND
+            return f"{node.value.id}::{node.attr}"
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool):
                 return "1" if node.value else "0"
@@ -286,6 +290,9 @@ class _Compiler:
             "mov": "tmov",
             "load": "tload",
             "store": "tstore",
+            # API candy: prefer shorter names in Python kernels.
+            "rowmax": "trowmax",
+            "matmul": "tmatmul",
         }.get(name, name)
 
     def _emit_instr_assign(self, *, dst_name: str, call: ast.Call) -> None:

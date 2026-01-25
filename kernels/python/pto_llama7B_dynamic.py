@@ -25,7 +25,7 @@ def pto_llama7B_dynamic():
 
     # Tile 0 (rows 0..15).
     tx0 = pto.load(x, 0, 0)
-    row_max = pto.trowmax(tx0, tmp)
+    row_max = pto.rowmax(tx0, tmp)
     centered = pto.trowexpandsub(tx0, row_max)
     exp_x = pto.texp(centered)
     row_sum = pto.trowsum(exp_x, tmp)
@@ -34,7 +34,7 @@ def pto_llama7B_dynamic():
 
     # Tile 1 (rows 16..31).
     tx1 = pto.load(x, 16, 0)
-    row_max = pto.trowmax(tx1, tmp)
+    row_max = pto.rowmax(tx1, tmp)
     centered = pto.trowexpandsub(tx1, row_max)
     exp_x = pto.texp(centered)
     row_sum = pto.trowsum(exp_x, tmp)

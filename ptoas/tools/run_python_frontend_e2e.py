@@ -77,9 +77,10 @@ def main() -> int:
             runtime_lib=runtime_lib,
             soc=soc,
         )
-        npu_out = pipeline.run_npu_kernel_from_so(
+        npu_res = pipeline.run_npu_kernel_from_so(
             so_path=npu_so, host_spec=host_spec, host_arrays=npu_arrays, device_id=args.device, block_dim=args.block_dim
         )
+        npu_out = npu_res.outputs
 
         out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
         pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)

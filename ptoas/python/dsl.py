@@ -103,6 +103,13 @@ def tmatmul(dst: Tile, a: Tile, b: Tile) -> None:
 def tmatmul_acc(dst: Tile, acc: Tile, a: Tile, b: Tile) -> None:
     _noexec()
 
+def matmul(dst: Tile, a: Tile, b: Tile) -> None:
+    _noexec()
+
+
+def rowmax(dst: Tile, src: Tile, tmp: Tile) -> None:
+    _noexec()
+
 
 def tload(dst: Tile, src: Tensor, r: int, c: int) -> None:
     _noexec()
@@ -118,3 +125,120 @@ def record_event(*, src_op: str, dst_op: str, token: int) -> None:
 
 def wait_event(*, src_op: str, dst_op: str, token: int) -> None:
     _noexec()
+
+
+# Best-effort: expose the full PTO ISA surface as no-op stubs so kernel authors
+# can `from ptoas.python.dsl import *` and still get import-time names.
+#
+# The Python AST frontend accepts `pto.<mnemonic>(...)` calls, and the set of
+# legal mnemonics is determined by the underlying PTO toolchain. Keep this list
+# in sync with `include/pto/common/pto_instr.hpp` (MAP_INSTR_IMPL entries).
+_PTO_ISA_OPS: tuple[str, ...] = (
+    "tassign",
+    "tadd",
+    "tabs",
+    "tand",
+    "tor",
+    "tsub",
+    "tmul",
+    "tmin",
+    "tmax",
+    "texpands",
+    "tload",
+    "tprefetch",
+    "tcmps",
+    "tcmp",
+    "tdiv",
+    "tshl",
+    "tshr",
+    "txor",
+    "tlog",
+    "tdivs",
+    "tprelu",
+    "tprint",
+    "taddc",
+    "tsubc",
+    "tmatmul_mx",
+    "tmatmul",
+    "tmatmul_acc",
+    "tmatmul_bias",
+    "tneg",
+    "tmrgsort",
+    "textract",
+    "tinsert",
+    "tfillpad",
+    "tfillpad_inplace",
+    "tfillpad_expand",
+    "tsort32",
+    "tgather",
+    "tscatter",
+    "trem",
+    "tpartadd",
+    "tpartmax",
+    "tpartmin",
+    "mgather",
+    "mscatter",
+    "tcvt",
+    "tmov",
+    "trowsum",
+    "tcolsum",
+    "tcolmax",
+    "tcolexpand",
+    "tcolexpanddiv",
+    "tcolexpandmul",
+    "tcolexpandsub",
+    "tcolexpandexpdif",
+    "trowmax",
+    "treshape",
+    "trowmin",
+    "tsels",
+    "tsel",
+    "ttrans",
+    "tmins",
+    "trowexpand",
+    "trowexpanddiv",
+    "trowexpandmul",
+    "trowexpandsub",
+    "trowexpandadd",
+    "trowexpandmax",
+    "trowexpandmin",
+    "trowexpandexpdif",
+    "trsqrt",
+    "tsqrt",
+    "texp",
+    "tnot",
+    "trelu",
+    "tgatherb",
+    "tadds",
+    "tsubs",
+    "tmuls",
+    "trems",
+    "tmaxs",
+    "tands",
+    "tors",
+    "tshls",
+    "tshrs",
+    "txors",
+    "tlrelu",
+    "taddsc",
+    "tsubsc",
+    "tcolmin",
+)
+
+
+def _install_isa_stubs() -> None:
+    for name in _PTO_ISA_OPS:
+        if name in globals():
+            continue
+
+        def _mk(n: str):
+            def _f(*args: Any, **kwargs: Any) -> Any:
+                _noexec()
+
+            _f.__name__ = n
+            return _f
+
+        globals()[name] = _mk(name)
+
+
+_install_isa_stubs()

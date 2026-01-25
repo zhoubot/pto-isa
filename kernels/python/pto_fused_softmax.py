@@ -20,7 +20,7 @@ def pto_fused_softmax():
     out = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
-    row_max = pto.trowmax(tx, tmp)
+    row_max = pto.rowmax(tx, tmp)
     centered = pto.trowexpandsub(tx, row_max)
     exp_x = pto.texp(centered)
     row_sum = pto.trowsum(exp_x, tmp)

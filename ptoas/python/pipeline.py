@@ -94,10 +94,12 @@ def repo_root() -> Path:
 def ascend_include_dirs(ascend_home: Path) -> list[str]:
     candidates = [
         ascend_home / "compiler/ascendc/include/basic_api",
+        ascend_home / "compiler/ascendc/include/basic_api/interface",
         ascend_home / "compiler/ascendc/include/basic_api/impl",
         ascend_home / "compiler/asc/include/basic_api",
         ascend_home / "compiler/asc/include/interface",
         ascend_home / "compiler/asc",
+        ascend_home / "include/ascendc/highlevel_api",
         ascend_home / "include/ascendc",
         ascend_home / "include",
         ascend_home / "runtime/include",
@@ -145,6 +147,74 @@ class CompileConfig:
     arch: str
     memory_model: str = "MEMORY_BASE"
     insert_events: bool = True
+    split_kernels: bool = False
+
+
+@dataclass(frozen=True)
+class NpuDeviceInfo:
+    device_id: int
+    device_count: int | None
+    soc: str | None
+
+
+@dataclass(frozen=True)
+class NpuKernelBench:
+    # Timing for kernel execution only (excludes H2D/D2H copies), in microseconds.
+    iters: int
+    warmup: int
+    method: str
+    avg_us: float
+    p50_us: float
+    min_us: float
+    max_us: float
+
+
+@dataclass(frozen=True)
+class NpuRunResult:
+    outputs: list[np.ndarray]
+    device: NpuDeviceInfo
+    bench: NpuKernelBench | None = None
+
+
+def discover_ascend_perf_apis(*, ascend_home: Path) -> dict[str, object]:
+    """
+    Best-effort discovery of Ascend performance/profiling APIs from headers under ASCEND_HOME_PATH.
+    Useful for validating that expected timing/profiling entrypoints exist on a given toolkit install.
+    """
+
+    def _contains(path: Path, needle: str) -> bool:
+        try:
+            with path.open("r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if needle in line:
+                        return True
+        except Exception:
+            return False
+        return False
+
+    ascend_home = Path(ascend_home)
+    info: dict[str, object] = {"ascend_home": str(ascend_home)}
+    if not ascend_home.exists():
+        info["error"] = "ascend_home does not exist"
+        return info
+
+    rt_h = ascend_home / "include/acl/acl_rt.h"
+    prof_h = ascend_home / "include/acl/acl_prof.h"
+    info["acl_rt_h"] = str(rt_h) if rt_h.exists() else None
+    info["acl_prof_h"] = str(prof_h) if prof_h.exists() else None
+
+    if rt_h.exists():
+        info["aclrtEventElapsedTime"] = _contains(rt_h, "aclrtEventElapsedTime")
+        info["aclrtCreateEvent"] = _contains(rt_h, "aclrtCreateEvent")
+        info["aclrtRecordEvent"] = _contains(rt_h, "aclrtRecordEvent")
+    if prof_h.exists():
+        info["aclprofInit"] = _contains(prof_h, "aclprofInit")
+        info["aclprofCreateConfig"] = _contains(prof_h, "aclprofCreateConfig")
+        info["aclprofStart"] = _contains(prof_h, "aclprofStart")
+        info["aclprofStop"] = _contains(prof_h, "aclprofStop")
+        info["aclprofFinalize"] = _contains(prof_h, "aclprofFinalize")
+
+    return info
 
 
 def _source_setenv_bash(setenv_path: Path) -> dict[str, str]:
@@ -375,10 +445,15 @@ def compile_pto_to_cce_and_bin(
         str(repo_root()),
         "--ascend-home",
         str(cfg.ascend_home),
-        f"--emit-bin={bin_path}",
     ]
+    # NOTE: `--emit-bin` runs bisheng inside `ptoas`. For multi-kernel (split cube/vec)
+    # flows we build fatobj objects per-arch in Python, so skip `--emit-bin` here.
+    if not cfg.split_kernels:
+        args.append(f"--emit-bin={bin_path}")
     if not cfg.insert_events:
         args.append("--no-insert-events")
+    if cfg.split_kernels:
+        args.append("--split-kernels")
     _run(args, cwd=repo_root())
     return cce_path, bin_path
 
@@ -413,6 +488,7 @@ def compile_pto_to_device_cpp(
     memory_model: str = "MEMORY_BASE",
     insert_events: bool = True,
     assign_tile_addrs: bool = True,
+    split_kernels: bool = False,
 ) -> Path:
     out_cpp.parent.mkdir(parents=True, exist_ok=True)
     args = [
@@ -435,6 +511,8 @@ def compile_pto_to_device_cpp(
         args.append("--no-insert-events")
     if assign_tile_addrs:
         args.append("--assign-tile-addrs")
+    if split_kernels:
+        args.append("--split-kernels")
     _run(args, cwd=repo_root())
     return out_cpp
 
@@ -486,51 +564,34 @@ def build_fatobj_so_from_cce(
 
     kernel_src = cce_path.read_text(encoding="utf-8")
 
-    def strip_outer_cce_guard(text: str) -> str:
-        # Newer `ptoas` emits CCE sources wrapped in:
-        #   #if defined(__CCE_AICORE__)
-        #   ...
-        #   #endif
-        #
-        # For fatobj compilation, we compile with `bisheng -xcce` already; stripping the outer
-        # guard avoids host-side compilation variants where the kernel body is skipped, which
-        # would otherwise leave an unresolved `pto_kernel` reference in the linked `.so`.
-        lines = text.splitlines()
-        # Find first non-empty, non-comment line.
-        first = None
-        for i, ln in enumerate(lines):
-            s = ln.strip()
-            if not s or s.startswith("//"):
-                continue
-            first = i
-            break
-        if first is None:
-            return text
-        # Find last non-empty line.
-        last = None
-        for i in range(len(lines) - 1, -1, -1):
-            s = lines[i].strip()
-            if not s:
-                continue
-            last = i
-            break
-        if last is None:
-            return text
-        if lines[first].strip() != "#if defined(__CCE_AICORE__)":
-            return text
-        if lines[last].strip() != "#endif":
-            return text
-        new_lines = lines[:first] + lines[first + 1 : last] + lines[last + 1 :]
-        return "\n".join(new_lines).rstrip() + "\n"
+    # Keep the outer `#if defined(__CCE__) ... #endif` guard emitted by ptoas.
+    #
+    # `bisheng -xcce` builds fatobj objects by compiling host + device paths. CCE
+    # intrinsics (e.g. `set_flag`, `pipe_barrier`, `__cce_get_tile_ptr`) are only
+    # available in the device path. Stripping the guard would force host compilation
+    # to parse device-only code and fail.
 
-    kernel_src = strip_outer_cce_guard(kernel_src)
-
-    m = re.search(r'extern\s+"C"\s+__global__\s+AICORE\s+void\s+(\w+)\s*\(([^)]*)\)', kernel_src)
-    if not m:
+    sig_re = re.compile(
+        r'extern\s+"C"\s+__global__\s+(?:AICORE|__aicore__)(?:\s+__attribute__\(\([^)]*\)\))*\s+void\s+(\w+)\s*\(([^)]*)\)'
+    )
+    matches = list(sig_re.finditer(kernel_src))
+    if not matches:
         raise RuntimeError(f"failed to infer kernel signature from: {cce_path}")
-    kernel_name = m.group(1)
-    params = [p.strip() for p in m.group(2).split(",") if p.strip()]
-    arg_count = len(params)
+    def _is_vec_kernel(name: str, sig: str) -> bool:
+        # Prefer explicit AIV annotation when present, but for split-kernel flows we primarily
+        # infer vec/cube from the stage suffix in the kernel name (e.g. `..._softmax_vec`).
+        if "aiv" in sig:
+            return True
+        return name.endswith("_vec") or ("_vec_" in name) or name.endswith("_aiv") or ("_aiv_" in name)
+
+    kernel_infos = [(m.group(1), _is_vec_kernel(m.group(1), m.group(0))) for m in matches]
+    kernel_names = [n for (n, _is_vec) in kernel_infos]
+    params0 = [p.strip() for p in matches[0].group(2).split(",") if p.strip()]
+    arg_count = len(params0)
+    for m in matches[1:]:
+        params = [p.strip() for p in m.group(2).split(",") if p.strip()]
+        if len(params) != arg_count:
+            raise RuntimeError(f"kernel signature mismatch in {cce_path}: {kernel_names[0]} has {arg_count} args but {m.group(1)} has {len(params)}")
 
     host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
     kernel_args = ", ".join([f"(GM_ADDR)arg{i}" for i in range(arg_count)])
@@ -546,29 +607,15 @@ def build_fatobj_so_from_cce(
         block_param = "uint32_t blockDim"
         block_unused = ""
 
-    combined = (
-        "#include \"kernel.cpp\"\n"
-        "#include <cstdint>\n\n"
-        f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
-        "{\n"
-        f"{block_unused}"
-        f"    {kernel_name}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n"
-        "}\n"
-    )
-
     with tempfile.TemporaryDirectory(prefix="ptoas_so_") as td:
         td_path = Path(td)
         (td_path / "kernel.cpp").write_text(kernel_src, encoding="utf-8")
-        combined_path = td_path / "combined.cpp"
-        combined_path.write_text(combined, encoding="utf-8")
-        combined_o = td_path / "combined.o"
 
         bisheng = _resolve_bisheng(ascend_home)
         # Match CMake examples: optimize by default for performance-sensitive kernels.
-        common = [
+        common_base = [
             bisheng,
             "-xcce",
-            f"--cce-aicore-arch={arch}",
             "-std=c++17",
             "-fPIC",
             "-O2",
@@ -577,12 +624,188 @@ def build_fatobj_so_from_cce(
             "-Wno-ignored-attributes",
         ]
         if cce_extra_flags:
-            common += list(cce_extra_flags)
+            common_base += list(cce_extra_flags)
         incs = [f"-I{d}" for d in include_dirs]
-        _run(common + incs + ["-c", str(combined_path), "-o", str(combined_o)], cwd=td_path)
+        out_objs: list[Path] = []
+
+        def _arch_base(a: str) -> str:
+            if a.endswith("-vec") or a.endswith("-cube"):
+                return a.rsplit("-", 1)[0]
+            return a
+
+        base = _arch_base(str(arch))
+        vec_arch = f"{base}-vec"
+        cube_arch = f"{base}-cube"
+
+        if len(kernel_infos) > 1:
+            # Multi-stage split build:
+            # - Build one fatobj `.so` per stage (each stage compiled with its own arch).
+            # - Build a tiny host-only wrapper `.so` at `out_so` that dlopens and chains stages in order.
+            #
+            # This avoids `cce-ld` limitations when trying to link host objects built under different
+            # cube/vector modes into a single fatobj `.so`.
+
+            out_so.parent.mkdir(parents=True, exist_ok=True)
+
+            # Common link args for stage libs.
+            stage_link_common: list[str] = []
+            lib64 = ascend_home / "lib64"
+            if lib64.exists():
+                stage_link_common += [f"-L{lib64}"]
+                disable_rpath = os.environ.get("PTOAS_DISABLE_RPATH", "") in ("1", "true", "True", "yes", "YES")
+                if not disable_rpath:
+                    stage_link_common += [f"-Wl,-rpath,{lib64}"]
+            if runtime_lib not in ("runtime", "runtime_camodel", "runtime_cmodel"):
+                raise ValueError(f"unsupported runtime_lib: {runtime_lib}")
+            if runtime_lib in ("runtime_camodel", "runtime_cmodel"):
+                if not soc:
+                    raise ValueError(f"soc must be provided when runtime_lib={runtime_lib}")
+                sim_lib = resolve_ascend_simulator_lib_dir(ascend_home=ascend_home, soc=soc)
+                stage_link_common += [f"-L{sim_lib}"]
+            stage_link_common += [
+                f"-l{runtime_lib}",
+                "-lascendcl",
+                "-ltiling_api",
+                "-lplatform",
+                "-lc_sec",
+                "-ldl",
+                "-lm",
+                "-lstdc++",
+            ]
+
+            # Build each stage as its own `.so` in the same directory as `out_so`.
+            stage_leafs: list[str] = []
+            for i, (kn, is_vec) in enumerate(kernel_infos):
+                stage_leaf = f"{out_so.stem}.stage{i}.so"
+                stage_leafs.append(stage_leaf)
+                stage_so = out_so.with_name(stage_leaf)
+                stage_arch = vec_arch if is_vec else cube_arch
+
+                stage_decl = f'extern "C" __global__ __aicore__ void {kn}({", ".join([f"GM_ADDR arg{i}" for i in range(arg_count)])});\n'
+                stage_src = (
+                    f"#define PTOAS_EMIT_ALL 0\n#define PTOAS_EMIT_KERNEL_{kn} 1\n"
+                    "#include \"kernel_operator.h\"\n"
+                    + stage_decl +
+                    "#include \"kernel.cpp\"\n"
+                    "#include <cstdint>\n\n"
+                    f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
+                    "{\n"
+                    f"{block_unused}"
+                    f"    {kn}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n"
+                    "}\n"
+                )
+                stage_cpp = td_path / f"stage{i}.cpp"
+                stage_cpp.write_text(stage_src, encoding="utf-8")
+                stage_o = td_path / f"stage{i}.o"
+                _run(
+                    common_base + [f"--cce-aicore-arch={stage_arch}"] + incs + ["-c", str(stage_cpp), "-o", str(stage_o)],
+                    cwd=td_path,
+                )
+                link_stage = [bisheng, "-shared", "--cce-fatobj-link", "-o", str(stage_so), str(stage_o)] + stage_link_common
+                _run(link_stage, cwd=td_path)
+
+            # Build host-only wrapper `.so` that chains the per-stage `.so`s.
+            def _host_cxx() -> tuple[str, str]:
+                cxx = os.environ.get("CXX", "").strip()
+                if cxx:
+                    return cxx, "-std=c++20"
+                if shutil.which("clang++"):
+                    return "clang++", "-std=c++20"
+                if shutil.which("g++"):
+                    return "g++", "-std=gnu++2b"
+                return "c++", "-std=gnu++2b"
+
+            host_cxx, host_std = _host_cxx()
+            host_cpp = td_path / "host_chain.cpp"
+            arg_list = ", ".join([f"void *arg{i}" for i in range(arg_count)])
+            fn_params = ", ".join(["void* stream", "uint32_t blockDim"] + [f"void* arg{i}" for i in range(arg_count)])
+            call_args = ", ".join(["stream", "blockDim"] + [f"arg{i}" for i in range(arg_count)])
+            leaf_inits = ",\n".join([f"    \"{leaf}\"" for leaf in stage_leafs])
+            host_cpp.write_text(
+                "\n".join(
+                    [
+                        "#include <cstdint>",
+                        "#include <cstdio>",
+                        "#include <cstdlib>",
+                        "#include <dlfcn.h>",
+                        "#include <stdexcept>",
+                        "#include <string>",
+                        "",
+                        "static std::string _self_dir() {",
+                        "  Dl_info info{};",
+                        "  if (dladdr((void*)&_self_dir, &info) == 0 || !info.dli_fname) return std::string(\".\");",
+                        "  std::string p(info.dli_fname);",
+                        "  auto pos = p.rfind('/');",
+                        "  if (pos == std::string::npos) return std::string(\".\");",
+                        "  return p.substr(0, pos);",
+                        "}",
+                        "",
+                        f"using launch_fn_t = void(*)(void*, uint32_t{', ' if arg_count else ''}{', '.join(['void*']*arg_count)});",
+                        "",
+                        "static launch_fn_t _load_stage(const char* leaf) {",
+                        "  std::string path = _self_dir() + \"/\" + leaf;",
+                        "  void* h = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);",
+                        "  if (!h) throw std::runtime_error(std::string(\"dlopen failed: \") + dlerror());",
+                        "  void* sym = dlsym(h, \"ptoas_launch\");",
+                        "  if (!sym) throw std::runtime_error(std::string(\"dlsym failed: \") + dlerror());",
+                        "  return reinterpret_cast<launch_fn_t>(sym);",
+                        "}",
+                        "",
+                        f"extern \"C\" void ptoas_launch({fn_params}) {{",
+                        "  static const char* kStageLibs[] = {",
+                        leaf_inits,
+                        "  };",
+                        "  const bool trace = (std::getenv(\"PTOAS_SPLIT_TRACE\") != nullptr);",
+                        "  for (const char* leaf : kStageLibs) {",
+                        "    if (trace) { std::fprintf(stderr, \"[ptoas][split] %s\\n\", leaf); std::fflush(stderr); }",
+                        "    auto fn = _load_stage(leaf);",
+                        f"    fn({call_args});",
+                        "  }",
+                        "}",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            subprocess.run(
+                [host_cxx, "-shared", "-fPIC", "-O2", host_std, str(host_cpp), "-ldl", "-o", str(out_so)],
+                check=True,
+                cwd=str(td_path),
+            )
+            return
+        else:
+            # Single-kernel TU:
+            # - Provide host-side forward decls for kernels (device definitions live in `kernel.cpp` under `__CCE_AICORE__`).
+            # - Include `kernel.cpp` as-is (keep its outer guard).
+            decls = "\n".join(
+                [
+                    f'extern "C" __global__ __aicore__ void {kn}({", ".join([f"GM_ADDR arg{i}" for i in range(arg_count)])});'
+                    for kn in kernel_names
+                ]
+            )
+            launch_lines = "".join([f"    {kn}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n" for kn in kernel_names])
+            combined = (
+                "#include \"kernel_operator.h\"\n"
+                "#include <cstdint>\n\n"
+                f"{decls}\n\n"
+                "#include \"kernel.cpp\"\n\n"
+                f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
+                "{\n"
+                f"{block_unused}"
+                f"{launch_lines}"
+                "}\n"
+            )
+            combined_path = td_path / "combined.cpp"
+            combined_path.write_text(combined, encoding="utf-8")
+            combined_o = td_path / "combined.o"
+            _run(
+                common_base + [f"--cce-aicore-arch={arch}"] + incs + ["-c", str(combined_path), "-o", str(combined_o)],
+                cwd=td_path,
+            )
+            out_objs.append(combined_o)
 
         out_so.parent.mkdir(parents=True, exist_ok=True)
-        link = [bisheng, "-shared", "--cce-fatobj-link", "-o", str(out_so), str(combined_o)]
+        link = [bisheng, "-shared", "--cce-fatobj-link", "-o", str(out_so)] + [str(p) for p in out_objs]
         lib64 = ascend_home / "lib64"
         if lib64.exists():
             link += [f"-L{lib64}"]
@@ -644,41 +867,22 @@ def build_fatobj_exe_from_cce(
 
     kernel_src = cce_path.read_text(encoding="utf-8")
 
-    def strip_outer_cce_guard(text: str) -> str:
-        lines = text.splitlines()
-        first = None
-        for i, ln in enumerate(lines):
-            s = ln.strip()
-            if not s or s.startswith("//"):
-                continue
-            first = i
-            break
-        if first is None:
-            return text
-        last = None
-        for i in range(len(lines) - 1, -1, -1):
-            s = lines[i].strip()
-            if not s:
-                continue
-            last = i
-            break
-        if last is None:
-            return text
-        if lines[first].strip() != "#if defined(__CCE_AICORE__)":
-            return text
-        if lines[last].strip() != "#endif":
-            return text
-        new_lines = lines[:first] + lines[first + 1 : last] + lines[last + 1 :]
-        return "\n".join(new_lines).rstrip() + "\n"
+    # Keep the outer `#if defined(__CCE__) ... #endif` guard emitted by ptoas.
+    # See `build_fatobj_so_from_cce()` for rationale.
 
-    kernel_src = strip_outer_cce_guard(kernel_src)
-
-    m = re.search(r'extern\s+"C"\s+__global__\s+AICORE\s+void\s+(\w+)\s*\(([^)]*)\)', kernel_src)
-    if not m:
+    sig_re = re.compile(
+        r'extern\s+"C"\s+__global__\s+(?:AICORE|__aicore__)(?:\s+__attribute__\(\([^)]*\)\))*\s+void\s+(\w+)\s*\(([^)]*)\)'
+    )
+    matches = list(sig_re.finditer(kernel_src))
+    if not matches:
         raise RuntimeError(f"failed to infer kernel signature from: {cce_path}")
-    kernel_name = m.group(1)
-    params = [p.strip() for p in m.group(2).split(",") if p.strip()]
-    arg_count = len(params)
+    kernel_names = [m.group(1) for m in matches]
+    params0 = [p.strip() for p in matches[0].group(2).split(",") if p.strip()]
+    arg_count = len(params0)
+    for m in matches[1:]:
+        params = [p.strip() for p in m.group(2).split(",") if p.strip()]
+        if len(params) != arg_count:
+            raise RuntimeError(f"kernel signature mismatch in {cce_path}: {kernel_names[0]} has {arg_count} args but {m.group(1)} has {len(params)}")
 
     host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
     kernel_args = ", ".join([f"(GM_ADDR)arg{i}" for i in range(arg_count)])
@@ -694,13 +898,22 @@ def build_fatobj_exe_from_cce(
         block_param = "uint32_t blockDim"
         block_unused = ""
 
+    decls = "\n".join(
+        [
+            f'extern "C" __global__ __aicore__ void {kn}({", ".join([f"GM_ADDR arg{i}" for i in range(arg_count)])});'
+            for kn in kernel_names
+        ]
+    )
+    launch_lines = "".join([f"    {kn}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n" for kn in kernel_names])
     combined = (
-        "#include \"kernel.cpp\"\n"
+        "#include \"kernel_operator.h\"\n"
         "#include <cstdint>\n\n"
+        f"{decls}\n\n"
+        "#include \"kernel.cpp\"\n\n"
         f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
         "{\n"
         f"{block_unused}"
-        f"    {kernel_name}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n"
+        f"{launch_lines}"
         "}\n"
     )
 
@@ -889,7 +1102,9 @@ def run_npu_kernel_from_so(
     host_arrays: list[np.ndarray],
     device_id: int,
     block_dim: int,
-) -> list[np.ndarray]:
+    bench_iters: int = 0,
+    bench_warmup: int = 0,
+) -> NpuRunResult:
     import ctypes
     import acl
     import time
@@ -914,8 +1129,89 @@ def run_npu_kernel_from_so(
         sys.stderr.write(f"[ptoas][run] {msg}\n")
         sys.stderr.flush()
 
+    def _device_info() -> NpuDeviceInfo:
+        soc = None
+        try:
+            soc = str(acl.get_soc_name())
+        except Exception:
+            pass
+        dev_count = None
+        try:
+            # Returns (count, ret)
+            c, r = acl.rt.get_device_count()
+            if int(r) == 0:
+                dev_count = int(c)
+        except Exception:
+            pass
+        return NpuDeviceInfo(device_id=int(device_id), device_count=dev_count, soc=soc)
+
+    def _maybe_bench_kernel_us(*, launch: object, stream: int, dev_ptrs: list[int]) -> NpuKernelBench | None:
+        iters = int(bench_iters)
+        warmup = int(bench_warmup)
+        if iters <= 0:
+            return None
+        if warmup < 0:
+            warmup = 0
+
+        # Prefer ACL event timing (aclrtEventElapsedTime). This uses device-side timestamps
+        # and avoids including Python/host overhead in the measurement.
+        if (
+            not hasattr(acl.rt, "create_event")
+            or not hasattr(acl.rt, "record_event")
+            or not hasattr(acl.rt, "synchronize_event")
+            or not hasattr(acl.rt, "event_elapsed_time")
+        ):
+            return None
+
+        start_evt = None
+        end_evt = None
+        try:
+            start_evt, r = acl.rt.create_event()
+            _check(r, "acl.rt.create_event(start)")
+            end_evt, r = acl.rt.create_event()
+            _check(r, "acl.rt.create_event(end)")
+
+            args = [ctypes.c_void_p(stream), int(block_dim)] + [ctypes.c_void_p(p) for p in dev_ptrs]
+
+            for _ in range(warmup):
+                launch(*args)
+            _check(acl.rt.synchronize_stream(stream), "acl.rt.synchronize_stream(warmup)")
+
+            ms_list: list[float] = []
+            for _ in range(iters):
+                _check(acl.rt.record_event(start_evt, stream), "acl.rt.record_event(start)")
+                launch(*args)
+                _check(acl.rt.record_event(end_evt, stream), "acl.rt.record_event(end)")
+                _check(acl.rt.synchronize_event(end_evt), "acl.rt.synchronize_event(end)")
+                ms, r = acl.rt.event_elapsed_time(start_evt, end_evt)
+                _check(r, "acl.rt.event_elapsed_time")
+                ms_list.append(float(ms))
+
+            us = np.array(ms_list, dtype=np.float64) * 1000.0
+            return NpuKernelBench(
+                iters=iters,
+                warmup=warmup,
+                method="aclrtEventElapsedTime",
+                avg_us=float(us.mean()) if us.size else 0.0,
+                p50_us=float(np.percentile(us, 50.0)) if us.size else 0.0,
+                min_us=float(us.min()) if us.size else 0.0,
+                max_us=float(us.max()) if us.size else 0.0,
+            )
+        finally:
+            try:
+                if start_evt is not None:
+                    acl.rt.destroy_event(start_evt)
+            except Exception:
+                pass
+            try:
+                if end_evt is not None:
+                    acl.rt.destroy_event(end_evt)
+            except Exception:
+                pass
+
     stream = None
     dev_ptrs: list[int] = []
+    device = _device_info()
     try:
         t0 = time.perf_counter()
         _log("acl.init() ...")
@@ -970,7 +1266,30 @@ def run_npu_kernel_from_so(
             )
             _log(f"acl.rt.memcpy(arg{i} D2H) OK")
             out.append(tmp)
-        return out
+
+        # Optional kernel-only benchmark. To avoid perturbing the correctness outputs
+        # (in case a kernel reads/writes output buffers in a non-idempotent way),
+        # allocate fresh device buffers for output args and time on those.
+        bench = None
+        bench_out_ptrs: list[int] = []
+        if int(bench_iters) > 0:
+            bench_ptrs = list(dev_ptrs)
+            try:
+                for i in host_spec.output_indices():
+                    a = host_arrays[i]
+                    p, r = acl.rt.malloc(int(a.nbytes), 0)
+                    _check(r, f"acl.rt.malloc(bench_out{i})")
+                    bench_ptrs[i] = int(p)
+                    bench_out_ptrs.append(int(p))
+                bench = _maybe_bench_kernel_us(launch=launch, stream=int(stream), dev_ptrs=bench_ptrs)
+            finally:
+                for p in bench_out_ptrs:
+                    try:
+                        acl.rt.free(int(p))
+                    except Exception:
+                        pass
+
+        return NpuRunResult(outputs=out, device=device, bench=bench)
     finally:
         for p in dev_ptrs:
             try:

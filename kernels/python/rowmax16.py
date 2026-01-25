@@ -16,9 +16,8 @@ def rowmax16():
     row_max = pto.vec(dtype="f32", shape=(16, 1), blayout="ColMajor")
 
     tx = pto.load(x)
-    row_max = pto.trowmax(tx, tmp)
+    row_max = pto.rowmax(tx, tmp)
     pto.store(y, row_max)
 
     pto.epilogue()
     return pto.program()
-

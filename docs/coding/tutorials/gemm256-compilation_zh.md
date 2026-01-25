@@ -773,13 +773,14 @@ pto_text = (outdir / "gemm256.pto").read_text(encoding="utf-8")
 host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
 host_arrays = pipeline.make_host_arrays(host_spec)
 
-out = pipeline.run_npu_kernel_from_so(
+res = pipeline.run_npu_kernel_from_so(
     so_path=outdir / "libgemm256_npu.so",
     host_spec=host_spec,
     host_arrays=host_arrays,
     device_id=0,
     block_dim=1,
 )
+out = res.outputs
 print("output:", out[0].shape, out[0].dtype)
 PY
 ```
@@ -888,9 +889,10 @@ def main() -> int:
     pipeline.build_fatobj_so_from_cce(cce_path=cce_cpp, out_so=npu_so, arch=cfg.arch, ascend_home=cfg.ascend_home)
 
     npu_arrays = [a.copy() for a in base_arrays]
-    npu_out = pipeline.run_npu_kernel_from_so(
+    npu_res = pipeline.run_npu_kernel_from_so(
         so_path=npu_so, host_spec=host_spec, host_arrays=npu_arrays, device_id=args.device, block_dim=args.block_dim
     )
+    npu_out = npu_res.outputs
 
     out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
     pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)

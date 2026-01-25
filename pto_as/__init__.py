@@ -190,6 +190,10 @@ class PTO:
     def tstore(self, dst: Tensor, src: Tile, r: int = 0, c: int = 0) -> None:
         self._p.op("tstore", [f"{dst.ref}[{r}, {c}]", src.ref])
 
+    # Common sugar used by the AST frontend (statement form).
+    def store(self, dst: Tensor, src: Tile, r: int = 0, c: int = 0) -> None:
+        self.tstore(dst, src, r, c)
+
     # --- Generic instruction helpers ---
 
     def _fmt(self, x: Any) -> str:
@@ -217,7 +221,148 @@ class PTO:
 
     def __getattr__(self, opcode: str) -> Callable[..., Any]:
         # Allow `pto.trowmax(dst, a, b)` without having to define every method.
+        # Note: Python kernels in this repo are typically *parsed, not executed*.
+        # These aliases exist to keep the surface API short and consistent.
+        opcode = _OPCODE_ALIASES.get(opcode, opcode)
+
         def _op(*operands: Any) -> Any:
             return self._emit_dst_first(opcode, operands)
 
         return _op
+
+
+# --- PTO op surface API -------------------------------------------------------
+#
+# Keep a curated list of PTO ISA entrypoints exposed to the Python frontend, so:
+# - users get tab completion in IDEs
+# - docs can link to a stable list of supported mnemonics
+#
+# The actual toolchain accepts any `pto.<mnemonic>` string, but only a subset
+# lower to real kernels. This list is based on the C++ ISA entrypoints in:
+#   include/pto/common/pto_instr.hpp
+_PTO_KNOWN_OPS: tuple[str, ...] = (
+    "tassign",
+    "tadd",
+    "tabs",
+    "tand",
+    "tor",
+    "tsub",
+    "tmul",
+    "tmin",
+    "tmax",
+    "texpands",
+    "tload",
+    "tprefetch",
+    "tcmps",
+    "tcmp",
+    "tdiv",
+    "tshl",
+    "tshr",
+    "txor",
+    "tlog",
+    "tdivs",
+    "tprelu",
+    "tprint",
+    "taddc",
+    "tsubc",
+    "tmatmul_mx",
+    "tmatmul",
+    "tmatmul_acc",
+    "tmatmul_bias",
+    "tneg",
+    "tmrgsort",
+    "textract",
+    "tinsert",
+    "tfillpad",
+    "tfillpad_inplace",
+    "tfillpad_expand",
+    "tsort32",
+    "tgather",
+    "tscatter",
+    "trem",
+    "tpartadd",
+    "tpartmax",
+    "tpartmin",
+    "mgather",
+    "mscatter",
+    "tcvt",
+    "tmov",
+    "trowsum",
+    "tcolsum",
+    "tcolmax",
+    "tcolexpand",
+    "tcolexpanddiv",
+    "tcolexpandmul",
+    "tcolexpandsub",
+    "tcolexpandexpdif",
+    "trowmax",
+    "treshape",
+    "trowmin",
+    "tsels",
+    "tsel",
+    "ttrans",
+    "tmins",
+    "trowexpand",
+    "trowexpanddiv",
+    "trowexpandmul",
+    "trowexpandsub",
+    "trowexpandadd",
+    "trowexpandmax",
+    "trowexpandmin",
+    "trowexpandexpdif",
+    "trsqrt",
+    "tsqrt",
+    "texp",
+    "tnot",
+    "trelu",
+    "tgatherb",
+    "tadds",
+    "tsubs",
+    "tmuls",
+    "trems",
+    "tmaxs",
+    "tands",
+    "tors",
+    "tshls",
+    "tshrs",
+    "txors",
+    "tlrelu",
+    "taddsc",
+    "tsubsc",
+    "tcolmin",
+)
+
+_OPCODE_ALIASES: dict[str, str] = {
+    # Existing sugar in the AST frontend.
+    "mov": "tmov",
+    "load": "tload",
+    # Requested API refinement.
+    "rowmax": "trowmax",
+    "matmul": "tmatmul",
+    # Extra convenience (kept symmetric with existing `t*` names).
+    "matmul_acc": "tmatmul_acc",
+    "matmul_mx": "tmatmul_mx",
+    "matmul_bias": "tmatmul_bias",
+}
+
+
+def _install_pto_op_methods() -> None:
+    def _mk(*, py_name: str, opcode: str) -> Callable[..., Any]:
+        def _op(self: PTO, *operands: Any) -> Any:
+            return self._emit_dst_first(opcode, operands)
+
+        _op.__name__ = py_name
+        return _op
+
+    for op in _PTO_KNOWN_OPS:
+        if hasattr(PTO, op):
+            continue
+        setattr(PTO, op, _mk(py_name=op, opcode=op))
+
+    for alias, real in _OPCODE_ALIASES.items():
+        if hasattr(PTO, alias):
+            continue
+        setattr(PTO, alias, _mk(py_name=alias, opcode=real))
+
+
+_install_pto_op_methods()

@@ -40,6 +40,7 @@ target_link_libraries(ptoas_core PUBLIC
 add_library(ptoas_passes
   lib/AssignTileAddressesPass.cpp
   lib/InsertEventsPass.cpp
+  lib/SplitKernelsPass.cpp
 )
 llvm_update_compile_flags(ptoas_passes)
 target_include_directories(ptoas_passes PUBLIC include)

@@ -10,8 +10,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #ifndef _PTO_INCLUDE_NPU_TYPE_H_
 #define _PTO_INCLUDE_NPU_TYPE_H_
-#if defined(MEMORY_BASE) || defined(REGISTER_BASE)
-#define AICORE [aicore]
+#if defined(__CCE_AICORE__)
+// `bisheng -xcce` enables Ascend CCE mode; the compiler provides the `__aicore__`
+// attribute keyword used throughout AscendC headers.
+#define AICORE __aicore__
 #else
 #define AICORE
 #endif
@@ -24,6 +26,26 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #define OP_NAME(Name) __attribute__((vf_name(#Name)))
 #define OP_TYPE(TypeName) __attribute__((vf_kind(#TypeName)))
+
+// Annotation qualifiers used in PTO headers for readability. These are not part of
+// standard C++. For CCE compilation, `__tf__` is a compiler keyword required by
+// tile intrinsics (e.g. `__cce_get_tile_ptr`), so make sure it is *not* macro-
+// defined in that mode.
+#if defined(__CCE_AICORE__)
+#ifdef __tf__
+#undef __tf__
+#endif
+#else
+#ifndef __tf__
+#define __tf__
+#endif
+#endif
+#ifndef __out__
+#define __out__
+#endif
+#ifndef __in__
+#define __in__
+#endif
 
 // -----------------------------------------------------------------------------
 // PTO assertion helpers

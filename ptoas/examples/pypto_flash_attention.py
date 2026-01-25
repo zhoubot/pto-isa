@@ -47,11 +47,11 @@ def build():
             kt_tile = pto.ttrans(k_tile, k_tile)
             k_right = pto.mov(kt_tile)
 
-            scores_acc = pto.tmatmul(q_left, k_right)
+            scores_acc = pto.matmul(q_left, k_right)
             scores = pto.mov(scores_acc)
             scores = pto.tmuls(scores, scale)
 
-            row_max = pto.trowmax(scores, scores)
+            row_max = pto.rowmax(scores, scores)
             centered = pto.trowexpandsub(scores, row_max)
             exp_scores = pto.texp(centered)
             row_sum = pto.trowsum(exp_scores, exp_scores)
@@ -59,7 +59,7 @@ def build():
 
             p_left = pto.mov(probs)
             v_right = pto.mov(v_tile)
-            out_acc = pto.tmatmul(p_left, v_right)
+            out_acc = pto.matmul(p_left, v_right)
             pto.store(o, out_acc)
         else:
             pto.comment("unreachable")

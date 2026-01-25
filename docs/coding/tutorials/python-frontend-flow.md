@@ -65,6 +65,32 @@ Notes:
 - `ptoas` drives the Ascend toolchain under the hood for `.bin` emission.
 - The typical run path uses a fatobj `.so` (Stage 3) instead of directly loading `.bin`.
 
+## Stage 2.1: Multi-kernel split (cube + vec)
+
+Some kernels want to mix **cube** and **vec** code paths (e.g. `matmul` + `softmax`) in one logical Python program.
+In that case, compile with:
+
+- `ptoas --split-kernels`
+
+How it works (high level):
+
+- Python emits marker ops like `pto.stage_qk_cube()` / `pto.stage_softmax_vec()`.
+- `ptoas --split-kernels` turns a single `.pto` into multiple kernels by stage and emits multiple CCE kernels:
+  - `pto_kernel_<name>_<stage0>`
+  - `pto_kernel_<name>_<stage1>`
+  - ...
+- `build_fatobj_so_from_cce(...)` builds one stage fatobj `.so` per kernel and a small host wrapper `.so` that
+  dlopens and chains them in order.
+
+Example:
+
+```bash
+python3 kernels/python/run_regression.py --run-mode sim --soc a3 --cases flash_attention64_split --timeout-sec 600
+python3 kernels/python/run_regression.py --run-mode npu --cases flash_attention64_split --timeout-sec 300
+```
+
+Set `PTOAS_SPLIT_TRACE=1` to print the stage `.so` names at runtime.
+
 ## Stage 3: CCE → fatobj `.so` (via `bisheng -xcce`)
 
 Use the helper (wraps `bisheng -xcce` with the right include/lib flags):
@@ -106,7 +132,7 @@ Artifacts in `--outdir` include:
 - `*.pto` (PTO-AS)
 - `*.cpu.cpp` + `lib*_cpu.so` (CPU reference)
 - `*.cpp` + `*.bin` + `lib*_{npu,sim}.so` (NPU build products)
-- `event_summary.json` and `set_wait_snippet.txt` (best-effort set/wait flag summaries)
+- `event_summary.txt` and `set_wait_snippet.txt` (best-effort set/wait flag summaries)
 
 ## Batch regression (NPU)
 

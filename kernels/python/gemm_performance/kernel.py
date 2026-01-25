@@ -137,7 +137,7 @@ def gemm_performance():
                     lane = kt % 2
                     if lane == 0:
                         if kt == 0:
-                            c = pto.tmatmul(a0, b0)
+                            c = pto.matmul(a0, b0)
                         else:
                             c = pto.tmatmul_acc(c, a0, b0)
                     else:

@@ -1,4 +1,5 @@
 #include "ptoas/Passes.h"
+#include "ptoas/ProtoAttrs.h"
 
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
@@ -91,9 +92,13 @@ static llvm::StringRef pipeForOpEnum(llvm::StringRef opEnum) {
     return "FIX";
   if (opEnum == "TMATMUL")
     return "M";
+  if (opEnum == "TMATMUL_MX")
+    return "M";
   if (opEnum == "TMOV_V2V")
     return "V";
   if (opEnum == "TMOV_V2M" || opEnum == "TEXTRACT_V2M" || opEnum == "TMOV_A2V" || opEnum == "TMOV_A2M")
+    return "FIX";
+  if (opEnum == "TEXTRACT_A2M" || opEnum == "TINSERT_A2M")
     return "FIX";
   if (opEnum == "TMOV_M2B" || opEnum == "TMOV_M2L" || opEnum == "TMOV_M2R" || opEnum == "TEXTRACT_M2LR")
     return "MTE1";
@@ -142,6 +147,8 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
     return "TMATMUL";
   if (opcode == "tmatmul_acc")
     return "TMATMUL";
+  if (opcode == "tmatmul_mx")
+    return "TMATMUL_MX";
 
   if (opcode == "tmov") {
     auto operands = readOperands(op);
@@ -172,6 +179,44 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
       return "TMOV_A2V";
     if (srcLoc == "Acc" && dstLoc == "Mat")
       return "TMOV_A2M";
+    return "";
+  }
+
+  if (opcode == "textract") {
+    auto operands = readOperands(op);
+    if (operands.size() != 2)
+      return "";
+    auto dst = stripIndexing(operands[0]);
+    auto src = stripIndexing(operands[1]);
+    auto dstIt = argTypes.find(dst);
+    auto srcIt = argTypes.find(src);
+    if (dstIt == argTypes.end() || srcIt == argTypes.end())
+      return "";
+    auto dstLoc = parseTileLocFromType(dstIt->second);
+    auto srcLoc = parseTileLocFromType(srcIt->second);
+    if (srcLoc == "Vec" && dstLoc == "Mat")
+      return "TEXTRACT_V2M";
+    if (srcLoc == "Mat" && (dstLoc == "Left" || dstLoc == "Right"))
+      return "TEXTRACT_M2LR";
+    if (srcLoc == "Acc" && dstLoc == "Mat")
+      return "TEXTRACT_A2M";
+    return "";
+  }
+
+  if (opcode == "tinsert") {
+    auto operands = readOperands(op);
+    if (operands.size() != 2)
+      return "";
+    auto dst = stripIndexing(operands[0]);
+    auto src = stripIndexing(operands[1]);
+    auto dstIt = argTypes.find(dst);
+    auto srcIt = argTypes.find(src);
+    if (dstIt == argTypes.end() || srcIt == argTypes.end())
+      return "";
+    auto dstLoc = parseTileLocFromType(dstIt->second);
+    auto srcLoc = parseTileLocFromType(srcIt->second);
+    if (srcLoc == "Acc" && dstLoc == "Mat")
+      return "TINSERT_A2M";
     return "";
   }
 
@@ -232,8 +277,6 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
       auto base = stripIndexing(trim(operands[i]));
       if (argTypes.count(base) && isTileTypeString(argTypes.at(base)))
         uses.push_back(base);
-      else if (!base.empty() && base[0] == '%')
-        uses.push_back(base); // best-effort: unknown symbols are treated as tiles
     }
     return uses;
   }
@@ -241,12 +284,17 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
   return {};
 }
 
-static mlir::Operation *insertEventOp(mlir::OpBuilder &b, mlir::Location loc, llvm::StringRef kind,
+static mlir::Operation *insertEventOp(mlir::OpBuilder &b, mlir::Operation *anchor, mlir::Location loc,
+                                      llvm::StringRef kind,
                                       llvm::StringRef srcOp, llvm::StringRef dstOp, llvm::StringRef token) {
   mlir::OperationState st(loc, ("pto." + kind).str());
   st.addAttribute("src_op", b.getStringAttr(srcOp));
   st.addAttribute("dst_op", b.getStringAttr(dstOp));
   st.addAttribute("token", b.getStringAttr(token));
+  if (anchor) {
+    if (auto stage = anchor->getAttrOfType<mlir::StringAttr>(kStageAttr))
+      st.addAttribute(kStageAttr, stage);
+  }
   return b.create(st);
 }
 
@@ -403,8 +451,8 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
 
       auto tok = allocTokenForPipes(srcPipe, dstPipe);
       b.setInsertionPoint(anchor);
-      insertEventOp(b, anchor->getLoc(), "record_event", srcOp, dstOp, tok);
-      insertEventOp(b, anchor->getLoc(), "wait_event", srcOp, dstOp, tok);
+      insertEventOp(b, anchor, anchor->getLoc(), "record_event", srcOp, dstOp, tok);
+      insertEventOp(b, anchor, anchor->getLoc(), "wait_event", srcOp, dstOp, tok);
     };
 
     auto insertTsyncVBefore = [&](mlir::Operation *anchor) -> void {
@@ -413,6 +461,8 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
       b.setInsertionPoint(anchor);
       mlir::OperationState st(anchor->getLoc(), "pto.tsync");
       st.addAttribute("pipe", b.getStringAttr("V"));
+      if (auto stage = anchor->getAttrOfType<mlir::StringAttr>(kStageAttr))
+        st.addAttribute(kStageAttr, stage);
       b.create(st);
     };
 

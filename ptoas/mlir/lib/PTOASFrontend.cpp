@@ -166,10 +166,56 @@ static void splitAttrAndTypeSig(std::string rest, std::string &operandsPart, std
     operandsPart = trim(operandsPart.substr(0, bracePos) + " " + operandsPart.substr(end + 1));
   }
 
-  auto colonPos = operandsPart.find(':');
-  if (colonPos != std::string::npos) {
-    typeSig = trim(operandsPart.substr(colonPos + 1));
-    operandsPart = trim(operandsPart.substr(0, colonPos));
+  // Type signatures use the MLIR-ish `... : <type>` suffix. Be careful not to treat C++ tokens
+  // like `RoundMode::CAST_ROUND` as a type separator.
+  auto findTypeSigColon = [&](const std::string &s) -> std::optional<size_t> {
+    int depthParen = 0, depthBrack = 0, depthAngle = 0, depthBrace = 0;
+    for (size_t i = 0; i < s.size(); ++i) {
+      char ch = s[i];
+      switch (ch) {
+      case '(':
+        depthParen++;
+        break;
+      case ')':
+        depthParen = std::max(0, depthParen - 1);
+        break;
+      case '[':
+        depthBrack++;
+        break;
+      case ']':
+        depthBrack = std::max(0, depthBrack - 1);
+        break;
+      case '<':
+        depthAngle++;
+        break;
+      case '>':
+        depthAngle = std::max(0, depthAngle - 1);
+        break;
+      case '{':
+        depthBrace++;
+        break;
+      case '}':
+        depthBrace = std::max(0, depthBrace - 1);
+        break;
+      default:
+        break;
+      }
+      if (ch != ':')
+        continue;
+      if (depthParen != 0 || depthBrack != 0 || depthAngle != 0 || depthBrace != 0)
+        continue;
+      // Treat a top-level leading ':' as the type signature separator (e.g. `pto.alloc_tile : !pto.tile<...>`).
+      // Otherwise, require whitespace before ':' so `::` does not match.
+      if (i != 0 && !std::isspace(static_cast<unsigned char>(s[i - 1])))
+        continue;
+      return i;
+    }
+    return std::nullopt;
+  };
+
+  if (auto colonPos = findTypeSigColon(operandsPart)) {
+    typeSig = trim(operandsPart.substr(*colonPos + 1));
+    operandsPart = trim(operandsPart.substr(0, *colonPos));
   }
 }
 

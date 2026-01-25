@@ -232,13 +232,14 @@ pto_text = (outdir / "gemm256.pto").read_text(encoding="utf-8")
 host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)
 host_arrays = pipeline.make_host_arrays(host_spec)
 
-out = pipeline.run_npu_kernel_from_so(
+res = pipeline.run_npu_kernel_from_so(
     so_path=outdir / "libgemm256_npu.so",
     host_spec=host_spec,
     host_arrays=host_arrays,
     device_id=0,
     block_dim=1,
 )
+out = res.outputs
 print("output:", out[0].shape, out[0].dtype)
 PY
 ```

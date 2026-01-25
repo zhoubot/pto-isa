@@ -19,10 +19,12 @@ static std::vector<std::string> ascendIncludeDirs(const std::string &ascendHome)
   // Mirrors the include chain needed by `kernel_operator.h` + PTO headers.
   std::vector<std::string> candidates = {
       ascendHome + "/compiler/ascendc/include/basic_api",
+      ascendHome + "/compiler/ascendc/include/basic_api/interface",
       ascendHome + "/compiler/ascendc/include/basic_api/impl",
       ascendHome + "/compiler/asc/include/basic_api",
       ascendHome + "/compiler/asc/include/interface",
       ascendHome + "/compiler/asc",
+      ascendHome + "/include/ascendc/highlevel_api",
       ascendHome + "/include/ascendc",
       ascendHome + "/include",
       ascendHome + "/runtime/include",

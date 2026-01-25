@@ -34,7 +34,7 @@ def gemm256():
                     a_left_0 = pto.mov(a_mat)
                     b_right_0 = pto.mov(b_mat)
                     if kk == 0:
-                        c_acc = pto.tmatmul(a_left_0, b_right_0)
+                        c_acc = pto.matmul(a_left_0, b_right_0)
                     else:
                         c_acc = pto.tmatmul_acc(c_acc, a_left_0, b_right_0)
                 else:

@@ -1,10 +1,12 @@
 #include "ptoas/Passes.h"
+#include "ptoas/ProtoAttrs.h"
 
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/ErrorHandling.h"
 
 #include <algorithm>
@@ -46,6 +48,13 @@ static std::vector<std::string> readOperands(mlir::Operation *op) {
 }
 
 static bool isTileTypeString(llvm::StringRef typeStr) { return typeStr.starts_with("!pto.tile"); }
+
+static std::string stripIndexing(std::string s) {
+  auto l = s.find('[');
+  if (l == std::string::npos)
+    return trim(s);
+  return trim(s.substr(0, l));
+}
 
 static std::optional<std::string> findTypeKV(llvm::StringRef typeStr, llvm::StringRef key) {
   auto p = typeStr.find(key);
@@ -101,6 +110,32 @@ static std::string tileLocOrEmpty(llvm::StringRef typeStr) {
   return "";
 }
 
+static bool isDedicatedLoc(llvm::StringRef loc) {
+  // These tiles live in dedicated on-core buffers (L0A/L0B/L0C/...) with their own address spaces.
+  // We still need distinct offsets when multiple tiles share the same loc (e.g. ping-pong Left/Right tiles).
+  return loc == "Left" || loc == "Right" || loc == "Acc" || loc == "Bias" || loc == "ScaleLeft" || loc == "ScaleRight" ||
+         loc == "Scaling";
+}
+
+static uint64_t stepForLoc(llvm::StringRef loc, llvm::StringRef typeStr) {
+  // Empirically align with NPU ST patterns:
+  // - Vec tiles can be tightly packed (UB/Vec scratch); keep them 4KB-aligned
+  // - Mat tiles use 0x20000 spacing (L1 tiles for cube matmul)
+  if (loc == "Vec") {
+    auto bytes = tileBytesFromTypeOrDefault(typeStr);
+    return alignUp(bytes, 0x1000);
+  }
+  if (loc == "Mat")
+    return 0x20000;
+  // L0A/L0B/L0C ping-pong patterns commonly use 32 KiB slots. This is conservative and avoids overlap
+  // even when the tile's physical footprint is larger than `fractal`.
+  if (isDedicatedLoc(loc))
+    return 0x8000;
+  // Fallback: keep the old conservative scheme.
+  auto bytes = tileBytesFromTypeOrDefault(typeStr);
+  return alignUp(bytes, 0x1000);
+}
+
 struct AssignTileAddressesPass
     : public mlir::PassWrapper<AssignTileAddressesPass, mlir::OperationPass<mlir::ModuleOp>> {
   void runOnOperation() override {
@@ -114,6 +149,7 @@ struct AssignTileAddressesPass
       std::string name;
       std::string typeStr;
       mlir::Operation *declOp = nullptr; // pto.alloc_tile
+      std::optional<std::string> addrLiteral; // raw literal, if provided
     };
     std::map<std::string, TileDecl> tiles;
     std::set<std::string> tilesWithAddr;
@@ -131,38 +167,156 @@ struct AssignTileAddressesPass
         auto typeStr = trim(typeSig.getValue().str());
         if (!isTileTypeString(typeStr))
           return;
-        tiles[tileName] = TileDecl{tileName, typeStr, op};
-        if (operands.size() >= 2 && !trim(operands[1]).empty())
-          tilesWithAddr.insert(tileName);
+        TileDecl d{tileName, typeStr, op, std::nullopt};
+        if (operands.size() >= 2 && !trim(operands[1]).empty()) {
+          auto addrStr = trim(operands[1]);
+          auto addrLit = parseIntLiteralOrZero(addrStr);
+          if (addrLit != 0 || addrStr == "0" || addrStr == "0x0" || addrStr == "0X0") {
+            d.addrLiteral = std::move(addrStr);
+            tilesWithAddr.insert(tileName);
+          }
+        }
+        tiles[tileName] = std::move(d);
         return;
       }
     });
 
-    auto isDedicatedLoc = [&](llvm::StringRef loc) -> bool {
-      // These tiles live in dedicated on-core buffers (L0A/L0B/L0C/...) with their own address spaces.
-      // We still need distinct offsets when multiple tiles share the same loc (e.g. ping-pong Left/Right tiles).
-      return loc == "Left" || loc == "Right" || loc == "Acc" || loc == "Bias" || loc == "ScaleLeft" ||
-             loc == "ScaleRight" || loc == "Scaling";
-    };
+    // Detect split-kernel mode by presence of stage annotations.
+    std::vector<std::string> stages;
+    std::set<std::string> seenStages;
+    module.walk([&](mlir::Operation *op) {
+      auto a = op->getAttrOfType<mlir::StringAttr>(kStageAttr);
+      if (!a)
+        return;
+      auto s = trim(a.getValue().str());
+      if (s.empty() || s == kPreambleStage)
+        return;
+      if (seenStages.insert(s).second)
+        stages.push_back(std::move(s));
+    });
 
-    auto stepForLoc = [&](llvm::StringRef loc, llvm::StringRef typeStr) -> uint64_t {
-      // Empirically align with NPU ST patterns:
-      // - Vec tiles can be tightly packed (UB/Vec scratch); keep them 4KB-aligned
-      // - Mat tiles use 0x20000 spacing (L1 tiles for cube matmul)
-      if (loc == "Vec") {
-        auto bytes = tileBytesFromTypeOrDefault(typeStr);
-        return alignUp(bytes, 0x1000);
+    const bool stageAware = !stages.empty();
+
+    if (stageAware) {
+      mlir::Builder b(&getContext());
+
+      // Compute which tiles are used in each stage.
+      std::set<std::string> allTileNames;
+      for (auto &kv : tiles)
+        allTileNames.insert(kv.first);
+
+      std::map<std::string, std::set<std::string>> usedByStage;
+      for (auto &s : stages)
+        usedByStage[s] = {};
+
+      module.walk([&](mlir::Operation *op) {
+        auto name = op->getName().getStringRef();
+        if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.alloc_tile")
+          return;
+        auto ops = readOperands(op);
+        if (ops.empty())
+          return;
+        std::string stage;
+        if (auto a = op->getAttrOfType<mlir::StringAttr>(kStageAttr)) {
+          stage = trim(a.getValue().str());
+          if (stage == kPreambleStage)
+            stage.clear();
+        }
+        for (auto &o : ops) {
+          auto base = stripIndexing(o);
+          if (!allTileNames.count(base))
+            continue;
+          if (stage.empty()) {
+            // Preamble ops are emitted into every stage kernel.
+            for (auto &s : stages)
+              usedByStage[s].insert(base);
+          } else {
+            usedByStage[stage].insert(base);
+          }
+        }
+      });
+
+      // Per-stage allocator state.
+      struct AllocState {
+        uint64_t nextVec = 0x0;
+        uint64_t nextMat = 0x0;
+        uint64_t nextOther = 0x10000;
+        std::map<std::string, uint64_t> nextDedicated;
+      };
+      std::map<std::string, AllocState> stateByStage;
+
+      // Seed allocators using any explicit address literals.
+      for (auto &stage : stages) {
+        auto &st = stateByStage[stage];
+        for (auto &tileName : usedByStage[stage]) {
+          auto it = tiles.find(tileName);
+          if (it == tiles.end())
+            continue;
+          auto &decl = it->second;
+          if (!decl.addrLiteral)
+            continue;
+          auto addrStr = trim(*decl.addrLiteral);
+          auto addrLit = parseIntLiteralOrZero(addrStr);
+          if (addrLit == 0 && addrStr != "0" && addrStr != "0x0" && addrStr != "0X0")
+            continue;
+          auto loc = tileLocOrEmpty(decl.typeStr);
+          auto step = stepForLoc(loc, decl.typeStr);
+          if (loc == "Vec")
+            st.nextVec = std::max(st.nextVec, addrLit + step);
+          else if (loc == "Mat")
+            st.nextMat = std::max(st.nextMat, addrLit + step);
+          else if (isDedicatedLoc(loc))
+            st.nextDedicated[loc] = std::max(st.nextDedicated[loc], addrLit + step);
+          else
+            st.nextOther = std::max(st.nextOther, alignUp(addrLit + step, 0x1000));
+        }
       }
-      if (loc == "Mat")
-        return 0x20000;
-      // L0A/L0B/L0C ping-pong patterns commonly use 32 KiB slots. This is conservative and avoids overlap
-      // even when the tile's physical footprint is larger than `fractal`.
-      if (isDedicatedLoc(loc))
-        return 0x8000;
-      // Fallback: keep the old conservative scheme.
-      auto bytes = tileBytesFromTypeOrDefault(typeStr);
-      return alignUp(bytes, 0x1000);
-    };
+
+      // Helper to allocate one tile address in a stage.
+      auto allocOne = [&](const std::string &stage, const TileDecl &decl) -> std::string {
+        auto &st = stateByStage[stage];
+        auto loc = tileLocOrEmpty(decl.typeStr);
+        uint64_t addr = 0;
+        if (loc == "Vec") {
+          addr = alignUp(st.nextVec, 0x1000);
+          st.nextVec = addr + stepForLoc(loc, decl.typeStr);
+        } else if (loc == "Mat") {
+          addr = alignUp(st.nextMat, 0x20000);
+          st.nextMat = addr + stepForLoc(loc, decl.typeStr);
+        } else if (isDedicatedLoc(loc)) {
+          addr = alignUp(st.nextDedicated[loc], 0x1000);
+          st.nextDedicated[loc] = addr + stepForLoc(loc, decl.typeStr);
+        } else {
+          addr = alignUp(st.nextOther, 0x1000);
+          st.nextOther = addr + stepForLoc(loc, decl.typeStr);
+        }
+        std::ostringstream ss;
+        ss << "0x" << std::hex << addr;
+        return ss.str();
+      };
+
+      // Attach per-stage address maps.
+      for (auto &[tileName, decl] : tiles) {
+        llvm::SmallVector<mlir::NamedAttribute> kvs;
+        kvs.reserve(stages.size());
+        for (auto &stage : stages) {
+          if (!usedByStage[stage].count(tileName))
+            continue;
+          std::string addrStr;
+          if (decl.addrLiteral) {
+            addrStr = *decl.addrLiteral;
+          } else {
+            addrStr = allocOne(stage, decl);
+          }
+          kvs.push_back(b.getNamedAttr(stage, b.getStringAttr(addrStr)));
+        }
+        if (kvs.empty())
+          continue;
+        decl.declOp->setAttr(kTileAddrMapAttr, b.getDictionaryAttr(kvs));
+      }
+
+      return;
+    }
 
     // Track per-loc address ranges.
     uint64_t nextVec = 0x0;

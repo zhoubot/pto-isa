@@ -145,14 +145,39 @@ def _child(args: argparse.Namespace) -> int:
 
     # NPU run.
     npu_arrays = [a.copy() for a in base_arrays]
-    npu_out = pipeline.run_npu_kernel_from_so(
-        so_path=npu_so, host_spec=host_spec, host_arrays=npu_arrays, device_id=int(args.device), block_dim=int(args.block_dim)
+    iters = int(args.bench_iters) if args.run_mode == "npu" else 0
+    warmup = int(args.bench_warmup) if args.run_mode == "npu" else 0
+    if iters > 0 and int(args.bench_max_bytes) > 0:
+        total_bytes = sum(int(a.nbytes) for a in npu_arrays)
+        if total_bytes > int(args.bench_max_bytes):
+            iters = 1
+            warmup = 0
+
+    npu_res = pipeline.run_npu_kernel_from_so(
+        so_path=npu_so,
+        host_spec=host_spec,
+        host_arrays=npu_arrays,
+        device_id=int(args.device),
+        block_dim=int(args.block_dim),
+        bench_iters=iters,
+        bench_warmup=warmup,
     )
+    npu_out = npu_res.outputs
     out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
     pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
 
+    bench_s = ""
+    if args.run_mode == "npu" and npu_res.bench is not None:
+        b = npu_res.bench
+        soc = npu_res.device.soc or "unknown"
+        cnt_s = f",count={npu_res.device.device_count}" if npu_res.device.device_count is not None else ""
+        bench_s = (
+            f" npu(dev={npu_res.device.device_id},soc={soc}{cnt_s},avg={b.avg_us:.2f}us,"
+            f"p50={b.p50_us:.2f}us,min={b.min_us:.2f}us,max={b.max_us:.2f}us,iters={b.iters})"
+        )
+
     print(
-        f"OK: {args.py.name}:{spec.name} "
+        f"OK: {args.py.name}:{spec.name}{bench_s} "
         f"(pto={pto_path.name} cce={Path(npu_cce).name} bin={Path(npu_bin).name} so={npu_so.name} outdir={args.outdir})"
     )
     return 0
@@ -181,9 +206,25 @@ def main() -> int:
     ap.add_argument("--timeout-sec", type=float, default=None, help="Kill the run if it exceeds this wall time.")
     ap.add_argument("--sim-on-timeout", action="store_true", help="If NPU run times out, rerun under simulator.")
     ap.add_argument("--sim-timeout-sec", type=float, default=120.0, help="Timeout for simulator fallback.")
+    ap.add_argument("--bench-iters", type=int, default=50, help="NPU-only: measure kernel time with ACL events.")
+    ap.add_argument("--bench-warmup", type=int, default=10, help="NPU-only: warmup iterations before timing.")
+    ap.add_argument(
+        "--bench-max-bytes",
+        type=int,
+        default=1 << 20,
+        help="If total H2D bytes exceed this, reduce benchmark to 1 iteration (avoids slow large-kernel benches).",
+    )
+    ap.add_argument(
+        "--show-perf-apis",
+        action="store_true",
+        help="Print which timing/profiling APIs are present in the Ascend toolkit headers.",
+    )
 
     ap.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
+
+    if args.show_perf_apis and not args._child:
+        print(json.dumps(pipeline.discover_ascend_perf_apis(ascend_home=args.ascend_home), indent=2, sort_keys=True))
 
     if args._child or not args.timeout_sec:
         if not os.environ.get("PTOAS_VERBOSE_RUN") and args.run_mode == "sim":
@@ -218,6 +259,12 @@ def main() -> int:
         str(int(args.device)),
         "--block-dim",
         str(int(args.block_dim)),
+        "--bench-iters",
+        str(int(args.bench_iters)),
+        "--bench-warmup",
+        str(int(args.bench_warmup)),
+        "--bench-max-bytes",
+        str(int(args.bench_max_bytes)),
         "--_child",
     ]
     if args.kernel is None:
@@ -228,7 +275,9 @@ def main() -> int:
         cmd.append("--no-insert-events")
 
     try:
-        proc = subprocess.run(cmd, check=False, timeout=float(args.timeout_sec))
+        env = dict(os.environ)
+        env["_PTOAS_PY_KERNEL_E2E_CHILD"] = "1"
+        proc = subprocess.run(cmd, check=False, timeout=float(args.timeout_sec), env=env)
         if proc.returncode == 0:
             return 0
         return int(proc.returncode)

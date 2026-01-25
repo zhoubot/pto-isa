@@ -24,7 +24,7 @@ def pto_torch_nn_operators():
     b_mat = pto.load(b)
     a_left = pto.mov(a_mat)
     b_right = pto.mov(b_mat)
-    c_acc = pto.tmatmul(a_left, b_right)
+    c_acc = pto.matmul(a_left, b_right)
     pto.store(c, c_acc)
 
     pto.epilogue()
