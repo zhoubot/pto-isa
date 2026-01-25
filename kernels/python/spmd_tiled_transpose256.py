@@ -34,17 +34,16 @@ def spmd_tiled_transpose256():
     for r in range(r_base, r_end, 16):
         for c in range(0, 256, 16):
             tx = pto.load(x, r, c)
-            t0 = pto.ttrans(tx, tmp)
+            t0 = pto.trans(tx, tmp)
 
             c_mod = c % 32
             if c_mod == 0:
                 # out = t0 + 0
-                zeros = pto.tsub(t0, t0)
-                out = pto.tadd(t0, zeros)
+                zeros = pto.sub(t0, t0)
+                out = pto.add(t0, zeros)
                 pto.store(y, c, r, out)
             else:
                 pto.store(y, c, r, t0)
 
     pto.epilogue()
     return pto.program()
-

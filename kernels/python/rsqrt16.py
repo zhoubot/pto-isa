@@ -19,11 +19,10 @@ def rsqrt16():
     eps = pto.const("eps", 1e-3, scalar("f32"))
 
     tx = pto.load(x)
-    ax = pto.tabs(tx)
-    tmp = pto.tadds(ax, eps)
-    out = pto.trsqrt(tmp)
+    ax = pto.abs(tx)
+    tmp = pto.adds(ax, eps)
+    out = pto.rsqrt(tmp)
     pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
-

@@ -27,14 +27,14 @@ def tiled_rowsum64():
     for r in range(0, 64, 16):
         # Init accumulator to 0 using the first tile.
         tx = pto.load(x, r, 0)
-        acc = pto.tsub(tx, tx)
+        acc = pto.sub(tx, tx)
 
         # Add row sums from each (16,16) tile in the row block.
         for c in range(0, 64, 16):
             tx = pto.load(x, r, c)
-            row_sum = pto.trowsum(tx, tmp)
-            bcast = pto.trowexpand(row_sum)
-            acc = pto.tadd(acc, bcast)
+            row_sum = pto.rowsum(tx, tmp)
+            bcast = pto.rowexpand(row_sum)
+            acc = pto.add(acc, bcast)
 
         pto.store(y, r, 0, acc)
 

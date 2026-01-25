@@ -178,10 +178,14 @@ txor
 txors
 )
 
-if(TEST_CASE IN_LIST ALL_TESTCASES)
-message(STATUS "run : ${TEST_CASE}")
+if(DEFINED TEST_CASE)
+    if(TEST_CASE IN_LIST ALL_TESTCASES)
+        message(STATUS "run : ${TEST_CASE}")
+    else()
+        message(FATAL_ERROR "not found TEST_CASE: ${TEST_CASE}, support case is : ${ALL_TESTCASES}")
+    endif()
 else()
-message(FATAL_ERROR "not found TEST_CASE: ${TEST_CASE}, support case is : ${ALL_TESTCASES}")
+    message(STATUS "run : all")
 endif()
 
 

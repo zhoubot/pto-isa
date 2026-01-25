@@ -16,9 +16,8 @@ def rowsum16():
     row_sum = pto.vec(dtype="f32", shape=(16, 1), blayout="ColMajor")
 
     tx = pto.load(x)
-    row_sum = pto.trowsum(tx, tmp)
+    row_sum = pto.rowsum(tx, tmp)
     pto.store(y, row_sum)
 
     pto.epilogue()
     return pto.program()
-

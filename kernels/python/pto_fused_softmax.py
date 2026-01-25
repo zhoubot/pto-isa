@@ -21,10 +21,10 @@ def pto_fused_softmax():
 
     tx = pto.load(x)
     row_max = pto.rowmax(tx, tmp)
-    centered = pto.trowexpandsub(tx, row_max)
-    exp_x = pto.texp(centered)
-    row_sum = pto.trowsum(exp_x, tmp)
-    out = pto.trowexpanddiv(exp_x, row_sum)
+    centered = pto.rowexpandsub(tx, row_max)
+    exp_x = pto.exp(centered)
+    row_sum = pto.rowsum(exp_x, tmp)
+    out = pto.rowexpanddiv(exp_x, row_sum)
     pto.store(y, out)
 
     pto.epilogue()

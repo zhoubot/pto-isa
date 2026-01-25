@@ -147,6 +147,11 @@ def resolve_runtime_stub_path(ascend_home: str) -> str:
             return str(p)
     raise EnvironmentError(f"cannot find runtime stub dir under ASCEND_HOME_PATH={ascend_home}")
 
+def resolve_bisheng() -> str:
+    # ST builds rely on Ascend CCE compilation; prefer the toolchain-provided `bisheng`.
+    # CMake only honors compiler selection at *configure time*, so pass it via -DCMAKE_*_COMPILER.
+    return shutil.which("bisheng") or "bisheng"
+
 
 def set_env_variables(run_mode: str, soc_version: str) -> None:
     ascend_home = resolve_ascend_home()
@@ -183,13 +188,18 @@ def build_project(run_mode, soc_version, testcase = "all", debug_enable = False)
 
     try:
         verbose = _is_truthy(os.environ.get("PTO_ST_VERBOSE", "")) or debug_enable
+        bisheng = resolve_bisheng()
         cmake_cmd = [
             "cmake",
+            f"-DCMAKE_C_COMPILER={bisheng}",
+            f"-DCMAKE_CXX_COMPILER={bisheng}",
             f"-DRUN_MODE={run_mode}",
             f"-DSOC_VERSION={soc_version}",
-            f"-DTEST_CASE={testcase}",
-            ".."
         ]
+        # When TEST_CASE is omitted, CMakeLists adds *all* testcases.
+        if testcase and testcase.lower() != "all":
+            cmake_cmd.append(f"-DTEST_CASE={testcase}")
+        cmake_cmd.append("..")
         if debug_enable :
             cmake_cmd.append("-DDEBUG_MODE=ON")
 
@@ -369,12 +379,25 @@ def main():
         # 执行构建
         build_project(args.run_mode, default_soc_version, args.testcase, args.debug_enable)
 
-        # 生成标杆
-        golden_path = "testcase/" + args.testcase + "/gen_data.py"
-        run_gen_data(golden_path)
+        if args.testcase.lower() == "all":
+            tc_root = Path("testcase")
+            testcases = sorted(
+                p.name for p in tc_root.iterdir() if p.is_dir() and (p / "gen_data.py").exists()
+            )
+            if not testcases:
+                raise RuntimeError(f"no testcases found under {tc_root.resolve()}")
+            log(f"run all testcases: {len(testcases)}")
+            for tc in testcases:
+                golden_path = str(Path("testcase") / tc / "gen_data.py")
+                run_gen_data(golden_path)
+                run_binary(tc, args.run_mode, default_cases)
+        else:
+            # 生成标杆
+            golden_path = "testcase/" + args.testcase + "/gen_data.py"
+            run_gen_data(golden_path)
 
-        # 执行二进制文件
-        run_binary(args.testcase, args.run_mode, default_cases)
+            # 执行二进制文件
+            run_binary(args.testcase, args.run_mode, default_cases)
 
     except Exception as e:
         log(f"run failed: {str(e)}")

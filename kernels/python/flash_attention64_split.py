@@ -42,23 +42,21 @@ def flash_attention64_split():
     # --- Tiles: QK stage (cube) ---
     q_mat = pto.mat(dtype="f16", shape=(TS, TS))
     kt_mat = pto.mat(dtype="f16", shape=(TS, TS))
-    q_left_0 = pto.left(dtype="f16", shape=(TS, TS), blayout="ColMajor", slayout="RowMajor")
-    q_left_1 = pto.left(dtype="f16", shape=(TS, TS), blayout="ColMajor", slayout="RowMajor")
-    kt_right_0 = pto.right(dtype="f16", shape=(TS, TS))
-    kt_right_1 = pto.right(dtype="f16", shape=(TS, TS))
+    q_left = pto.left(dtype="f16", shape=(TS, TS), blayout="ColMajor", slayout="RowMajor")
+    kt_right = pto.right(dtype="f16", shape=(TS, TS))
     scores_acc = pto.acc(dtype="f32", shape=(TS, TS))
 
     # --- Tiles: softmax stage (vec) ---
     scores_tile = pto.vec(dtype="f32", shape=(TS, TS))
     tmp = pto.vec(dtype="f32", shape=(TS, TS))
-    row_max = pto.vec(dtype="f32", shape=(TS, 1), blayout="ColMajor")
-    row_max_part = pto.vec(dtype="f32", shape=(TS, 1), blayout="ColMajor")
+    # NOTE: For A5 vector codegen, keep per-row reduction outputs in a row-major tile
+    # (stride=TS) so subsequent `rowexpand()` can use aligned vector loads.
+    row_max_part = pto.vec(dtype="f32", shape=(TS, TS))
     max_bcast = pto.vec(dtype="f32", shape=(TS, TS))
     max_acc = pto.vec(dtype="f32", shape=(TS, TS))
     centered = pto.vec(dtype="f32", shape=(TS, TS))
     exp_scores = pto.vec(dtype="f32", shape=(TS, TS))
-    row_sum = pto.vec(dtype="f32", shape=(TS, 1), blayout="ColMajor")
-    row_sum_part = pto.vec(dtype="f32", shape=(TS, 1), blayout="ColMajor")
+    row_sum_part = pto.vec(dtype="f32", shape=(TS, TS))
     sum_bcast = pto.vec(dtype="f32", shape=(TS, TS))
     sum_acc = pto.vec(dtype="f32", shape=(TS, TS))
     probs_f32 = pto.vec(dtype="f32", shape=(TS, TS))
@@ -69,10 +67,8 @@ def flash_attention64_split():
     # --- Tiles: PV stage (cube) ---
     p_mat = pto.mat(dtype="f16", shape=(TS, TS))
     v_mat = pto.mat(dtype="f16", shape=(TS, TS))
-    p_left_0 = pto.left(dtype="f16", shape=(TS, TS), blayout="ColMajor", slayout="RowMajor")
-    p_left_1 = pto.left(dtype="f16", shape=(TS, TS), blayout="ColMajor", slayout="RowMajor")
-    v_right_0 = pto.right(dtype="f16", shape=(TS, TS))
-    v_right_1 = pto.right(dtype="f16", shape=(TS, TS))
+    p_left = pto.left(dtype="f16", shape=(TS, TS), blayout="ColMajor", slayout="RowMajor")
+    v_right = pto.right(dtype="f16", shape=(TS, TS))
     out_acc = pto.acc(dtype="f32", shape=(TS, TS))
 
     # -------------------------------------------------------------------------
@@ -87,20 +83,12 @@ def flash_attention64_split():
                 for kk in range(0, D, TS):
                     q_mat = pto.load(q, mi, kk)
                     kt_mat = pto.load(kt, kk, nj)
-
-                    it0 = kk // TS
-                    lane = it0 % 2
-                    if lane == 0:
-                        q_left_0 = pto.mov(q_mat)
-                        kt_right_0 = pto.mov(kt_mat)
-                        if kk == 0:
-                            scores_acc = pto.matmul(q_left_0, kt_right_0)
-                        else:
-                            scores_acc = pto.tmatmul_acc(scores_acc, q_left_0, kt_right_0)
+                    q_left = pto.mov(q_mat)
+                    kt_right = pto.mov(kt_mat)
+                    if kk == 0:
+                        scores_acc = pto.matmul(q_left, kt_right)
                     else:
-                        q_left_1 = pto.mov(q_mat)
-                        kt_right_1 = pto.mov(kt_mat)
-                        scores_acc = pto.tmatmul_acc(scores_acc, q_left_1, kt_right_1)
+                        scores_acc = pto.matmul_acc(scores_acc, q_left, kt_right)
 
                 pto.store(scores_gm, mi, nj, scores_acc)
         else:
@@ -117,35 +105,35 @@ def flash_attention64_split():
             # Pass 1: row_max across all column tiles.
             for nj in range(0, S, TS):
                 scores_tile = pto.load(scores_gm, mi, nj)
-                scores_tile = pto.tmuls(scores_tile, scale)
+                scores_tile = pto.muls(scores_tile, scale)
                 row_max_part = pto.rowmax(scores_tile, tmp)
-                max_bcast = pto.trowexpand(row_max_part)
+                max_bcast = pto.rowexpand(row_max_part)
                 if nj == 0:
                     max_acc = pto.mov(max_bcast)
                 else:
-                    max_acc = pto.tmax(max_acc, max_bcast)
+                    max_acc = pto.max(max_acc, max_bcast)
 
             # Pass 2: row_sum across all column tiles.
             for nj in range(0, S, TS):
                 scores_tile = pto.load(scores_gm, mi, nj)
-                scores_tile = pto.tmuls(scores_tile, scale)
-                centered = pto.tsub(scores_tile, max_acc)
-                exp_scores = pto.texp(centered)
-                row_sum_part = pto.trowsum(exp_scores, tmp)
-                sum_bcast = pto.trowexpand(row_sum_part)
+                scores_tile = pto.muls(scores_tile, scale)
+                centered = pto.sub(scores_tile, max_acc)
+                exp_scores = pto.exp(centered)
+                row_sum_part = pto.rowsum(exp_scores, tmp)
+                sum_bcast = pto.rowexpand(row_sum_part)
                 if nj == 0:
                     sum_acc = pto.mov(sum_bcast)
                 else:
-                    sum_acc = pto.tadd(sum_acc, sum_bcast)
+                    sum_acc = pto.add(sum_acc, sum_bcast)
 
             # Pass 3: probs tile-by-tile.
             for nj in range(0, S, TS):
                 scores_tile = pto.load(scores_gm, mi, nj)
-                scores_tile = pto.tmuls(scores_tile, scale)
-                centered = pto.tsub(scores_tile, max_acc)
-                exp_scores = pto.texp(centered)
-                probs_f32 = pto.tdiv(exp_scores, sum_acc)
-                probs_f16 = pto.tcvt(probs_f32, RoundMode.CAST_ROUND)
+                scores_tile = pto.muls(scores_tile, scale)
+                centered = pto.sub(scores_tile, max_acc)
+                exp_scores = pto.exp(centered)
+                probs_f32 = pto.div(exp_scores, sum_acc)
+                probs_f16 = pto.cvt(probs_f32, RoundMode.CAST_ROUND)
                 pto.store(probs_gm, mi, nj, probs_f16)
         else:
             pto.comment("softmax: skip tile row")
@@ -162,20 +150,12 @@ def flash_attention64_split():
                 for kk in range(0, S, TS):
                     p_mat = pto.load(probs_gm, mi, kk)
                     v_mat = pto.load(v, kk, dj)
-
-                    it0 = kk // TS
-                    lane = it0 % 2
-                    if lane == 0:
-                        p_left_0 = pto.mov(p_mat)
-                        v_right_0 = pto.mov(v_mat)
-                        if kk == 0:
-                            out_acc = pto.matmul(p_left_0, v_right_0)
-                        else:
-                            out_acc = pto.tmatmul_acc(out_acc, p_left_0, v_right_0)
+                    p_left = pto.mov(p_mat)
+                    v_right = pto.mov(v_mat)
+                    if kk == 0:
+                        out_acc = pto.matmul(p_left, v_right)
                     else:
-                        p_left_1 = pto.mov(p_mat)
-                        v_right_1 = pto.mov(v_mat)
-                        out_acc = pto.tmatmul_acc(out_acc, p_left_1, v_right_1)
+                        out_acc = pto.matmul_acc(out_acc, p_left, v_right)
 
                 pto.store(out, mi, dj, out_acc)
         else:

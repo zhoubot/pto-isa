@@ -18,7 +18,7 @@ def pto_torch_tensor():
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tz = pto.tadd(tx, ty)
+    tz = pto.add(tx, ty)
     pto.store(z, tz)
 
     pto.epilogue()

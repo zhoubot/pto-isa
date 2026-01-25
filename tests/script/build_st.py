@@ -88,6 +88,9 @@ def set_env_variables(run_mode: str) -> None:
     ascend_home = resolve_ascend_home()
     source_setenv(ascend_home)
 
+def resolve_bisheng() -> str:
+    return shutil.which("bisheng") or "bisheng"
+
 
 def build_project(run_mode, soc_version, testcase = "all"):
     original_dir = os.getcwd()
@@ -99,13 +102,18 @@ def build_project(run_mode, soc_version, testcase = "all"):
     os.makedirs(build_dir, exist_ok=True)
 
     try:
+        bisheng = resolve_bisheng()
         cmake_cmd = [
             "cmake",
+            f"-DCMAKE_C_COMPILER={bisheng}",
+            f"-DCMAKE_CXX_COMPILER={bisheng}",
             f"-DRUN_MODE={run_mode}",
             f"-DSOC_VERSION={soc_version}",
-            f"-DTEST_CASE={testcase}",
-            ".."
         ]
+        # When TEST_CASE is omitted, CMakeLists adds *all* testcases.
+        if testcase and testcase.lower() != "all":
+            cmake_cmd.append(f"-DTEST_CASE={testcase}")
+        cmake_cmd.append("..")
 
         subprocess.run(
             cmake_cmd,

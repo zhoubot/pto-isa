@@ -22,13 +22,13 @@ def tiled_transpose64():
         for c in range(0, 64, 32):
             # Tile (r, c) -> (c, r)
             tx0 = pto.load(x, r, c)
-            out0 = pto.ttrans(tx0, tmp)
+            out0 = pto.trans(tx0, tmp)
             pto.store(y, c, r, out0)
 
             # Tile (r, c+16) -> (c+16, r)
             c1 = c + 16
             tx1 = pto.load(x, r, c1)
-            out1 = pto.ttrans(tx1, tmp)
+            out1 = pto.trans(tx1, tmp)
             pto.store(y, c1, r, out1)
 
     pto.epilogue()

@@ -19,10 +19,9 @@ def abs_add16():
 
     tx = pto.load(x)
     ty = pto.load(y)
-    ax = pto.tabs(tx)
-    out = pto.tadd(ax, ty)
+    ax = pto.abs(tx)
+    out = pto.add(ax, ty)
     pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
-

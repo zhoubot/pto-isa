@@ -2,6 +2,7 @@
 #include "ptoas/CCEmitter.h"
 #include "ptoas/PTOASFrontend.h"
 #include "ptoas/Passes.h"
+#include "ptoas/ProtoAttrs.h"
 
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
@@ -59,6 +60,7 @@ int main(int argc, char **argv) {
     llvm::errs() << "parse failed: " << err << "\n";
     return 1;
   }
+  module->setAttr(ptoas::kMemoryModelAttr, mlir::StringAttr::get(&ctx, memoryModel));
 
   bool doInsertEvents = (target == "npu") && insertEvents && !noInsertEvents;
   if (assignTileAddrs || splitKernels || doInsertEvents) {

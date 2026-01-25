@@ -15,9 +15,8 @@ def neg16():
     out = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
-    out = pto.tneg(tx)
+    out = pto.neg(tx)
     pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
-

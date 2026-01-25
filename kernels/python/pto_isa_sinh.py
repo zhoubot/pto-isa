@@ -22,11 +22,11 @@ def pto_isa_sinh():
     half = pto.const("half", 0.5, scalar("f32"))
 
     tx = pto.load(x)
-    neg_x = pto.tneg(tx)
-    exp_x = pto.texp(tx)
-    exp_neg_x = pto.texp(neg_x)
-    diff = pto.tsub(exp_x, exp_neg_x)
-    out = pto.tmuls(diff, half)
+    neg_x = pto.neg(tx)
+    exp_x = pto.exp(tx)
+    exp_neg_x = pto.exp(neg_x)
+    diff = pto.sub(exp_x, exp_neg_x)
+    out = pto.muls(diff, half)
     pto.store(y, out)
 
     pto.epilogue()

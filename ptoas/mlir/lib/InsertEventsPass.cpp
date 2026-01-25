@@ -89,6 +89,7 @@ static llvm::StringRef pipeForOpEnum(llvm::StringRef opEnum) {
   if (opEnum == "TSTORE_VEC" || opEnum == "TSTORE_MAT")
     return "MTE3";
   if (opEnum == "TSTORE_ACC")
+    // Acc -> GM store uses FIX pipe (see A5 ST `tstore_acc2gm` patterns).
     return "FIX";
   if (opEnum == "TMATMUL")
     return "M";
@@ -327,6 +328,31 @@ static bool hasEquivalentWaitEventBefore(mlir::Operation *consumer, llvm::String
   return false;
 }
 
+static bool hasFencePairAfter(mlir::Operation *producer, llvm::StringRef srcOp, llvm::StringRef dstOp) {
+  auto *rec = producer ? producer->getNextNode() : nullptr;
+  if (!rec || rec->getName().getStringRef() != "pto.record_event")
+    return false;
+  auto recSrcA = rec->getAttrOfType<mlir::StringAttr>("src_op");
+  auto recDstA = rec->getAttrOfType<mlir::StringAttr>("dst_op");
+  auto recTokA = rec->getAttrOfType<mlir::StringAttr>("token");
+  if (!recSrcA || !recDstA || !recTokA)
+    return false;
+  if (recSrcA.getValue() != srcOp || recDstA.getValue() != dstOp)
+    return false;
+
+  auto *wait = rec->getNextNode();
+  if (!wait || wait->getName().getStringRef() != "pto.wait_event")
+    return false;
+  auto waitSrcA = wait->getAttrOfType<mlir::StringAttr>("src_op");
+  auto waitDstA = wait->getAttrOfType<mlir::StringAttr>("dst_op");
+  auto waitTokA = wait->getAttrOfType<mlir::StringAttr>("token");
+  if (!waitSrcA || !waitDstA || !waitTokA)
+    return false;
+  if (waitSrcA.getValue() != srcOp || waitDstA.getValue() != dstOp)
+    return false;
+  return waitTokA.getValue() == recTokA.getValue();
+}
+
 struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::OperationPass<mlir::ModuleOp>> {
   void runOnOperation() override {
     auto module = getOperation();
@@ -368,7 +394,6 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     });
 
     mlir::OpBuilder b(module.getContext());
-    int loopId = 0;
 
     auto canonicalOpEnumForPipe = [&](llvm::StringRef pipe) -> llvm::StringRef {
       // Pick a stable representative op enum for each pipe so event insertion can
@@ -455,6 +480,30 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
       insertEventOp(b, anchor, anchor->getLoc(), "wait_event", srcOp, dstOp, tok);
     };
 
+    auto insertFencePairAfter = [&](mlir::Operation *anchor, llvm::StringRef srcPipe, llvm::StringRef dstPipe,
+                                    llvm::StringRef srcOpEnum, llvm::StringRef dstOpEnum) -> void {
+      if (!anchor)
+        return;
+      if (srcPipe.empty() || dstPipe.empty())
+        return;
+      if (srcPipe == dstPipe)
+        return;
+
+      auto srcOp = !srcOpEnum.empty() ? srcOpEnum : canonicalOpEnumForPipe(srcPipe);
+      auto dstOp = !dstOpEnum.empty() ? dstOpEnum : canonicalOpEnumForPipe(dstPipe);
+      if (srcOp.empty() || dstOp.empty())
+        return;
+
+      // Keep the pass stable if re-run.
+      if (hasFencePairAfter(anchor, srcOp, dstOp))
+        return;
+
+      auto tok = allocTokenForPipes(srcPipe, dstPipe);
+      b.setInsertionPointAfter(anchor);
+      insertEventOp(b, anchor, anchor->getLoc(), "record_event", srcOp, dstOp, tok);
+      insertEventOp(b, anchor, anchor->getLoc(), "wait_event", srcOp, dstOp, tok);
+    };
+
     auto insertTsyncVBefore = [&](mlir::Operation *anchor) -> void {
       if (!anchor)
         return;
@@ -470,69 +519,13 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         std::string lastPipe;
 	      for (auto it = block.begin(); it != block.end(); ++it) {
 	        auto *consumer = &*it;
-	        auto opname = consumer->getName().getStringRef();
-	        if (opname == "scf.for") {
-            lastPipe.clear();
-	          int thisLoopId = loopId++;
-          // Loop-carried reuse hazards:
-          // - Many real kernels reuse the same tile storage across loop iterations.
-          // - Since `set_flag` is pipe-scoped (not object-scoped), we insert a conservative
-          //   per-iteration handshake to prevent overwriting tiles that may still be in-flight.
-          //
-          // This implements the spec's "Reverse dependency must be explicit" rule (WAR/WAW hazards)
-          // in a conservative way for common pipelines:
-          //   - M -> MTE1 (protect Left/Right reuse across TMATMUL)
-          //   - MTE1 -> MTE2 (protect Mat/L1 reuse across TMOV)
-          //
-          // Pattern: prime in preheader, then {wait at loop start; record at loop end} each iter.
-          bool hasM = false;
-          bool hasMte1 = false;
-          bool hasMte2 = false;
-          bool hasMte3 = false;
-          for (auto &r : consumer->getRegions()) {
-            if (r.empty())
-              continue;
-            r.walk([&](mlir::Operation *op) {
-              if (!isPtoInstrOp(op))
-                return;
-              auto opcode = stripDialect(op->getName().getStringRef());
-              auto opEnum = opcodeToOpEnum(opcode, op, argTypes);
-              if (opEnum.empty())
-                return;
-              auto pipe = pipeForOpEnum(opEnum);
-              if (pipe == "M")
-                hasM = true;
-              else if (pipe == "MTE1")
-                hasMte1 = true;
-              else if (pipe == "MTE2")
-                hasMte2 = true;
-              else if (pipe == "MTE3")
-                hasMte3 = true;
-            });
-          }
+		        auto opname = consumer->getName().getStringRef();
+		        if (opname == "scf.for") {
+	            lastPipe.clear();
 
-          // Insert per-iteration pipe fences at loop body start.
-          // Keep them as adjacent record+wait pairs so they are balanced on all paths.
-          for (auto &r : consumer->getRegions()) {
-            if (r.empty())
-              continue;
-            auto &body = r.front();
-            auto *anchor = body.empty() ? nullptr : &*body.begin();
-            if (!anchor)
-              continue;
-            if (hasM && hasMte1)
-              insertFencePairBefore(anchor, "M", "MTE1", "TMATMUL", "TMOV_M2L");
-            if (hasMte1 && hasMte2)
-              insertFencePairBefore(anchor, "MTE1", "MTE2", "TMOV_M2L", "TLOAD");
-            if (hasMte3 && hasMte2)
-              insertFencePairBefore(anchor, "MTE3", "MTE2", "TSTORE_VEC", "TLOAD");
-            if (hasMte1 && hasM)
-              insertFencePairBefore(anchor, "MTE1", "M", "TMOV_M2L", "TMATMUL");
-          }
-
-	          // Process the loop region with a snapshot of the current tile state.
-	          // If we can prove the loop executes at least once (constant bounds), propagate the
-	          // resulting tile defs to the outer scope so consumers after the loop (e.g. tstore)
+		          // Process the loop region with a snapshot of the current tile state.
+		          // If we can prove the loop executes at least once (constant bounds), propagate the
+		          // resulting tile defs to the outer scope so consumers after the loop (e.g. tstore)
 	          // can see producers inside the loop.
 	          auto resolveInt = [&](std::string s) -> std::optional<int64_t> {
 	            s = trim(s);
@@ -736,6 +729,11 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
             st.def = DefInfo{consumer, consEnum, consPipe.str()};
             st.waitedPipes.insert(consPipe.str());
             tileState[src] = std::move(st);
+
+            // A5 correctness: after Acc->GM store, fence FIX -> M so the next matmul cannot
+            // overwrite L0C while the store is still in-flight (see ST `tstore_acc2gm`).
+            if (consEnum == "TSTORE_ACC")
+              insertFencePairAfter(consumer, "FIX", "M", "TSTORE_ACC", "TMATMUL");
           }
         }
 

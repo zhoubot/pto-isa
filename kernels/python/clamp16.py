@@ -21,10 +21,10 @@ def clamp16():
     hi = pto.const("hi", 0.25, scalar("f32"))
 
     tx = pto.load(x)
-    lo_tile = pto.texpands(lo)
-    tmp = pto.tmax(tx, lo_tile)
-    hi_tile = pto.texpands(hi)
-    out = pto.tmin(tmp, hi_tile)
+    lo_tile = pto.expands(lo)
+    tmp = pto.max(tx, lo_tile)
+    hi_tile = pto.expands(hi)
+    out = pto.min(tmp, hi_tile)
     pto.store(y, out)
 
     pto.epilogue()

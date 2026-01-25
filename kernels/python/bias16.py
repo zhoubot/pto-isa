@@ -17,9 +17,8 @@ def bias16():
     b = pto.const("b", 1.5, scalar("f32"))
 
     tx = pto.load(x)
-    out = pto.tadds(tx, b)
+    out = pto.adds(tx, b)
     pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
-

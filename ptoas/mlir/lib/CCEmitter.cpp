@@ -693,9 +693,9 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     auto layout = kv.count("layout") ? kv.at("layout") : "ND";
     auto elemCpp = elemToCpp(dtype);
     auto baseName = t.a.name.substr(1);
-    os << "  using " << baseName << "_Shape = Shape<" << intOrDynamic(shape[0]) << ", " << intOrDynamic(shape[1])
+    os << "  using " << baseName << "_Shape = ::pto::Shape<" << intOrDynamic(shape[0]) << ", " << intOrDynamic(shape[1])
        << ", " << intOrDynamic(shape[2]) << ", " << intOrDynamic(shape[3]) << ", " << intOrDynamic(shape[4]) << ">;\n";
-    os << "  using " << baseName << "_Stride = Stride<" << intOrDynamic(stride[0]) << ", " << intOrDynamic(stride[1])
+    os << "  using " << baseName << "_Stride = ::pto::Stride<" << intOrDynamic(stride[0]) << ", " << intOrDynamic(stride[1])
        << ", " << intOrDynamic(stride[2]) << ", " << intOrDynamic(stride[3]) << ", " << intOrDynamic(stride[4])
        << ">;\n";
     os << "  using " << baseName << "_Tensor = GlobalTensor<" << elemCpp << ", " << baseName << "_Shape, " << baseName
@@ -1031,7 +1031,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         ss << "    auto " << src << "_off = (" << r0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TloadShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TloadShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
         ss << "    using TloadTensor = GlobalTensor<" << ti->second.elemCpp << ", TloadShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
         ss << "    TloadTensor " << src << "_view(" << src << "_ptr);\n";
@@ -1075,7 +1075,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         ss << "    auto " << dst << "_off = (" << r0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TstoreShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TstoreShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
         ss << "    using TstoreTensor = GlobalTensor<" << ti->second.elemCpp << ", TstoreShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
         ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr);\n";
@@ -1104,13 +1104,16 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto pipe = pipeA ? trim(pipeA.getValue().str()) : std::string("V");
       if (pipe.empty())
         pipe = "V";
+      if (pipe == "V") {
+        // Some toolchains restrict `pipe_barrier` arguments for vector builds. Use a conservative
+        // all-pipe barrier under REGISTER_BASE (A5) to keep compilation portable.
+        return "#if defined(REGISTER_BASE)\n  pipe_barrier(PIPE_ALL);\n#else\n  pipe_barrier(PIPE_V);\n#endif\n";
+      }
       auto pipeConst = [&]() -> std::string {
         if (pipe == "S")
           return "PIPE_S";
         if (pipe == "FIX")
           return "PIPE_FIX";
-        if (pipe == "V")
-          return "PIPE_V";
         if (pipe == "MTE1")
           return "PIPE_MTE1";
         if (pipe == "MTE2")
@@ -1131,6 +1134,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       if (opEnum == "TSTORE_VEC" || opEnum == "TSTORE_MAT")
         return "MTE3";
       if (opEnum == "TSTORE_ACC")
+        // Acc -> GM store is driven by FIX pipe on A5 (see ST `tstore_acc2gm` patterns).
         return "FIX";
       if (opEnum == "TMATMUL")
         return "M";
@@ -1494,9 +1498,9 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
     auto elemCpp = elemToCpp(dtype);
     auto baseName = t.a.name.substr(1);
     os << "  auto* " << baseName << "_ptr = (" << elemCpp << "*)" << baseName << ";\n";
-    os << "  using " << baseName << "_Shape = Shape<" << intOrDynamic(shape[0]) << ", " << intOrDynamic(shape[1])
+    os << "  using " << baseName << "_Shape = ::pto::Shape<" << intOrDynamic(shape[0]) << ", " << intOrDynamic(shape[1])
        << ", " << intOrDynamic(shape[2]) << ", " << intOrDynamic(shape[3]) << ", " << intOrDynamic(shape[4]) << ">;\n";
-    os << "  using " << baseName << "_Stride = Stride<" << intOrDynamic(stride[0]) << ", " << intOrDynamic(stride[1])
+    os << "  using " << baseName << "_Stride = ::pto::Stride<" << intOrDynamic(stride[0]) << ", " << intOrDynamic(stride[1])
        << ", " << intOrDynamic(stride[2]) << ", " << intOrDynamic(stride[3]) << ", " << intOrDynamic(stride[4])
        << ">;\n";
     os << "  using " << baseName << "_Tensor = GlobalTensor<" << elemCpp << ", " << baseName << "_Shape, " << baseName
@@ -1787,7 +1791,7 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         ss << "    auto " << src << "_off = (" << r0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TloadShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TloadShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
         ss << "    using TloadTensor = GlobalTensor<" << ti->second.elemCpp << ", TloadShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
         ss << "    TloadTensor " << src << "_view(" << src << "_ptr);\n";
@@ -1831,7 +1835,7 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         ss << "    auto " << dst << "_off = (" << r0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TstoreShape = Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TstoreShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
         ss << "    using TstoreTensor = GlobalTensor<" << ti->second.elemCpp << ", TstoreShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
         ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr);\n";

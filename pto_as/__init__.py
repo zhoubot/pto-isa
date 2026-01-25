@@ -194,6 +194,14 @@ class PTO:
     def store(self, dst: Tensor, src: Tile, r: int = 0, c: int = 0) -> None:
         self.tstore(dst, src, r, c)
 
+    def tprint(self, src: Any) -> None:
+        # Statement-form op (no destination).
+        self._p.op("tprint", [self._fmt(src)])
+
+    def print(self, src: Any) -> None:
+        # Python-friendly alias.
+        self.tprint(src)
+
     # --- Generic instruction helpers ---
 
     def _fmt(self, x: Any) -> str:
@@ -336,6 +344,7 @@ _OPCODE_ALIASES: dict[str, str] = {
     # Existing sugar in the AST frontend.
     "mov": "tmov",
     "load": "tload",
+    "print": "tprint",
     # Requested API refinement.
     "rowmax": "trowmax",
     "matmul": "tmatmul",
@@ -358,6 +367,16 @@ def _install_pto_op_methods() -> None:
         if hasattr(PTO, op):
             continue
         setattr(PTO, op, _mk(py_name=op, opcode=op))
+
+    # Prefer shorter Python method names: allow dropping the leading 't' for
+    # the curated PTO ISA ops (e.g. tadd -> add, tadds -> adds, trowmax -> rowmax).
+    #
+    # Keep the original `t*` spellings for backward compatibility.
+    for op in _PTO_KNOWN_OPS:
+        if not (op.startswith("t") and len(op) > 1 and op[1].isalpha()):
+            continue
+        alias = op[1:]
+        _OPCODE_ALIASES.setdefault(alias, op)
 
     for alias, real in _OPCODE_ALIASES.items():
         if hasattr(PTO, alias):

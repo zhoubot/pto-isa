@@ -15,7 +15,7 @@ def transpose16():
     tmp = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
-    ty = pto.ttrans(tx, tmp)
+    ty = pto.trans(tx, tmp)
     pto.store(y, ty)
 
     pto.epilogue()

@@ -49,10 +49,19 @@ def emit_acl_host_cpp(*, so_basename: str, args: list[TensorSpec]) -> str:
         [f"  ACL_CHECK(aclrtMalloc(&d{i}, kArg{i}Bytes, ACL_MEM_MALLOC_HUGE_FIRST));" for i in range(n)]
     )
     # Initialize inputs (all but the last arg).
-    init_inputs = "\n".join(
-        [f"  Fill(h{i}, kArg{i}Bytes, {i + 1});" for i in range(n - 1)]
-        + [f"  std::memset(h{n - 1}, 0, kArg{n - 1}Bytes);"]
-    )
+    init_stmts: list[str] = []
+    for i in range(n - 1):
+        dtype = args[i].dtype
+        if dtype == "f16":
+            init_stmts.append(f"  FillF16(h{i}, kArg{i}Bytes, {i + 1});")
+        elif dtype == "f32":
+            init_stmts.append(f"  FillF32(h{i}, kArg{i}Bytes, {i + 1});")
+        elif dtype in ("i32", "u32"):
+            init_stmts.append(f"  FillU32(h{i}, kArg{i}Bytes, {i + 1});")
+        else:
+            raise ValueError(f"unsupported dtype for host codegen: {dtype}")
+    init_stmts.append(f"  std::memset(h{n - 1}, 0, kArg{n - 1}Bytes);")
+    init_inputs = "\n".join(init_stmts)
     h2d = "\n".join(
         [f"  ACL_CHECK(aclrtMemcpy(d{i}, kArg{i}Bytes, h{i}, kArg{i}Bytes, ACL_MEMCPY_HOST_TO_DEVICE));" for i in range(n)]
     )
@@ -81,11 +90,41 @@ static void Die(const char* msg, int32_t code) {{
   if (_ret != 0) Die(#x, _ret); \\
 }} while (0)
 
-static void Fill(void* p, size_t n, uint8_t seed) {{
-  auto* b = static_cast<uint8_t*>(p);
+static uint32_t NextSeed(uint32_t seed) {{
+  // LCG: same constants as Numerical Recipes.
+  return seed * 1664525u + 1013904223u;
+}}
+
+static void FillU32(void* p, size_t nbytes, uint32_t seed) {{
+  auto* w = static_cast<uint32_t*>(p);
+  const size_t n = nbytes / sizeof(uint32_t);
   for (size_t i = 0; i < n; ++i) {{
-    seed = static_cast<uint8_t>(seed * 131u + 7u);
-    b[i] = seed;
+    seed = NextSeed(seed);
+    w[i] = seed;
+  }}
+}}
+
+static void FillF32(void* p, size_t nbytes, uint32_t seed) {{
+  auto* f = static_cast<float*>(p);
+  const size_t n = nbytes / sizeof(float);
+  for (size_t i = 0; i < n; ++i) {{
+    seed = NextSeed(seed);
+    // Generate a finite, small-magnitude float in [-1, 1).
+    const int32_t r = static_cast<int32_t>((seed >> 9) & 0xFFFFu) - 32768;
+    f[i] = static_cast<float>(r) / 32768.0f;
+  }}
+}}
+
+static void FillF16(void* p, size_t nbytes, uint32_t seed) {{
+  auto* h = static_cast<uint16_t*>(p);
+  const size_t n = nbytes / sizeof(uint16_t);
+  for (size_t i = 0; i < n; ++i) {{
+    seed = NextSeed(seed);
+    // Half bits: sign | exp(14) | mantissa. This yields finite values ~[-1, -0.5) U [0.5, 1).
+    const uint16_t sign = (seed & 1u) ? 0x8000u : 0u;
+    const uint16_t exp = static_cast<uint16_t>(14u << 10);
+    const uint16_t mant = static_cast<uint16_t>((seed >> 1) & 0x03FFu);
+    h[i] = static_cast<uint16_t>(sign | exp | mant);
   }}
 }}
 
@@ -181,10 +220,19 @@ def emit_acl_host_cpp_static(*, args: list[TensorSpec]) -> str:
     malloc_dev = "\n".join(
         [f"  ACL_CHECK(aclrtMalloc(&d{i}, kArg{i}Bytes, ACL_MEM_MALLOC_HUGE_FIRST));" for i in range(n)]
     )
-    init_inputs = "\n".join(
-        [f"  Fill(h{i}, kArg{i}Bytes, {i + 1});" for i in range(n - 1)]
-        + [f"  std::memset(h{n - 1}, 0, kArg{n - 1}Bytes);"]
-    )
+    init_stmts: list[str] = []
+    for i in range(n - 1):
+        dtype = args[i].dtype
+        if dtype == "f16":
+            init_stmts.append(f"  FillF16(h{i}, kArg{i}Bytes, {i + 1});")
+        elif dtype == "f32":
+            init_stmts.append(f"  FillF32(h{i}, kArg{i}Bytes, {i + 1});")
+        elif dtype in ("i32", "u32"):
+            init_stmts.append(f"  FillU32(h{i}, kArg{i}Bytes, {i + 1});")
+        else:
+            raise ValueError(f"unsupported dtype for host codegen: {dtype}")
+    init_stmts.append(f"  std::memset(h{n - 1}, 0, kArg{n - 1}Bytes);")
+    init_inputs = "\n".join(init_stmts)
     h2d = "\n".join(
         [f"  ACL_CHECK(aclrtMemcpy(d{i}, kArg{i}Bytes, h{i}, kArg{i}Bytes, ACL_MEMCPY_HOST_TO_DEVICE));" for i in range(n)]
     )
@@ -213,11 +261,41 @@ static void Die(const char* msg, int32_t code) {{
   if (_ret != 0) Die(#x, _ret); \\
 }} while (0)
 
-static void Fill(void* p, size_t n, uint8_t seed) {{
-  auto* b = static_cast<uint8_t*>(p);
+static uint32_t NextSeed(uint32_t seed) {{
+  // LCG: same constants as Numerical Recipes.
+  return seed * 1664525u + 1013904223u;
+}}
+
+static void FillU32(void* p, size_t nbytes, uint32_t seed) {{
+  auto* w = static_cast<uint32_t*>(p);
+  const size_t n = nbytes / sizeof(uint32_t);
   for (size_t i = 0; i < n; ++i) {{
-    seed = static_cast<uint8_t>(seed * 131u + 7u);
-    b[i] = seed;
+    seed = NextSeed(seed);
+    w[i] = seed;
+  }}
+}}
+
+static void FillF32(void* p, size_t nbytes, uint32_t seed) {{
+  auto* f = static_cast<float*>(p);
+  const size_t n = nbytes / sizeof(float);
+  for (size_t i = 0; i < n; ++i) {{
+    seed = NextSeed(seed);
+    // Generate a finite, small-magnitude float in [-1, 1).
+    const int32_t r = static_cast<int32_t>((seed >> 9) & 0xFFFFu) - 32768;
+    f[i] = static_cast<float>(r) / 32768.0f;
+  }}
+}}
+
+static void FillF16(void* p, size_t nbytes, uint32_t seed) {{
+  auto* h = static_cast<uint16_t*>(p);
+  const size_t n = nbytes / sizeof(uint16_t);
+  for (size_t i = 0; i < n; ++i) {{
+    seed = NextSeed(seed);
+    // Half bits: sign | exp(14) | mantissa. This yields finite values ~[-1, -0.5) U [0.5, 1).
+    const uint16_t sign = (seed & 1u) ? 0x8000u : 0u;
+    const uint16_t exp = static_cast<uint16_t>(14u << 10);
+    const uint16_t mant = static_cast<uint16_t>((seed >> 1) & 0x03FFu);
+    h[i] = static_cast<uint16_t>(sign | exp | mant);
   }}
 }}
 

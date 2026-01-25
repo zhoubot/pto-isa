@@ -22,10 +22,9 @@ def fma16():
     tx = pto.load(x)
     ty = pto.load(y)
     tb = pto.load(b)
-    prod = pto.tmul(tx, ty)
-    out = pto.tadd(prod, tb)
+    prod = pto.mul(tx, ty)
+    out = pto.add(prod, tb)
     pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
-

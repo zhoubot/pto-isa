@@ -62,13 +62,14 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 
-// Import rounding type definitions from __cce_simd namespace
-using __cce_simd::RoundRType;
-using __cce_simd::RoundAType;
-using __cce_simd::RoundFType;
-using __cce_simd::RoundCType;
-using __cce_simd::RoundZType;
-using __cce_simd::RoundOType;
+// Rounding type definitions come from the CCE compiler intrinsics headers.
+// On current toolchains they are declared in the global namespace.
+using ::RoundRType;
+using ::RoundAType;
+using ::RoundFType;
+using ::RoundCType;
+using ::RoundZType;
+using ::RoundOType;
 
 /**
  * Unified enum for all type conversion modes

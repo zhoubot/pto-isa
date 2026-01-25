@@ -14,9 +14,8 @@ def abs16():
     out = pto.vec(dtype="f32", shape=(16, 16))
 
     tx = pto.load(x)
-    out = pto.tabs(tx)
+    out = pto.abs(tx)
     pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
-

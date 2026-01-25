@@ -44,18 +44,18 @@ def build():
             v_tile = pto.load(v)
 
             q_left = pto.mov(q_tile)
-            kt_tile = pto.ttrans(k_tile, k_tile)
+            kt_tile = pto.trans(k_tile, k_tile)
             k_right = pto.mov(kt_tile)
 
             scores_acc = pto.matmul(q_left, k_right)
             scores = pto.mov(scores_acc)
-            scores = pto.tmuls(scores, scale)
+            scores = pto.muls(scores, scale)
 
             row_max = pto.rowmax(scores, scores)
-            centered = pto.trowexpandsub(scores, row_max)
-            exp_scores = pto.texp(centered)
-            row_sum = pto.trowsum(exp_scores, exp_scores)
-            probs = pto.trowexpanddiv(exp_scores, row_sum)
+            centered = pto.rowexpandsub(scores, row_max)
+            exp_scores = pto.exp(centered)
+            row_sum = pto.rowsum(exp_scores, exp_scores)
+            probs = pto.rowexpanddiv(exp_scores, row_sum)
 
             p_left = pto.mov(probs)
             v_right = pto.mov(v_tile)

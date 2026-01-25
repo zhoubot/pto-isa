@@ -18,7 +18,7 @@ def pto_aten_ir_primitives():
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tz = pto.tmul(tx, ty)
+    tz = pto.mul(tx, ty)
     pto.store(z, tz)
 
     pto.epilogue()

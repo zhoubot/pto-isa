@@ -33,21 +33,20 @@ def spmd_tiled_rowsum256():
     for r in range(r_base, r_end, 16):
         # Init accumulator to 0 using the first tile in this row block.
         tx = pto.load(x, r, 0)
-        acc = pto.tsub(tx, tx)
+        acc = pto.sub(tx, tx)
 
         for c in range(0, 256, 16):
             tx = pto.load(x, r, c)
-            row_sum = pto.trowsum(tx, tmp)
-            bcast = pto.trowexpand(row_sum)
+            row_sum = pto.rowsum(tx, tmp)
+            bcast = pto.rowexpand(row_sum)
 
             c_mod = c % 32
             if c_mod == 0:
-                acc = pto.tadd(acc, bcast)
+                acc = pto.add(acc, bcast)
             else:
-                acc = pto.tsub(acc, bcast)
+                acc = pto.sub(acc, bcast)
 
         pto.store(y, r, 0, acc)
 
     pto.epilogue()
     return pto.program()
-

@@ -19,8 +19,8 @@ def rowsum_abs16():
     row_sum = pto.vec(dtype="f32", shape=(16, 1), blayout="ColMajor")
 
     tx = pto.load(x)
-    ax = pto.tabs(tx)
-    row_sum = pto.trowsum(ax, tmp)
+    ax = pto.abs(tx)
+    row_sum = pto.rowsum(ax, tmp)
     pto.store(y, row_sum)
 
     pto.epilogue()

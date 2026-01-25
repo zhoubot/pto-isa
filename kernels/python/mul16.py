@@ -18,9 +18,8 @@ def mul16():
 
     tx = pto.load(x)
     ty = pto.load(y)
-    out = pto.tmul(tx, ty)
+    out = pto.mul(tx, ty)
     pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
-

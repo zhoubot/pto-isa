@@ -60,11 +60,11 @@ def gemm_f16f16f32():
                 if k0 == 0:
                     c_acc = pto.matmul(a_left_0, b_right_0)
                 else:
-                    c_acc = pto.tmatmul_acc(c_acc, a_left_0, b_right_0)
+                    c_acc = pto.matmul_acc(c_acc, a_left_0, b_right_0)
             else:
                 a_left_1 = pto.mov(a_mat)
                 b_right_1 = pto.mov(b_mat)
-                c_acc = pto.tmatmul_acc(c_acc, a_left_1, b_right_1)
+                c_acc = pto.matmul_acc(c_acc, a_left_1, b_right_1)
         pto.store(C, m0, n0, c_acc)
 
     pto.epilogue()

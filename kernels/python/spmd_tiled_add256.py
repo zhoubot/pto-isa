@@ -37,14 +37,13 @@ def spmd_tiled_add256():
 
             c_mod = c % 32
             if c_mod == 0:
-                tmp = pto.tadd(tx, ty)
+                tmp = pto.add(tx, ty)
             else:
-                tmp = pto.tsub(tx, ty)
+                tmp = pto.sub(tx, ty)
 
             # Back-to-back vector ops to stress PIPE_V barriers.
-            out = pto.tmul(tmp, tx)
+            out = pto.mul(tmp, tx)
             pto.store(z, r, c, out)
 
     pto.epilogue()
     return pto.program()
-

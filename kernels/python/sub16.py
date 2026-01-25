@@ -18,9 +18,8 @@ def sub16():
 
     tx = pto.load(x)
     ty = pto.load(y)
-    out = pto.tsub(tx, ty)
+    out = pto.sub(tx, ty)
     pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
-

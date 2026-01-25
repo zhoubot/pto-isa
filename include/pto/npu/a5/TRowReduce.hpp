@@ -15,10 +15,23 @@ full text of the License.
 
 #include "common.hpp"
 #include "pto/common/pto_tile.hpp"
-#include <math.h>
 #include <type_traits>
 
 namespace pto {
+template <typename T> struct _RowReduceInitVal;
+template <> struct _RowReduceInitVal<float> {
+  // NOTE: The A5 simulator flags +/-Inf and NaN as illegal vector inputs.
+  // Use finite sentinels instead of IEEE infinities.
+  static constexpr float pos_inf = 3.4028234663852886e+38f;  // FLT_MAX
+  static constexpr float neg_inf = -3.4028234663852886e+38f; // -FLT_MAX
+};
+template <> struct _RowReduceInitVal<half> {
+  // NOTE: The A5 simulator flags +/-Inf and NaN as illegal vector inputs.
+  // Use max finite half (65504) instead of IEEE infinities.
+  static constexpr half pos_inf = (half)65504.0f;
+  static constexpr half neg_inf = (half)-65504.0f;
+};
+
 template <typename T> struct ROWSUM {
   static constexpr T InitVal = 0;
   using RegType = typename TypeGet<T>::T;
@@ -32,7 +45,7 @@ template <typename T> struct ROWSUM {
 };
 
 template <typename T> struct ROWMAX {
-  static constexpr T InitVal = -INFINITY;
+  static constexpr T InitVal = _RowReduceInitVal<T>::neg_inf;
   using RegType = typename TypeGet<T>::T;
   static PTO_INTERNAL void Accumulate(RegType &dst, RegType &src0,
                                       RegType &src1, MaskReg &pred) {
@@ -44,7 +57,7 @@ template <typename T> struct ROWMAX {
 };
 
 template <typename T> struct ROWMIN {
-  static constexpr T InitVal = INFINITY;
+  static constexpr T InitVal = _RowReduceInitVal<T>::pos_inf;
   using RegType = typename TypeGet<T>::T;
   static PTO_INTERNAL void Accumulate(RegType &dst, RegType &src0,
                                       RegType &src1, MaskReg &pred) {

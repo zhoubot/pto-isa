@@ -139,9 +139,9 @@ def gemm_performance():
                         if kt == 0:
                             c = pto.matmul(a0, b0)
                         else:
-                            c = pto.tmatmul_acc(c, a0, b0)
+                            c = pto.matmul_acc(c, a0, b0)
                     else:
-                        c = pto.tmatmul_acc(c, a1, b1)
+                        c = pto.matmul_acc(c, a1, b1)
 
                 pto.store(C, m0, n0, c)
 

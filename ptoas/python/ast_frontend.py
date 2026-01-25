@@ -6,7 +6,7 @@ Tiny Python-to-PTO-AS frontend.
 The frontend parses a restricted Python AST and emits the newer PTO-AS syntax:
   - `tensor(...)` declares a kernel arg bound to `%argN` via `pto.make_tensor_view`
   - `tile(...)` allocates a tile with `pto.alloc_tile`
-  - `tload/tstore/tadd/tmatmul/...` map directly to PTO ops
+  - `load/store/add/matmul/...` map to PTO ops (legacy `t*` spellings still supported)
 
 Only a minimal subset of Python is supported (straight-line code, `for range`,
 and simple `if` compares). This is intended for prototyping kernels quickly.
@@ -35,7 +35,7 @@ Supported kernel authoring styles:
        tx = pto.vec(dtype="f16", shape=(16, 16))
        ty = pto.vec(dtype="f16", shape=(16, 16))
        tx = pto.load(x)     # defaults to [0,0]
-       ty = pto.tadd(tx, tx)
+       ty = pto.add(tx, tx)
        ...
        pto.store(y, ty)     # defaults to [0,0]
    ```
@@ -49,6 +49,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .pto_asm import TensorType, TileType
+from .dsl import _PTO_ISA_OPS as _PTO_ISA_OPS_DSL
+
+
+_STRIPPED_T_OPS: set[str] = {
+    op[1:]
+    for op in _PTO_ISA_OPS_DSL
+    if op.startswith("t") and len(op) > 1 and op[1].isalpha()
+}
 
 
 class FrontendError(Exception):
@@ -286,14 +294,24 @@ class _Compiler:
     def _opcode_alias(self, name: str) -> str:
         # Small Python-friendly aliases.
         # Keep this intentionally minimal: most PTO ops are already descriptive.
-        return {
+        aliased = {
             "mov": "tmov",
             "load": "tload",
             "store": "tstore",
+            "print": "tprint",
             # API candy: prefer shorter names in Python kernels.
             "rowmax": "trowmax",
             "matmul": "tmatmul",
-        }.get(name, name)
+        }.get(name)
+        if aliased is not None:
+            return aliased
+
+        # Allow dropping the leading 't' for the PTO tile ISA ops
+        # (e.g. add -> tadd, adds -> tadds, rowexpand -> trowexpand, ...).
+        if name in _STRIPPED_T_OPS:
+            return "t" + name
+
+        return name
 
     def _emit_instr_assign(self, *, dst_name: str, call: ast.Call) -> None:
         """

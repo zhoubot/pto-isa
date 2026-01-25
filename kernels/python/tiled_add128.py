@@ -25,14 +25,14 @@ def tiled_add128():
             # Tile (r, c)
             tx0 = pto.load(x, r, c)
             ty0 = pto.load(y, r, c)
-            out0 = pto.tadd(tx0, ty0)
+            out0 = pto.add(tx0, ty0)
             pto.store(z, r, c, out0)
 
             # Tile (r, c+16)
             c1 = c + 16
             tx1 = pto.load(x, r, c1)
             ty1 = pto.load(y, r, c1)
-            out1 = pto.tadd(tx1, ty1)
+            out1 = pto.add(tx1, ty1)
             pto.store(z, r, c1, out1)
 
     pto.epilogue()

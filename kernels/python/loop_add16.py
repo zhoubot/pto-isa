@@ -21,8 +21,8 @@ def loop_add16():
     iters = 3
     for _ in range(iters):
         # Avoid in-place `tadd(dst=src0, ...)` (not guaranteed safe across backends).
-        acc1 = pto.tadd(acc0, tx)
-        acc0 = pto.tmov(acc1)
+        acc1 = pto.add(acc0, tx)
+        acc0 = pto.mov(acc1)
 
     pto.store(z, acc0)
     pto.epilogue()

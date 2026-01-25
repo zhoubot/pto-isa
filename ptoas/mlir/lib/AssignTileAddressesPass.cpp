@@ -7,14 +7,18 @@
 #include "mlir/Pass/Pass.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/ErrorHandling.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
+#include <limits>
 #include <map>
 #include <optional>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <string>
@@ -143,6 +147,12 @@ struct AssignTileAddressesPass
     auto *top = module.getBody();
     if (!top)
       return;
+    const bool isRegisterBase = [&]() -> bool {
+      auto mm = module->getAttrOfType<mlir::StringAttr>(kMemoryModelAttr);
+      if (!mm)
+        return false;
+      return trim(mm.getValue().str()) == "REGISTER_BASE";
+    }();
 
     // Collect tile declarations and existing address bindings.
     struct TileDecl {
@@ -235,6 +245,345 @@ struct AssignTileAddressesPass
           }
         }
       });
+
+      if (isRegisterBase) {
+        // REGISTER_BASE (A5) uses banked on-core tile buffers:
+        // - Vec: 192KB (3 x 64KB banks)
+        // - Mat: 512KB (8 x 64KB banks)
+        //
+        // Assigning dense byte offsets (e.g. 0x1000) can trigger illegal-instruction
+        // faults. Instead, do a small liveness-based bank allocation per stage.
+        struct Interval {
+          uint32_t start = std::numeric_limits<uint32_t>::max();
+          uint32_t end = 0;
+        };
+
+        // Build per-stage linear op indices (preamble ops count for all stages).
+        std::map<std::string, uint32_t> nextIdx;
+        std::map<std::string, std::map<std::string, Interval>> intervals;
+        for (auto &s : stages)
+          nextIdx[s] = 0;
+
+        auto recordUse = [&](const std::string &stage, const std::string &tileName, uint32_t idx) {
+          auto &iv = intervals[stage][tileName];
+          iv.start = std::min(iv.start, idx);
+          iv.end = std::max(iv.end, idx);
+        };
+
+        std::function<void(mlir::Block &)> visitBlock = [&](mlir::Block &blk) {
+          for (auto &opRef : blk) {
+            auto *op = &opRef;
+            auto opname = op->getName().getStringRef();
+
+            const bool isDecl = opname == "pto.arg" || opname == "pto.const" || opname == "pto.make_tensor_view" ||
+                                opname == "pto.alloc_tile";
+            const bool isPtoOp = opname.starts_with("pto.") && !isDecl;
+
+            std::string stage;
+            if (auto a = op->getAttrOfType<mlir::StringAttr>(kStageAttr)) {
+              stage = trim(a.getValue().str());
+              if (stage == kPreambleStage)
+                stage.clear();
+            }
+
+            if (isPtoOp) {
+              auto ops = readOperands(op);
+              if (!ops.empty()) {
+                if (stage.empty()) {
+                  for (auto &s : stages) {
+                    uint32_t idx = nextIdx[s]++;
+                    for (auto &o : ops) {
+                      auto base = stripIndexing(o);
+                      if (!usedByStage[s].count(base))
+                        continue;
+                      recordUse(s, base, idx);
+                    }
+                  }
+                } else if (usedByStage.count(stage)) {
+                  uint32_t idx = nextIdx[stage]++;
+                  for (auto &o : ops) {
+                    auto base = stripIndexing(o);
+                    if (!usedByStage[stage].count(base))
+                      continue;
+                    recordUse(stage, base, idx);
+                  }
+                }
+              } else {
+                // Still advance indices so later ops have stable relative ordering.
+                if (stage.empty()) {
+                  for (auto &s : stages)
+                    nextIdx[s]++;
+                } else if (usedByStage.count(stage)) {
+                  nextIdx[stage]++;
+                }
+              }
+            }
+
+            for (auto &r : op->getRegions()) {
+              if (r.empty())
+                continue;
+              visitBlock(r.front());
+            }
+          }
+        };
+
+        visitBlock(*top);
+
+        struct BankCfg {
+          uint64_t base = 0;
+          uint64_t slotBytes = 0;
+          uint32_t slots = 0;
+        };
+        auto cfgForLoc = [&](llvm::StringRef loc) -> std::optional<BankCfg> {
+          // Hardware limits (REGISTER_BASE):
+          // - Vec tiles: 192KB
+          // - Mat tiles: 512KB
+          //
+          // Use 4KB slots to keep addresses aligned while allowing dense packing.
+          // If a future target requires coarser-grained banking, tighten these slots and
+          // insert real spills to GM instead of failing.
+          // Vec (UB): allow dense packing; 4KB alignment is conservative and matches ST patterns.
+          if (loc == "Vec")
+            return BankCfg{0x0, 0x1000, 0x30000 / 0x1000};
+          // Mat (CBUF/L1): ST patterns and toolchain behavior indicate 64KB granularity.
+          if (loc == "Mat")
+            return BankCfg{0x0, 0x10000, 0x80000 / 0x10000};
+          return std::nullopt;
+        };
+
+        // Stage -> tile -> assigned addr.
+        std::map<std::string, std::map<std::string, std::string>> addrByStage;
+
+        // Heuristic ordering for Mat tiles on A5:
+        // Many ST kernels consistently assign:
+        //   - A-matrix Mat tile (fed into Left)  -> 0x00000
+        //   - B-matrix Mat tile (fed into Right)-> 0x10000
+        //   - Bias Mat tile (fed into Bias)     -> 0x20000
+        //
+        // Some A5 ops appear to assume these conventional base addresses for their source Mat tiles.
+        // Sorting purely by tile name can swap A/B (e.g. kt_mat < q_mat) and lead to wrong results or faults.
+        std::map<std::string, std::map<std::string, int>> matPriorityByStage;
+        for (auto &s : stages)
+          matPriorityByStage[s] = {};
+        auto bumpMatPriority = [&](const std::string &stage, const std::string &matName, int pri) {
+          if (!usedByStage[stage].count(matName))
+            return;
+          auto &m = matPriorityByStage[stage];
+          auto it = m.find(matName);
+          if (it == m.end())
+            m[matName] = pri;
+          else
+            it->second = std::min(it->second, pri);
+        };
+        module.walk([&](mlir::Operation *op) {
+          auto name = op->getName().getStringRef();
+          if (name != "pto.tmov")
+            return;
+          auto ops = readOperands(op);
+          if (ops.size() != 2)
+            return;
+          auto dstName = stripIndexing(ops[0]);
+          auto srcName = stripIndexing(ops[1]);
+          auto srcIt = tiles.find(srcName);
+          auto dstIt = tiles.find(dstName);
+          if (srcIt == tiles.end() || dstIt == tiles.end())
+            return;
+          auto srcLoc = tileLocOrEmpty(srcIt->second.typeStr);
+          auto dstLoc = tileLocOrEmpty(dstIt->second.typeStr);
+          if (srcLoc != "Mat")
+            return;
+
+          int pri = 100;
+          if (dstLoc == "Left")
+            pri = 0;
+          else if (dstLoc == "Right")
+            pri = 1;
+          else if (dstLoc == "Bias")
+            pri = 2;
+
+          std::string stage;
+          if (auto a = op->getAttrOfType<mlir::StringAttr>(kStageAttr)) {
+            stage = trim(a.getValue().str());
+            if (stage == kPreambleStage)
+              stage.clear();
+          }
+          if (stage.empty()) {
+            // Preamble ops are emitted into every stage kernel.
+            for (auto &s : stages)
+              bumpMatPriority(s, srcName, pri);
+          } else if (usedByStage.count(stage)) {
+            bumpMatPriority(stage, srcName, pri);
+          }
+        });
+
+        // Allocate banked locs (Vec/Mat) per stage.
+        //
+        // NOTE: We intentionally do *not* reuse slots based on liveness here.
+        // The IR contains loops/ifs, and this prototype pass does not compute
+        // accurate liveness across control flow; reusing slots can cause
+        // overlapping tile buffers (e.g. clobbering a loop-carried accumulator),
+        // which may manifest as wrong results or device faults.
+        for (auto &stageName : stages) {
+          // Group tiles by loc.
+          std::map<std::string, std::vector<std::string>> tilesByLoc;
+          for (auto &tileName : usedByStage[stageName]) {
+            auto it = tiles.find(tileName);
+            if (it == tiles.end())
+              continue;
+            auto loc = tileLocOrEmpty(it->second.typeStr);
+            if (cfgForLoc(loc))
+              tilesByLoc[loc].push_back(tileName);
+          }
+
+          for (auto &[loc, names] : tilesByLoc) {
+            auto cfgOpt = cfgForLoc(loc);
+            if (!cfgOpt)
+              continue;
+            auto cfg = *cfgOpt;
+
+            struct Item {
+              std::string name;
+              std::optional<uint32_t> fixedSlot;
+            };
+            std::vector<Item> items;
+            items.reserve(names.size());
+
+            for (auto &tname : names) {
+              Item it;
+              it.name = tname;
+              auto &decl = tiles.at(tname);
+              if (decl.addrLiteral) {
+                auto addrLit = parseIntLiteralOrZero(*decl.addrLiteral);
+                if (cfg.slotBytes && (addrLit % cfg.slotBytes == 0)) {
+                  uint32_t slot = static_cast<uint32_t>(addrLit / cfg.slotBytes);
+                  if (slot < cfg.slots)
+                    it.fixedSlot = slot;
+                }
+              }
+              items.push_back(std::move(it));
+            }
+
+            if (loc == "Mat") {
+              auto &prio = matPriorityByStage[stageName];
+              std::sort(items.begin(), items.end(), [&](const Item &a, const Item &b) {
+                int pa = 100;
+                int pb = 100;
+                if (auto ita = prio.find(a.name); ita != prio.end())
+                  pa = ita->second;
+                if (auto itb = prio.find(b.name); itb != prio.end())
+                  pb = itb->second;
+                if (pa != pb)
+                  return pa < pb;
+                return a.name < b.name;
+              });
+            } else {
+              std::sort(items.begin(), items.end(), [&](const Item &a, const Item &b) { return a.name < b.name; });
+            }
+
+            std::vector<bool> used(cfg.slots, false);
+
+            for (auto &it : items) {
+              uint32_t slot = std::numeric_limits<uint32_t>::max();
+              if (it.fixedSlot) {
+                slot = *it.fixedSlot;
+                if (slot >= cfg.slots)
+                  llvm::report_fatal_error("fixedSlot out of range");
+                if (used[slot]) {
+                  llvm::report_fatal_error(llvm::Twine("REGISTER_BASE tile bank conflict (fixed addr) in stage ") +
+                                           stageName + " loc=" + loc + " tile=" + it.name);
+                }
+              } else {
+                for (uint32_t s = 0; s < cfg.slots; ++s) {
+                  if (!used[s]) {
+                    slot = s;
+                    break;
+                  }
+                }
+                if (slot == std::numeric_limits<uint32_t>::max()) {
+                  llvm::report_fatal_error(llvm::Twine("REGISTER_BASE out of tile banks in stage ") + stageName +
+                                           " loc=" + loc + " (need spill/rewrite): tile=" + it.name);
+                }
+              }
+
+              used[slot] = true;
+
+              uint64_t addr = cfg.base + static_cast<uint64_t>(slot) * cfg.slotBytes;
+              std::ostringstream ss;
+              ss << "0x" << std::hex << addr;
+              addrByStage[stageName][it.name] = ss.str();
+            }
+          }
+        }
+
+        // Attach per-stage address maps:
+        // - Vec/Mat: banked mapping from addrByStage
+        // - Other locs: keep the old sequential scheme (per-stage) as a fallback
+        std::map<std::string, std::map<std::string, uint32_t>> dedicatedCountByStage;
+        for (auto &stageName : stages) {
+          for (auto &tileName : usedByStage[stageName]) {
+            auto it = tiles.find(tileName);
+            if (it == tiles.end())
+              continue;
+            auto loc = tileLocOrEmpty(it->second.typeStr);
+            if (isDedicatedLoc(loc))
+              dedicatedCountByStage[stageName][loc]++;
+          }
+        }
+
+        struct AllocState {
+          uint64_t nextOther = 0x10000;
+          std::map<std::string, uint64_t> nextDedicated;
+        };
+        std::map<std::string, AllocState> stateByStage;
+
+        auto allocFallback = [&](const std::string &stage, const TileDecl &decl) -> std::string {
+          auto &st = stateByStage[stage];
+          auto loc = tileLocOrEmpty(decl.typeStr);
+          uint64_t addr = 0;
+          if (isDedicatedLoc(loc)) {
+            // Under REGISTER_BASE, L0A/L0B/L0C/... tiles are in dedicated address spaces.
+            // Most ST kernels bind the single tile per loc to 0x0. However, real kernels
+            // often need ping-pong (multiple tiles per loc); allocate distinct slots in
+            // that case to avoid clobbering in-flight tiles.
+            if (dedicatedCountByStage[stage][loc] <= 1) {
+              addr = 0x0;
+            } else {
+              auto &next = st.nextDedicated[loc];
+              addr = alignUp(next, 0x8000);
+              next = addr + stepForLoc(loc, decl.typeStr);
+            }
+          } else {
+            addr = alignUp(st.nextOther, 0x1000);
+            st.nextOther = addr + stepForLoc(loc, decl.typeStr);
+          }
+          std::ostringstream ss;
+          ss << "0x" << std::hex << addr;
+          return ss.str();
+        };
+
+        for (auto &[tileName, decl] : tiles) {
+          llvm::SmallVector<mlir::NamedAttribute> kvs;
+          kvs.reserve(stages.size());
+          for (auto &stage : stages) {
+            if (!usedByStage[stage].count(tileName))
+              continue;
+            std::string addrStr;
+            if (decl.addrLiteral) {
+              addrStr = *decl.addrLiteral;
+            } else if (auto it = addrByStage[stage].find(tileName); it != addrByStage[stage].end()) {
+              addrStr = it->second;
+            } else {
+              addrStr = allocFallback(stage, decl);
+            }
+            kvs.push_back(b.getNamedAttr(stage, b.getStringAttr(addrStr)));
+          }
+          if (kvs.empty())
+            continue;
+          decl.declOp->setAttr(kTileAddrMapAttr, b.getDictionaryAttr(kvs));
+        }
+
+        return;
+      }
 
       // Per-stage allocator state.
       struct AllocState {

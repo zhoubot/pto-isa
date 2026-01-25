@@ -48,6 +48,7 @@ def main() -> int:
     ap.add_argument("--arch", default="dav-c220-vec")
     ap.add_argument("--memory-model", default="MEMORY_BASE")
     ap.add_argument("--no-insert-events", dest="insert_events", action="store_false", default=True)
+    ap.add_argument("--split-kernels", action="store_true", help="Split mixed cube/vec kernels into staged kernels")
 
     # Simulator runtime options
     ap.add_argument("--ascend-home", type=Path, default=pipeline.default_ascend_home())
@@ -106,6 +107,7 @@ def main() -> int:
         arch=args.arch,
         memory_model=args.memory_model,
         insert_events=args.insert_events,
+        split_kernels=args.split_kernels,
     )
     cce_path, bin_path = pipeline.compile_pto_to_cce_and_bin(pto_path=pto_path, outdir=args.outdir, cfg=cfg)
 
@@ -133,78 +135,94 @@ def main() -> int:
     pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
     cpu_out = pipeline.run_cpu_kernel_from_so(so_path=cpu_so, host_spec=host_spec, host_arrays=cpu_arrays)
 
-    npu_res = pipeline.run_npu_kernel_from_so(
-        so_path=so_path, host_spec=host_spec, host_arrays=npu_arrays, device_id=args.device, block_dim=args.block_dim
-    )
-    npu_out = npu_res.outputs
-    out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
-    pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
+    err: Exception | None = None
+    try:
+        npu_res = pipeline.run_npu_kernel_from_so(
+            so_path=so_path,
+            host_spec=host_spec,
+            host_arrays=npu_arrays,
+            device_id=args.device,
+            block_dim=args.block_dim,
+        )
+        npu_out = npu_res.outputs
+        out_dtypes = [host_spec.args[i].dtype for i in host_spec.output_indices()]
+        pipeline.compare_cpu_and_npu_outputs(cpu_out=cpu_out, npu_out=npu_out, out_dtypes=out_dtypes)
+    except Exception as e:
+        err = e
 
     if args.dump_instr:
-        outdir = args.outdir
-        sim_lib = pipeline.resolve_ascend_simulator_lib_dir(ascend_home=args.ascend_home, soc=soc)
-        host_exe = outdir / f"host_sim_{kernel.name}"
+        # Best-effort: even if the kernel run failed, still try to run the standalone
+        # host binary to collect CAMODEL instruction dumps.
+        try:
+            outdir = args.outdir
+            sim_lib = pipeline.resolve_ascend_simulator_lib_dir(ascend_home=args.ascend_home, soc=soc)
+            host_exe = outdir / f"host_sim_{kernel.name}"
 
-        cmd = [
-            "g++",
-            str(outdir / "host.cpp"),
-            "-o",
-            str(host_exe),
-            "-O2",
-            "-std=c++17",
-            f"-I{args.ascend_home / 'include'}",
-            f"-I{args.ascend_home / 'pkg_inc'}",
-            f"-I{args.ascend_home / 'pkg_inc' / 'runtime' / 'runtime'}",
-            f"-I{args.ascend_home / 'pkg_inc' / 'profiling'}",
-            f"-L{args.ascend_home / 'lib64'}",
-            f"-L{sim_lib}",
-            f"-Wl,-rpath,{args.ascend_home / 'lib64'}",
-            f"-Wl,-rpath,{sim_lib}",
-            "-lruntime_camodel",
-            "-lnpu_drv_camodel",
-            "-lascendcl",
-            "-ltiling_api",
-            "-lplatform",
-            "-lc_sec",
-            "-ldl",
-            "-lm",
-            "-lstdc++",
-            "-lpthread",
-        ]
-        subprocess.run(cmd, check=True)
+            cmd = [
+                "g++",
+                str(outdir / "host.cpp"),
+                "-o",
+                str(host_exe),
+                "-O2",
+                "-std=c++17",
+                f"-I{args.ascend_home / 'include'}",
+                f"-I{args.ascend_home / 'pkg_inc'}",
+                f"-I{args.ascend_home / 'pkg_inc' / 'runtime' / 'runtime'}",
+                f"-I{args.ascend_home / 'pkg_inc' / 'profiling'}",
+                f"-L{args.ascend_home / 'lib64'}",
+                f"-L{sim_lib}",
+                f"-Wl,-rpath,{args.ascend_home / 'lib64'}",
+                f"-Wl,-rpath,{sim_lib}",
+                "-lruntime_camodel",
+                "-lnpu_drv_camodel",
+                "-lascendcl",
+                "-ltiling_api",
+                "-lplatform",
+                "-lc_sec",
+                "-ldl",
+                "-lm",
+                "-lstdc++",
+                "-lpthread",
+            ]
+            subprocess.run(cmd, check=True)
 
-        dump_dir = outdir / "host_camodel_logs"
-        dump_dir.mkdir(parents=True, exist_ok=True)
-        env = dict(os.environ)
-        env["CAMODEL_LOG_PATH"] = str(dump_dir)
-        env["LD_LIBRARY_PATH"] = f"{sim_lib}:{args.ascend_home / 'lib64'}:{env.get('LD_LIBRARY_PATH', '')}"
-        subprocess.run(
-            [str(host_exe), "--so", str(so_path), "--device", str(args.device), "--block-dim", str(args.block_dim)],
-            cwd=str(outdir),
-            env=env,
-            check=True,
-        )
+            dump_dir = outdir / "host_camodel_logs"
+            dump_dir.mkdir(parents=True, exist_ok=True)
+            env = dict(os.environ)
+            env["CAMODEL_LOG_PATH"] = str(dump_dir)
+            env["LD_LIBRARY_PATH"] = f"{sim_lib}:{args.ascend_home / 'lib64'}:{env.get('LD_LIBRARY_PATH', '')}"
+            subprocess.run(
+                [str(host_exe), "--so", str(so_path), "--device", str(args.device), "--block-dim", str(args.block_dim)],
+                cwd=str(outdir),
+                env=env,
+                check=True,
+            )
 
-        set_count = 0
-        wait_count = 0
-        samples: list[str] = []
-        for f in sorted(dump_dir.glob("*.instr_log.dump")):
-            try:
-                with f.open("r", errors="ignore") as fp:
-                    for line in fp:
-                        if "SET_FLAG" in line:
-                            set_count += 1
-                            if len(samples) < 6:
-                                samples.append(f"{f.name}: {line.strip()}")
-                        if "WAIT_FLAG" in line:
-                            wait_count += 1
-                            if len(samples) < 6:
-                                samples.append(f"{f.name}: {line.strip()}")
-            except OSError:
-                continue
-        print(f"SIM dumps: {dump_dir}  SET_FLAG={set_count}  WAIT_FLAG={wait_count}")
-        for s in samples:
-            print("  " + s)
+            set_count = 0
+            wait_count = 0
+            samples: list[str] = []
+            for f in sorted(dump_dir.glob("*.instr_log.dump")):
+                try:
+                    with f.open("r", errors="ignore") as fp:
+                        for line in fp:
+                            if "SET_FLAG" in line:
+                                set_count += 1
+                                if len(samples) < 6:
+                                    samples.append(f"{f.name}: {line.strip()}")
+                            if "WAIT_FLAG" in line:
+                                wait_count += 1
+                                if len(samples) < 6:
+                                    samples.append(f"{f.name}: {line.strip()}")
+                except OSError:
+                    continue
+            print(f"SIM dumps: {dump_dir}  SET_FLAG={set_count}  WAIT_FLAG={wait_count}")
+            for s in samples:
+                print("  " + s)
+        except Exception as dump_e:
+            print(f"warning: failed to produce SIM instruction dumps: {dump_e}", file=sys.stderr)
+
+    if err is not None:
+        raise err
 
     print(
         f"OK: {kernel.name} (sim soc={soc}) artifacts: "

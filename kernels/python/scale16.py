@@ -17,9 +17,8 @@ def scale16():
     beta = pto.const("beta", 3.0, scalar("f32"))
 
     tx = pto.load(x)
-    out = pto.tmuls(tx, beta)
+    out = pto.muls(tx, beta)
     pto.store(y, out)
 
     pto.epilogue()
     return pto.program()
-

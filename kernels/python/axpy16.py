@@ -21,10 +21,9 @@ def axpy16():
 
     tx = pto.load(x)
     ty = pto.load(y)
-    tmp = pto.tmuls(tx, alpha)
-    out = pto.tadd(tmp, ty)
+    tmp = pto.muls(tx, alpha)
+    out = pto.add(tmp, ty)
     pto.store(z, out)
 
     pto.epilogue()
     return pto.program()
-

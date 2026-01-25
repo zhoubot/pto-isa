@@ -29,9 +29,9 @@ def fa16():
 
     tq = pto.load(q)
     tk = pto.load(k)
-    to = pto.tadd(tq, tk)
+    to = pto.add(tq, tk)
     tv = pto.load(v)
-    to = pto.tadd(to, tv)
+    to = pto.add(to, tv)
     pto.store(out, to)
 
     pto.epilogue()
