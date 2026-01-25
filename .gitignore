@@ -10,6 +10,8 @@ build/
 .venv/
 venv/
 .cache
+.claude
+.vscode
 
 # Generated example outputs (Ascend header backends)
 examples/output_ascend_a2a3/
