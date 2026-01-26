@@ -35,6 +35,10 @@ extern "C" {
 #define A2A3_L1_SIZE_KB              192
 #define A2A3_L1_SIZE_BYTES           (A2A3_L1_SIZE_KB * 1024)
 
+// Core configuration
+#define A2A3_NUM_VECTOR_CORES        48
+#define A2A3_NUM_CUBE_CORES          24
+
 // =============================================================================
 // Host API
 // =============================================================================

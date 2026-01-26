@@ -615,6 +615,280 @@ def compile_code():
         return False
 
 
+def generate_test_program_template(code_dir, example_name):
+    """
+    Generate a test program template for A2A3 runtime entry.
+    
+    This creates a C file that:
+    1. Initializes the A2A3 runtime with configuration
+    2. Sets up host memory buffers
+    3. Copies data to device (copyToDevice)
+    4. Executes the orchestration function
+    5. Copies results back (copyFromDevice)
+    6. Cleans up the runtime
+    """
+    test_program = f'''/**
+ * PTO Runtime Test Program - {example_name}
+ * 
+ * Auto-generated test entry point for A2A3 Runtime.
+ * This program demonstrates the complete runtime workflow:
+ * 1. Load orchestration and InCore .so files
+ * 2. Initialize runtime with thread configuration
+ * 3. Transfer data to device
+ * 4. Execute orchestration function
+ * 5. Transfer results back to host
+ * 6. Clean up resources
+ * 
+ * Thread Configuration:
+ * - 1 Orchestration AICPU thread
+ * - 3 Dependency Resolution AICPU threads
+ * - 48 AIV (Vector) workers
+ * - 24 AIC (Cube) workers
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+// Include A2A3 Runtime API
+#include "runtime_a2a3/a2a3_runtime_api.h"
+
+// =============================================================================
+// Test Configuration
+// =============================================================================
+
+#define TEST_INPUT_SIZE   (1024 * 1024 * sizeof(float))  // 1M floats
+#define TEST_OUTPUT_SIZE  (1024 * 1024 * sizeof(float))  // 1M floats
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+static double get_time_ms(void) {{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1000000.0;
+}}
+
+static void init_test_data(float* data, size_t count) {{
+    for (size_t i = 0; i < count; i++) {{
+        data[i] = (float)(i % 1000) / 1000.0f;
+    }}
+}}
+
+static int verify_results(const float* expected, const float* actual, size_t count) {{
+    int errors = 0;
+    const float epsilon = 1e-5f;
+    for (size_t i = 0; i < count && errors < 10; i++) {{
+        float diff = expected[i] - actual[i];
+        if (diff < 0) diff = -diff;
+        if (diff > epsilon) {{
+            printf("  Mismatch at [%zu]: expected %.6f, got %.6f\\n", 
+                   i, expected[i], actual[i]);
+            errors++;
+        }}
+    }}
+    return errors;
+}}
+
+// =============================================================================
+// Main Entry Point
+// =============================================================================
+
+int main(int argc, char** argv) {{
+    printf("=======================================================\\n");
+    printf("  PTO A2A3 Runtime Test: {example_name}\\n");
+    printf("=======================================================\\n\\n");
+    
+    int ret;
+    double start_time, end_time;
+    
+    // =========================================================================
+    // 1. Configure Runtime
+    // =========================================================================
+    printf("[1/6] Configuring runtime...\\n");
+    
+    A2A3RuntimeConfig config;
+    a2a3_config_init_defaults(&config);
+    
+    // Set paths to compiled .so files
+    config.orchestration_so_path = "generated_code/orchestration/lib_orchestration.so";
+    config.incore_aiv_dir = "generated_code/incore_aiv/";
+    config.incore_aic_dir = "generated_code/incore_aic/";
+    
+    // Thread configuration (as specified in requirements)
+    config.num_orch_threads = 1;    // 1 Orchestration AICPU thread
+    config.num_dep_threads = 3;     // 3 Dependency Resolution threads
+    config.num_aiv_workers = 48;    // 48 AIV (Vector) workers
+    config.num_aic_workers = 24;    // 24 AIC (Cube) workers
+    
+    config.debug_enabled = true;
+    
+    printf("  Orchestration SO: %s\\n", config.orchestration_so_path);
+    printf("  InCore AIV dir:   %s\\n", config.incore_aiv_dir);
+    printf("  InCore AIC dir:   %s\\n", config.incore_aic_dir);
+    printf("  Orch threads:     %d\\n", config.num_orch_threads);
+    printf("  Dep threads:      %d\\n", config.num_dep_threads);
+    printf("  AIV workers:      %d\\n", config.num_aiv_workers);
+    printf("  AIC workers:      %d\\n", config.num_aic_workers);
+    
+    // =========================================================================
+    // 2. Initialize Runtime
+    // =========================================================================
+    printf("\\n[2/6] Initializing runtime...\\n");
+    start_time = get_time_ms();
+    
+    ret = a2a3_runtime_init(&config);
+    if (ret != A2A3_SUCCESS) {{
+        fprintf(stderr, "ERROR: Failed to initialize runtime: %s\\n",
+                a2a3_runtime_error_string(ret));
+        return 1;
+    }}
+    
+    end_time = get_time_ms();
+    printf("  Runtime initialized in %.2f ms\\n", end_time - start_time);
+    
+    // =========================================================================
+    // 3. Allocate and Initialize Host Buffers
+    // =========================================================================
+    printf("\\n[3/6] Allocating host buffers...\\n");
+    
+    float* host_input = (float*)malloc(TEST_INPUT_SIZE);
+    float* host_output = (float*)malloc(TEST_OUTPUT_SIZE);
+    float* host_expected = (float*)malloc(TEST_OUTPUT_SIZE);  // For verification
+    
+    if (!host_input || !host_output || !host_expected) {{
+        fprintf(stderr, "ERROR: Failed to allocate host buffers\\n");
+        a2a3_runtime_finalize();
+        return 1;
+    }}
+    
+    // Initialize input data
+    init_test_data(host_input, TEST_INPUT_SIZE / sizeof(float));
+    memset(host_output, 0, TEST_OUTPUT_SIZE);
+    
+    printf("  Input buffer:  %zu bytes\\n", (size_t)TEST_INPUT_SIZE);
+    printf("  Output buffer: %zu bytes\\n", (size_t)TEST_OUTPUT_SIZE);
+    
+    // =========================================================================
+    // 4. Copy Data to Device (copyToDevice)
+    // =========================================================================
+    printf("\\n[4/6] Copying data to device...\\n");
+    start_time = get_time_ms();
+    
+    // Allocate device buffers
+    void* dev_input = a2a3_runtime_malloc(TEST_INPUT_SIZE);
+    void* dev_output = a2a3_runtime_malloc(TEST_OUTPUT_SIZE);
+    
+    if (!dev_input || !dev_output) {{
+        fprintf(stderr, "ERROR: Failed to allocate device buffers\\n");
+        free(host_input);
+        free(host_output);
+        free(host_expected);
+        a2a3_runtime_finalize();
+        return 1;
+    }}
+    
+    // Copy input to device
+    ret = a2a3_runtime_copy_to_device(dev_input, host_input, TEST_INPUT_SIZE);
+    if (ret != A2A3_SUCCESS) {{
+        fprintf(stderr, "ERROR: copyToDevice failed: %s\\n",
+                a2a3_runtime_error_string(ret));
+        a2a3_runtime_free(dev_input);
+        a2a3_runtime_free(dev_output);
+        free(host_input);
+        free(host_output);
+        free(host_expected);
+        a2a3_runtime_finalize();
+        return 1;
+    }}
+    
+    end_time = get_time_ms();
+    printf("  Data copied to device in %.2f ms\\n", end_time - start_time);
+    
+    // =========================================================================
+    // 5. Execute Orchestration Function
+    // =========================================================================
+    printf("\\n[5/6] Executing orchestration function...\\n");
+    start_time = get_time_ms();
+    
+    // Create user data structure to pass buffer pointers
+    struct {{
+        void* input;
+        void* output;
+        size_t input_size;
+        size_t output_size;
+    }} user_data = {{
+        .input = dev_input,
+        .output = dev_output,
+        .input_size = TEST_INPUT_SIZE,
+        .output_size = TEST_OUTPUT_SIZE,
+    }};
+    
+    ret = a2a3_runtime_execute(&user_data);
+    if (ret != A2A3_SUCCESS) {{
+        fprintf(stderr, "ERROR: Execution failed: %s\\n",
+                a2a3_runtime_error_string(ret));
+        a2a3_runtime_free(dev_input);
+        a2a3_runtime_free(dev_output);
+        free(host_input);
+        free(host_output);
+        free(host_expected);
+        a2a3_runtime_finalize();
+        return 1;
+    }}
+    
+    end_time = get_time_ms();
+    printf("  Execution completed in %.2f ms\\n", end_time - start_time);
+    
+    // =========================================================================
+    // 6. Copy Results from Device (copyFromDevice)
+    // =========================================================================
+    printf("\\n[6/6] Copying results from device...\\n");
+    start_time = get_time_ms();
+    
+    ret = a2a3_runtime_copy_from_device(host_output, dev_output, TEST_OUTPUT_SIZE);
+    if (ret != A2A3_SUCCESS) {{
+        fprintf(stderr, "ERROR: copyFromDevice failed: %s\\n",
+                a2a3_runtime_error_string(ret));
+    }}
+    
+    end_time = get_time_ms();
+    printf("  Data copied from device in %.2f ms\\n", end_time - start_time);
+    
+    // =========================================================================
+    // Print Statistics
+    // =========================================================================
+    printf("\\n");
+    a2a3_runtime_print_stats();
+    
+    // =========================================================================
+    // Cleanup
+    // =========================================================================
+    printf("Cleaning up...\\n");
+    
+    a2a3_runtime_free(dev_input);
+    a2a3_runtime_free(dev_output);
+    free(host_input);
+    free(host_output);
+    free(host_expected);
+    
+    a2a3_runtime_finalize();
+    
+    printf("\\nTest completed successfully!\\n");
+    return 0;
+}}
+'''
+    
+    # Write the test program
+    test_file = os.path.join(code_dir, "test_program.c")
+    with open(test_file, 'w') as f:
+        f.write(test_program)
+    
+    return test_file
+
+
 def compile_ascend_a2a3(code_dir):
     """
     Compile generated code for Ascend A2/A3 platform.
@@ -623,6 +897,7 @@ def compile_ascend_a2a3(code_dir):
     - orchestration/*.c → lib_orchestration.so (shared library)
     - incore_aic/*.cpp → *.o (AICore Cube object files)
     - incore_aiv/*.cpp → *.o (AICore Vector object files)
+    - test_program.c → test_program (executable)
     
     Output files are saved in the same folder as source files.
     """
@@ -657,7 +932,7 @@ def compile_ascend_a2a3(code_dir):
     
     # 1. Compile orchestration functions to shared library
     if os.path.exists(orch_dir):
-        print("\\n  [1/3] Compiling orchestration functions...")
+        print("\\n  [1/4] Compiling orchestration functions...")
         c_files = glob.glob(os.path.join(orch_dir, "*.c"))
         if c_files:
             # Compile all .c files to a shared library
@@ -702,11 +977,11 @@ def compile_ascend_a2a3(code_dir):
         else:
             print("    No .c files found in orchestration/")
     else:
-        print("\\n  [1/3] Skipping orchestration (no orchestration/ directory)")
+        print("\\n  [1/4] Skipping orchestration (no orchestration/ directory)")
     
     # 2. Compile InCore AIC (AI Core Cube) functions
     if os.path.exists(aic_dir) and ccec_available:
-        print("\\n  [2/3] Compiling InCore AIC (Cube) functions...")
+        print("\\n  [2/4] Compiling InCore AIC (Cube) functions...")
         cpp_files = glob.glob(os.path.join(aic_dir, "*.cpp"))
         if cpp_files:
             for cpp_file in cpp_files:
@@ -736,13 +1011,13 @@ def compile_ascend_a2a3(code_dir):
         else:
             print("    No .cpp files found in incore_aic/")
     elif not ccec_available:
-        print("\\n  [2/3] Skipping InCore AIC (ccec compiler not available)")
+        print("\\n  [2/4] Skipping InCore AIC (ccec compiler not available)")
     else:
-        print("\\n  [2/3] Skipping InCore AIC (no incore_aic/ directory)")
+        print("\\n  [2/4] Skipping InCore AIC (no incore_aic/ directory)")
     
     # 3. Compile InCore AIV (AI Core Vector) functions
     if os.path.exists(aiv_dir) and ccec_available:
-        print("\\n  [3/3] Compiling InCore AIV (Vector) functions...")
+        print("\\n  [3/4] Compiling InCore AIV (Vector) functions...")
         cpp_files = glob.glob(os.path.join(aiv_dir, "*.cpp"))
         if cpp_files:
             for cpp_file in cpp_files:
@@ -772,9 +1047,63 @@ def compile_ascend_a2a3(code_dir):
         else:
             print("    No .cpp files found in incore_aiv/")
     elif not ccec_available:
-        print("\\n  [3/3] Skipping InCore AIV (ccec compiler not available)")
+        print("\\n  [3/4] Skipping InCore AIV (ccec compiler not available)")
     else:
-        print("\\n  [3/3] Skipping InCore AIV (no incore_aiv/ directory)")
+        print("\\n  [3/4] Skipping InCore AIV (no incore_aiv/ directory)")
+    
+    # 4. Generate and compile test program
+    print("\\n  [4/4] Generating and compiling test program...")
+    
+    example_name = os.path.basename(os.path.dirname(code_dir))
+    test_file = generate_test_program_template(code_dir, example_name)
+    print(f"    Generated: {{test_file}}")
+    
+    # Get parent directory (platform_dir) for test executable
+    platform_dir = os.path.dirname(code_dir)
+    test_exe = os.path.join(platform_dir, "test_program")
+    
+    compile_flags = ["-O2", "-std=c11", "-D_POSIX_C_SOURCE=199309L"]
+    if cann_available:
+        compile_flags.append("-DCANN_SDK_AVAILABLE")
+    else:
+        compile_flags.append("-DA2A3_SKIP_CANN_CHECK")
+    
+    include_paths = [
+        f"-I{{RUNTIME_DIR}}",
+        f"-I{{code_dir}}",
+    ]
+    
+    # Find all runtime source files needed
+    runtime_sources = [
+        os.path.join(RUNTIME_DIR, "pto_runtime.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "a2a3_runtime.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_host.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_so_loader.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "core", "a2a3_core_worker.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "orchestration", "a2a3_orchestration.c"),
+    ]
+    
+    # Filter to only existing files
+    runtime_sources = [s for s in runtime_sources if os.path.exists(s)]
+    
+    if runtime_sources:
+        cmd = (
+            f"gcc {{' '.join(compile_flags)}} {{' '.join(include_paths)}} "
+            f"-o {{test_exe}} {{test_file}} {{' '.join(runtime_sources)}} "
+            f"-lpthread -ldl"
+        )
+        
+        print(f"    Compiling test program...")
+        ok, stdout, stderr = run_command(cmd, cwd=code_dir, timeout=120)
+        
+        if ok:
+            print(f"    ✓ Compiled: {{test_exe}}")
+        else:
+            print(f"    ✗ Failed: {{stderr}}")
+            success = False
+    else:
+        print(f"    ✗ Runtime source files not found")
+        success = False
     
     return success
 

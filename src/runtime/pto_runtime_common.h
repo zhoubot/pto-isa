@@ -252,7 +252,15 @@ typedef struct PTORuntime {
     int32_t           num_cube_workers;      // Number of cube workers (A2A3)
     volatile bool     shutdown_requested;    // Signal workers to exit
     volatile bool     execution_started;     // Orchestration has submitted all tasks
+    volatile bool     orchestration_complete; // Orchestration function has finished
     int32_t           execution_task_threshold;  // Start workers when task_count > threshold
+    
+    // Dependency resolver threads (A2A3)
+    pthread_t         dep_resolvers[8];      // Up to 8 dependency resolver threads
+    int32_t           num_dep_resolvers;     // Number of dep resolver threads (default: 3)
+    
+    // Orchestration thread (A2A3)
+    pthread_t         orch_thread;           // Orchestration thread handle
     
     // =========================================================================
     // Platform-Specific: Mode Configuration

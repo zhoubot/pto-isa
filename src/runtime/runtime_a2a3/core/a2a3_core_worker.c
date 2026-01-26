@@ -5,10 +5,12 @@
  * Requires CANN SDK for actual NPU kernel execution.
  */
 
+#define _POSIX_C_SOURCE 199309L
 #include "a2a3_core_worker.h"
 #include "../orchestration/a2a3_orchestration.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 // =============================================================================
 // CANN SDK Requirement Check
@@ -296,4 +298,273 @@ void* a2a3_cube_worker_func(void* arg) {
     DEBUG_PRINT("[A2A3 Core HW] Cube worker %d exiting\n", worker_id);
     free(ctx);
     return NULL;
+}
+
+// =============================================================================
+// Dependency Resolution Thread Functions
+// =============================================================================
+
+/**
+ * Queue of completed task IDs waiting for dependency processing.
+ * This separates task completion notification from actual dependency update.
+ */
+#define MAX_COMPLETION_QUEUE 1024
+
+static int32_t g_completion_queue[MAX_COMPLETION_QUEUE];
+static int g_completion_head = 0;
+static int g_completion_tail = 0;
+static pthread_mutex_t g_completion_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_completion_not_empty = PTHREAD_COND_INITIALIZER;
+
+/**
+ * Push a completed task ID to the completion queue.
+ * Called by workers after executing a task.
+ */
+static void push_completion(int32_t task_id) {
+    pthread_mutex_lock(&g_completion_mutex);
+    
+    int next_tail = (g_completion_tail + 1) % MAX_COMPLETION_QUEUE;
+    if (next_tail == g_completion_head) {
+        // Queue is full - this shouldn't happen with proper sizing
+        fprintf(stderr, "[A2A3 DepResolver] WARNING: Completion queue full!\n");
+    } else {
+        g_completion_queue[g_completion_tail] = task_id;
+        g_completion_tail = next_tail;
+    }
+    
+    pthread_cond_signal(&g_completion_not_empty);
+    pthread_mutex_unlock(&g_completion_mutex);
+}
+
+/**
+ * Pop a completed task ID from the completion queue.
+ * Returns -1 if queue is empty (non-blocking).
+ */
+static int32_t pop_completion_nonblocking(void) {
+    pthread_mutex_lock(&g_completion_mutex);
+    
+    int32_t task_id = -1;
+    if (g_completion_head != g_completion_tail) {
+        task_id = g_completion_queue[g_completion_head];
+        g_completion_head = (g_completion_head + 1) % MAX_COMPLETION_QUEUE;
+    }
+    
+    pthread_mutex_unlock(&g_completion_mutex);
+    return task_id;
+}
+
+/**
+ * Pop a completed task ID from the completion queue (blocking).
+ * Returns -1 on shutdown.
+ */
+static int32_t pop_completion_blocking(PTORuntime* rt) {
+    pthread_mutex_lock(&g_completion_mutex);
+    
+    while (g_completion_head == g_completion_tail && !rt->shutdown_requested) {
+        // Check if all tasks are done
+        if (rt->execution_started && 
+            rt->total_tasks_completed >= rt->total_tasks_scheduled) {
+            pthread_mutex_unlock(&g_completion_mutex);
+            return -1;
+        }
+        
+        // Wait with timeout to check shutdown periodically
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_nsec += 10000000;  // 10ms timeout
+        if (ts.tv_nsec >= 1000000000) {
+            ts.tv_sec++;
+            ts.tv_nsec -= 1000000000;
+        }
+        pthread_cond_timedwait(&g_completion_not_empty, &g_completion_mutex, &ts);
+    }
+    
+    int32_t task_id = -1;
+    if (g_completion_head != g_completion_tail) {
+        task_id = g_completion_queue[g_completion_head];
+        g_completion_head = (g_completion_head + 1) % MAX_COMPLETION_QUEUE;
+    }
+    
+    pthread_mutex_unlock(&g_completion_mutex);
+    return task_id;
+}
+
+void a2a3_process_task_completion(PTORuntime* rt, int32_t task_id) {
+    if (task_id < 0 || task_id >= rt->next_task_id) {
+        fprintf(stderr, "[A2A3 DepResolver] ERROR: Invalid task_id %d\n", task_id);
+        return;
+    }
+    
+    pthread_mutex_lock(&rt->task_mutex);
+    
+    int32_t slot = PTO_TASK_SLOT(task_id);
+    PendingTask* task = &rt->pend_task[slot];
+    
+    // Skip if already processed
+    if (task->is_complete) {
+        pthread_mutex_unlock(&rt->task_mutex);
+        return;
+    }
+    
+    task->is_complete = true;
+    rt->active_task_count--;
+    rt->total_tasks_completed++;
+    
+    // Advance sliding window
+    bool window_advanced = false;
+    while (rt->window_oldest_pending < rt->next_task_id) {
+        int32_t oldest_slot = PTO_TASK_SLOT(rt->window_oldest_pending);
+        if (!rt->pend_task[oldest_slot].is_complete) break;
+        rt->window_oldest_pending++;
+        window_advanced = true;
+    }
+    
+    DEBUG_PRINT("[A2A3 DepResolver] Process completion: task %d (%s), %d/%d done\n", 
+                task_id, task->func_name, 
+                rt->total_tasks_completed, rt->total_tasks_scheduled);
+    
+    // Collect newly ready tasks
+    int32_t newly_ready[PTO_MAX_FANOUT];
+    int32_t newly_ready_count = 0;
+    
+    for (int i = 0; i < task->fanout_count; i++) {
+        int32_t dep_id = task->fanout[i];
+        int32_t dep_slot = PTO_TASK_SLOT(dep_id);
+        PendingTask* dep_task = &rt->pend_task[dep_slot];
+        
+        dep_task->fanin--;
+        
+        if (dep_task->fanin == 0 && !dep_task->is_complete) {
+            DEBUG_PRINT("[A2A3 DepResolver] Task %d now ready (successor of %d)\n",
+                       dep_id, task_id);
+            newly_ready[newly_ready_count++] = dep_id;
+        }
+    }
+    
+    bool all_done = (rt->total_tasks_completed >= rt->total_tasks_scheduled);
+    
+    if (window_advanced) {
+        pthread_cond_broadcast(&rt->window_not_full);
+    }
+    
+    pthread_mutex_unlock(&rt->task_mutex);
+    
+    // Route newly ready tasks to appropriate queues (outside of mutex)
+    for (int i = 0; i < newly_ready_count; i++) {
+        a2a3_orch_route_to_queue_threadsafe(rt, newly_ready[i]);
+    }
+    
+    // Signal completion if all tasks done
+    if (all_done) {
+        pthread_mutex_lock(&rt->queue_mutex);
+        pthread_cond_broadcast(&rt->all_done);
+        pthread_cond_broadcast(&rt->vector_queue_not_empty);
+        pthread_cond_broadcast(&rt->cube_queue_not_empty);
+        pthread_mutex_unlock(&rt->queue_mutex);
+        
+        // Also wake up other dep resolvers
+        pthread_mutex_lock(&g_completion_mutex);
+        pthread_cond_broadcast(&g_completion_not_empty);
+        pthread_mutex_unlock(&g_completion_mutex);
+        
+        DEBUG_PRINT("[A2A3 DepResolver] All %d tasks completed!\n", 
+                   rt->total_tasks_completed);
+    }
+}
+
+bool a2a3_has_pending_completions(PTORuntime* rt) {
+    pthread_mutex_lock(&g_completion_mutex);
+    bool has_pending = (g_completion_head != g_completion_tail);
+    pthread_mutex_unlock(&g_completion_mutex);
+    return has_pending;
+}
+
+void* a2a3_dep_resolver_func(void* arg) {
+    A2A3DepResolverContext* ctx = (A2A3DepResolverContext*)arg;
+    PTORuntime* rt = ctx->rt;
+    int thread_id = ctx->thread_id;
+    
+    DEBUG_PRINT("[A2A3 DepResolver] Thread %d started\n", thread_id);
+    
+    while (!rt->shutdown_requested) {
+        // Get a completed task from the queue
+        int32_t task_id = pop_completion_blocking(rt);
+        
+        if (task_id < 0) {
+            // Check termination conditions
+            if (rt->shutdown_requested) break;
+            if (rt->execution_started && 
+                rt->total_tasks_completed >= rt->total_tasks_scheduled) break;
+            continue;
+        }
+        
+        // Process the completion (update dependencies, route ready tasks)
+        a2a3_process_task_completion(rt, task_id);
+    }
+    
+    DEBUG_PRINT("[A2A3 DepResolver] Thread %d exiting\n", thread_id);
+    free(ctx);
+    return NULL;
+}
+
+// =============================================================================
+// Orchestration Thread Function
+// =============================================================================
+
+/**
+ * Forward declaration of orchestration function type from so_loader
+ */
+typedef void (*A2A3OrchFuncPtr)(void* runtime, void* user_data);
+
+void* a2a3_orch_thread_func(void* arg) {
+    A2A3OrchContext* ctx = (A2A3OrchContext*)arg;
+    PTORuntime* rt = ctx->rt;
+    A2A3OrchFuncPtr orch_func = (A2A3OrchFuncPtr)ctx->orch_func;
+    void* user_data = ctx->user_data;
+    
+    DEBUG_PRINT("[A2A3 Orch] Orchestration thread started\n");
+    
+    if (!orch_func) {
+        fprintf(stderr, "[A2A3 Orch] ERROR: No orchestration function provided!\n");
+        free(ctx);
+        return NULL;
+    }
+    
+    // Execute the orchestration function
+    // This will call into the runtime to build the task graph
+    DEBUG_PRINT("[A2A3 Orch] Starting orchestration function...\n");
+    orch_func(rt, user_data);
+    
+    // Mark orchestration as complete
+    DEBUG_PRINT("[A2A3 Orch] Orchestration function complete, scheduled %d tasks\n",
+               rt->total_tasks_scheduled);
+    
+    // Signal that orchestration is done (no more tasks will be added)
+    pthread_mutex_lock(&rt->task_mutex);
+    rt->orchestration_complete = true;
+    pthread_cond_broadcast(&rt->window_not_full);
+    pthread_mutex_unlock(&rt->task_mutex);
+    
+    // Signal worker queues in case they're waiting
+    pthread_mutex_lock(&rt->queue_mutex);
+    pthread_cond_broadcast(&rt->vector_queue_not_empty);
+    pthread_cond_broadcast(&rt->cube_queue_not_empty);
+    pthread_mutex_unlock(&rt->queue_mutex);
+    
+    DEBUG_PRINT("[A2A3 Orch] Orchestration thread exiting\n");
+    free(ctx);
+    return NULL;
+}
+
+// =============================================================================
+// Helper for Workers: Notify Completion to Dep Resolver
+// =============================================================================
+
+/**
+ * Notify the dependency resolution system that a task has been executed.
+ * This is called by workers instead of directly calling a2a3_core_complete_task
+ * when using the dep resolver threads.
+ */
+void a2a3_notify_task_executed(int32_t task_id) {
+    push_completion(task_id);
 }
