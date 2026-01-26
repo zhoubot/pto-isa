@@ -110,8 +110,9 @@ PTO_INST RecordEvent TPREFETCH(TileData &dst, GlobalData &src) {
   return {};
 }
 
-template <typename TileDataDst, typename TileDataSrc0, typename T, typename... WaitEvents>
-PTO_INST RecordEvent TCMPS(TileDataDst &dst, TileDataSrc0 &src0, T src1, CmpMode cmpMode, WaitEvents&... events) {
+template <typename TileDataDst, typename TileDataSrc0, typename... WaitEvents>
+PTO_INST RecordEvent TCMPS(TileDataDst &dst, TileDataSrc0 &src0, typename TileDataSrc0::DType src1, CmpMode cmpMode,
+                           WaitEvents &...events) {
   TSYNC(events...);
   MAP_INSTR_IMPL(TCMPS, dst, src0, src1, cmpMode);
   return {};
@@ -165,6 +166,28 @@ PTO_INST RecordEvent TSTORE_FP(GlobalData &dst, TileData &src, FpTileData &fp, W
 {
     TSYNC(events...);
     TSTORE_IMPL<TileData, GlobalData, FpTileData, atomicType, reluPreMode>(dst, src, fp);
+    return {};
+}
+
+// Push/Pop: GM tile FIFO helpers (prototype).
+//
+// These are intended as explicit producer/consumer operations around GM-backed tile FIFOs
+// (e.g. Cube producer -> Vec consumer). The `token` operand is reserved for future
+// cross-core synchronization and/or FIFO slot selection; today the default backends treat
+// it as a no-op hint.
+template <typename GlobalData, typename TileData, typename... WaitEvents>
+PTO_INST RecordEvent TPUSH(GlobalData &dst, TileData &src, uint16_t token, WaitEvents &...events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TPUSH, dst, src, token);
+    return {};
+}
+
+template <typename TileData, typename GlobalData, typename... WaitEvents>
+PTO_INST RecordEvent TPOP(TileData &dst, GlobalData &src, uint16_t token, WaitEvents &...events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TPOP, dst, src, token);
     return {};
 }
 

@@ -16,30 +16,47 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 PTO_INTERNAL void SetContinuousMask(unsigned n) {
+#if defined(__CCE_IS_AICORE__) || defined(__CCE_AICORE__)
     set_vector_mask(static_cast<uint64_t>(
                         (n > MASK_LEN) ? (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(n - MASK_LEN)) - 1) : 0),
         static_cast<uint64_t>(
             (n >= MASK_LEN) ? 0xffffffffffffffff : (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(n)) - 1)));
+#else
+    (void)n;
+#endif
 }
 
 template <int index>
 PTO_INTERNAL void movemask(uint64_t mask) {
+#if defined(__CCE_IS_AICORE__) || defined(__CCE_AICORE__)
     if constexpr (index == 0) {
-        asm volatile("MOVEMASK 	MASK[0],  %0\n" ::"l"(mask));
+        asm volatile("MOVEMASK MASK[0], %0\n" ::"r"(mask));
     } else if constexpr (index == 1) {
-        asm volatile("MOVEMASK 	MASK[1],  %0\n" ::"l"(mask));
+        asm volatile("MOVEMASK MASK[1], %0\n" ::"r"(mask));
     } else {
         PTO_STATIC_ASSERT((index <= 1), "movemask: error mask index.");
     }
+#else
+    (void)mask;
+    PTO_STATIC_ASSERT((index <= 1), "movemask: error mask index.");
+#endif
 }
 
 PTO_INTERNAL void SetVectorCount(uint64_t n) {
+#if defined(__CCE_IS_AICORE__) || defined(__CCE_AICORE__)
     set_vector_mask(0, n);
+#else
+    (void)n;
+#endif
 }
 
 template <typename T>
 PTO_INTERNAL void SetFullVecMaskByDType() {
+#if defined(__CCE_IS_AICORE__) || defined(__CCE_AICORE__)
     set_vector_mask(-1, -1);
+#else
+    (void)sizeof(T);
+#endif
 }
 
 template <typename T>

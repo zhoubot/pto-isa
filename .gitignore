@@ -11,6 +11,9 @@ build/
 venv/
 .cache
 
+# Local assets (keep repo tidy unless explicitly needed)
+assets/gemm_pipeline.png
+
 # Generated example outputs (Ascend header backends)
 examples/output_ascend_a2a3/
 examples/output_ascend_a5/
@@ -18,3 +21,11 @@ examples/output_ascend_a5/
 # Ascend simulator debug dumps
 core*_*.dump
 profile_*_log*.toml
+
+# Keep vendored PTO-AS sources ignored by default (they are large).
+ptoas
+pto_as
+
+# But do commit the launcher + prebuilt binaries under `bin/`.
+!bin/ptoas
+!bin/*/ptoas

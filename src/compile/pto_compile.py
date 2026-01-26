@@ -740,6 +740,17 @@ class MultiBackendCodeGenerator:
             target=target
         )
         return gen.generate(program)
+
+    def generate_ptoas(self, program: PTOProgram, *, block_dim: int = 1, kernel_name: str = "pto_kernel") -> str:
+        """
+        Generate new-format PTO-AS text compatible with the `ptoas` toolchain.
+
+        Note: this is currently a small fast-path exporter intended for tiny GEMM-style programs
+        (straight-line TLOAD/TMATMUL/TSTORE). It will raise NotImplementedError for unsupported ops.
+        """
+        from compile.pto_to_ptoas import export_program_to_ptoas_gemm16
+
+        return export_program_to_ptoas_gemm16(program=program, block_dim=int(block_dim), kernel_name=str(kernel_name))
     
     def generate_ascend_a2a3(self, program: PTOProgram) -> str:
         """Generate Ascend A2/A3 code (convenience method)."""

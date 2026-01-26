@@ -123,8 +123,15 @@ namespace pto {
     CceEventIdType token = __pto_set_flag(SrcPipe, DstPipe);
     __pto_wait_flag(SrcPipe, DstPipe, token);
 #else
+    // Some toolchains compile host-side stubs in addition to AICORE code paths.
+    // Guard intrinsic calls so non-AICORE compilation units don't fail to build.
+#if defined(__CCE_IS_AICORE__) || defined(__CCE_AICORE__)
     set_flag(SrcPipe, DstPipe, EVENT_ID0);
     wait_flag(SrcPipe, DstPipe, EVENT_ID0);
+#else
+    (void)SrcPipe;
+    (void)DstPipe;
+#endif
 #endif
   }
 } // namespace pto

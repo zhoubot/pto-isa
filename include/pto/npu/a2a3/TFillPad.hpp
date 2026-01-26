@@ -293,20 +293,28 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileData::TileDType __out__ dst, uint
 #endif
 }
 
-template <typename TileData, PadValue PadVal = PadValue::Zero>
-PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
-{
-    static_assert(!TileData::isRowMajor && (TileData::SFractal == SLayout::RowMajor),
-        "Fix: TFillPad Dst matTile now only support NZ layout.");
-    static_assert(TileData::PadVal == PadValue::Zero || TileData::PadVal == PadValue::Null,
-        "Fix: TFillPad dst matTile pad value only support Zero or Null!");
-    using T = typename TileData::DType;
-    static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1, "Fix: TFillPad type must be b4/b8/b16/b32.");
+	template <typename TileData, PadValue PadVal = PadValue::Zero>
+	PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
+	{
+	    if constexpr (TileData::Loc == TileType::Vec) {
+	        static_assert(TileData::PadVal == PadVal,
+	            "Fix: TFILLPAD VecTile PadValue mismatch between tile type and instruction template.");
+	        TFILLPAD_GENERIC_IMPL<TileData, TileData, false>(dst, src);
+	    } else {
+	        static_assert(TileData::Loc == TileType::Mat, "Fix: TFILLPAD PadValue overload only supports Vec/Mat tiles.");
+	        static_assert(!TileData::isRowMajor && (TileData::SFractal == SLayout::RowMajor),
+	            "Fix: TFillPad Dst matTile now only support NZ layout.");
+	        static_assert(TileData::PadVal == PadValue::Zero || TileData::PadVal == PadValue::Null,
+	            "Fix: TFillPad dst matTile pad value only support Zero or Null!");
+	        using T = typename TileData::DType;
+	        static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1,
+	            "Fix: TFillPad type must be b4/b8/b16/b32.");
 
-    uint32_t validDstRow = dst.GetValidRow();
-    uint32_t validDstCol = dst.GetValidCol();
-    TFillPad<TileData>(dst.data(), validDstRow, validDstCol);
-}
+	        uint32_t validDstRow = dst.GetValidRow();
+	        uint32_t validDstCol = dst.GetValidCol();
+	        TFillPad<TileData>(dst.data(), validDstRow, validDstCol);
+	    }
+	}
 
 } // namespace pto
 #endif

@@ -12,6 +12,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TSTORE_HPP
 #include "common.hpp"
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-attributes"
+#endif
+
 namespace pto {
 template <typename GlobalData, typename TileData>
 PTO_INTERNAL void TStoreUb2gmInstr(typename GlobalData::DType *dst, __ubuf__ typename TileData::DType *src,
@@ -608,5 +613,10 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src, FpTileData &fp)
         SetAtomicNone();
     }
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
 } // namespace pto
 #endif

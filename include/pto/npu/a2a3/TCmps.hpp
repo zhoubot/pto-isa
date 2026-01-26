@@ -13,121 +13,108 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #include <pto/common/constants.hpp>
 #include <pto/common/utils.hpp>
+#include <type_traits>
 
 namespace pto {
 
 constexpr const uint64_t NUM_BITS_IN_BYTE = 8;
 
-    template <typename TileDataDst, typename TileDataSrc, typename T>
-    AICORE void GenCmpCall(__ubuf__ typename TileDataDst::DType *dst,
-        __ubuf__ typename TileDataSrc::DType *src0, T src1, CmpMode cmpMode,
-        uint8_t repeat, uint16_t dstblockstride, uint16_t srcblockstride,
-        uint16_t dstrepeatstride, uint16_t srcrepeatstride)
+template <typename T>
+PTO_INTERNAL bool CmpScalarS(T a, T b, CmpMode cmpMode)
 {
-        if constexpr (std::is_same<typename TileDataSrc::DType, int32_t>::value) {
-            vcmpvs_eq(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
+    if constexpr (std::is_same_v<T, half> || std::is_same_v<T, float16_t>) {
+        const float af = static_cast<float>(a);
+        const float bf = static_cast<float>(b);
+        switch (cmpMode) {
+            case CmpMode::EQ: return af == bf;
+            case CmpMode::NE: return af != bf;
+            case CmpMode::LT: return af < bf;
+            case CmpMode::GT: return af > bf;
+            case CmpMode::GE: return af >= bf;
+            case CmpMode::LE: return af <= bf;
+            default: return af == bf;
         }
-        else {
-            switch (static_cast<CmpMode>(cmpMode)) {
-                case CmpMode::EQ:
-                    vcmpvs_eq(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-                case CmpMode::NE:
-                    vcmpvs_ne(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-                case CmpMode::LT:
-                    vcmpvs_lt(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-                case CmpMode::GT:
-                    vcmpvs_gt(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-                case CmpMode::GE:
-                    vcmpvs_ge(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-                case CmpMode::LE:
-                    vcmpvs_le(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-                default:
-                    vcmpvs_eq(dst, src0, src1, repeat, dstblockstride, srcblockstride, dstrepeatstride, srcrepeatstride);
-                    break;
-            }
+    } else if constexpr (std::is_floating_point_v<T>) {
+        switch (cmpMode) {
+            case CmpMode::EQ: return a == b;
+            case CmpMode::NE: return a != b;
+            case CmpMode::LT: return a < b;
+            case CmpMode::GT: return a > b;
+            case CmpMode::GE: return a >= b;
+            case CmpMode::LE: return a <= b;
+            default: return a == b;
         }
-    }
-
-
-    template <typename TileDataDst, typename TileDataSrc, typename T>
-    __tf__ AICORE void TCmps(
-        typename TileDataDst::TileDType __out__ dst,
-        typename TileDataSrc::TileDType __in__ src0, 
-        T src1, 
-        CmpMode mode, 
-        unsigned numRepeatPerLine,
-        unsigned validRow,
-        unsigned elementsPerRepeat) 
-    {
-        __ubuf__ typename TileDataDst::DType *dstPtr = (__ubuf__ typename TileDataDst::DType *)__cce_get_tile_ptr(dst);
-        __ubuf__ typename TileDataSrc::DType *srcPtr = (__ubuf__ typename TileDataSrc::DType *)__cce_get_tile_ptr(src0);
-
-        size_t numLoop = numRepeatPerLine / REPEAT_MAX;
-        int numRemainPerLine = numRepeatPerLine % REPEAT_MAX;
-        constexpr int srcAlignCols = TileDataSrc::Cols;
-        constexpr int dstAlignCols = TileDataDst::Cols;
-        constexpr int srcOffset = REPEAT_MAX * REPEAT_BYTE / sizeof(T);
-        constexpr int dstOffset = REPEAT_MAX * REPEAT_BYTE / sizeof(T) / NUM_BITS_IN_BYTE;
-        
-        set_mask_norm();
-        set_vector_mask(-1, -1);
-        for(size_t i = 0; i < validRow; i++) {
-            for(size_t j = 0; j < numLoop; j++) {
-                GenCmpCall<TileDataDst, TileDataSrc>(
-                        dstPtr + i * dstAlignCols + j * dstOffset,
-                        srcPtr + i * srcAlignCols + j * srcOffset,
-                        src1,
-                        mode,
-                        REPEAT_MAX,
-                        1,
-                        1,
-                        8,
-                        8);
-            }
-            if(numRemainPerLine) {
-                GenCmpCall<TileDataDst, TileDataSrc>(
-                        dstPtr + i * dstAlignCols + numLoop * dstOffset,
-                        srcPtr + i * srcAlignCols + numLoop * srcOffset,
-                        src1,
-                        mode,
-                        REPEAT_MAX,
-                        1,
-                        1,
-                        8,
-                        8);
-            }
+    } else {
+        switch (cmpMode) {
+            case CmpMode::EQ: return a == b;
+            case CmpMode::NE: return a != b;
+            case CmpMode::LT: return a < b;
+            case CmpMode::GT: return a > b;
+            case CmpMode::GE: return a >= b;
+            case CmpMode::LE: return a <= b;
+            default: return a == b;
         }
     }
+}
 
-    template <typename TileDataDst, typename TileDataSrc0, typename T>
-    PTO_INTERNAL void TCMPS_IMPL(TileDataDst &dst, TileDataSrc0 &src0, T src1, CmpMode cmpMode) {
-        static_assert(std::is_same<typename TileDataSrc0::DType, int32_t>::value ||
-                std::is_same<typename TileDataSrc0::DType, float>::value ||
-                std::is_same<typename TileDataSrc0::DType, half>::value,
-                "TCMPS: Invalid data type.");
-        static_assert(TileDataDst::isRowMajor, "TCMPS: not supported Layout type");
+template <typename TileDataDst, typename TileDataSrc0, typename ScalarT>
+__tf__ PTO_INTERNAL void TCmpsScalarNpu(typename TileDataDst::TileDType __out__ dst,
+    typename TileDataSrc0::TileDType __in__ src0, ScalarT scalar, CmpMode cmpMode, unsigned validRow,
+    unsigned validCol, unsigned validMaskCol)
+{
+    __ubuf__ uint8_t *dstPtr = (__ubuf__ uint8_t *)__cce_get_tile_ptr(dst);
+    __ubuf__ ScalarT *srcPtr = (__ubuf__ ScalarT *)__cce_get_tile_ptr(src0);
+
+    constexpr unsigned dstStride = TileDataDst::RowStride;
+    constexpr unsigned srcStride = TileDataSrc0::RowStride;
+
+    for (unsigned r = 0; r < validRow; ++r) {
+        for (unsigned byteIdx = 0; byteIdx < validMaskCol; ++byteIdx) {
+            uint8_t packed = 0;
+            for (unsigned bit = 0; bit < 8; ++bit) {
+                const unsigned c = byteIdx * 8 + bit;
+                if (c >= validCol) {
+                    break;
+                }
+                const auto a = srcPtr[r * srcStride + c];
+                const bool pred = CmpScalarS(a, scalar, cmpMode);
+                packed |= static_cast<uint8_t>((pred ? 1u : 0u) << bit);
+            }
+            dstPtr[r * dstStride + byteIdx] = packed;
+        }
+    }
+}
+
+	    template <typename TileDataDst, typename TileDataSrc0, typename T>
+	    PTO_INTERNAL void TCMPS_IMPL(TileDataDst &dst, TileDataSrc0 &src0, T src1, CmpMode cmpMode) {
+	        static_assert(std::is_same<typename TileDataSrc0::DType, int32_t>::value ||
+	                std::is_same<typename TileDataSrc0::DType, float>::value ||
+	                std::is_same<typename TileDataSrc0::DType, half>::value,
+	                "TCMPS: Invalid data type.");
+	        static_assert(std::is_same_v<typename TileDataDst::DType, uint8_t>,
+	            "TCMPS: dst tile must be a packed u8 mask.");
+	        static_assert(TileDataDst::isRowMajor, "TCMPS: not supported Layout type");
 
         static_assert(TileDataDst::Loc == TileType::Vec, "TileType of dst tile must be TileType::Vec.");
         static_assert(TileDataDst::ValidCol <= TileDataDst::Cols, "Number of valid columns for dst must not be greater than number of tile columns.");
         static_assert(TileDataDst::ValidRow <= TileDataDst::Rows, "Number of valid rows for dst must not be greater than number of tile rows.");
 
-        static_assert(TileDataSrc0::Loc == TileType::Vec, "TileType of src tile must be TileType::Vec.");
-        static_assert(TileDataSrc0::ValidCol <= TileDataSrc0::Cols, "Number of valid columns for scr must not be greater than number of tile columns.");
-        static_assert(TileDataSrc0::ValidRow <= TileDataSrc0::Rows, "Number of valid rows for src must not be greater than number of tile rows.");
-        PTO_ASSERT(src0.GetValidCol() == dst.GetValidCol(), "Number of columns of src and dst must be the same.");
-        PTO_ASSERT(src0.GetValidRow() == dst.GetValidRow(), "Number of rows of src and dst must be the same.");
-        
-        constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(typename TileDataSrc0::DType);
-        unsigned numRepeatPerLine = CeilDivision(src0.GetValidCol(), elementsPerRepeat);
-        unsigned validRow = src0.GetValidRow();
-        
-        TCmps<TileDataDst, TileDataSrc0, T>(dst.data(), src0.data(), src1, cmpMode, numRepeatPerLine, validRow, elementsPerRepeat);
-    }
+	        static_assert(TileDataSrc0::Loc == TileType::Vec, "TileType of src tile must be TileType::Vec.");
+	        static_assert(TileDataSrc0::ValidCol <= TileDataSrc0::Cols, "Number of valid columns for scr must not be greater than number of tile columns.");
+	        static_assert(TileDataSrc0::ValidRow <= TileDataSrc0::Rows, "Number of valid rows for src must not be greater than number of tile rows.");
+	        PTO_ASSERT(src0.GetValidRow() == dst.GetValidRow(), "Number of rows of src and dst must be the same.");
+	        PTO_ASSERT(CeilDivision(src0.GetValidCol(), 8) == dst.GetValidCol(),
+	            "Number of dst valid columns must equal ceil(src valid col / 8) for packed masks.");
+
+	        const unsigned validRow = src0.GetValidRow();
+	        const unsigned validCol = src0.GetValidCol();
+	        const unsigned validMaskCol = dst.GetValidCol();
+
+	        using ScalarT = typename TileDataSrc0::DType;
+	        const ScalarT scalar = static_cast<ScalarT>(src1);
+
+	        TCmpsScalarNpu<TileDataDst, TileDataSrc0, ScalarT>(
+	            dst.data(), src0.data(), scalar, cmpMode, validRow, validCol, validMaskCol);
+	    }
 }
 #endif

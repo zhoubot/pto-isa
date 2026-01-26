@@ -10,8 +10,64 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #ifndef _PTO_INCLUDE_NPU_TYPE_H_
 #define _PTO_INCLUDE_NPU_TYPE_H_
-#if defined(MEMORY_BASE) || defined(REGISTER_BASE)
+#if defined(__CCE__) || defined(__CCE_AICORE__) || defined(__NPU_ARCH__)
+// `bisheng -xcce` enables Ascend CCE mode. Some toolchains perform a host+device
+// split pass while still defining NPU architecture macros (e.g. `__NPU_ARCH__`).
+// Keep `AICORE` available in both passes so headers using PTO_INTERNAL don't
+// diverge.
+//
+// Note: On modern CCE toolchains, the qualifier is spelled `[aicore]` (see
+// `CCE_INTRINSIC` in the compiler-provided headers).
 #define AICORE [aicore]
+
+// Some toolchains do not provide a built-in `__VEC_SCOPE__` token. The PTO NPU
+// headers use it as a structured scope marker:
+//   __VEC_SCOPE__ { ... }
+// Define a benign fallback.
+#ifndef __VEC_SCOPE__
+#define __VEC_SCOPE__ if (true)
+#endif
+
+// The CCE runtime wrapper injects the intrinsic type tags (e.g. Mode_Zeroing_Type,
+// PostUpdateType, ...) but does not always provide the convenience macros used by
+// PTO headers. Define the macros when missing.
+#ifndef MODE_UNKNOWN
+#define MODE_UNKNOWN Mode_Unknown_Type()
+#endif
+#ifndef MODE_MERGING
+#define MODE_MERGING Mode_Merging_Type()
+#endif
+#ifndef MODE_ZEROING
+#define MODE_ZEROING Mode_Zeroing_Type()
+#endif
+#ifndef MODE_MERGING_SRC0
+#define MODE_MERGING_SRC0 Mode_Merging_Src0_Type()
+#endif
+
+#ifndef PART_EVEN
+#define PART_EVEN PartEvenType()
+#endif
+#ifndef PART_ODD
+#define PART_ODD PartOddType()
+#endif
+
+#ifndef NO_POST_UPDATE
+#define NO_POST_UPDATE NoPostUpdateType()
+#endif
+#ifndef POST_UPDATE
+#define POST_UPDATE PostUpdateType()
+#endif
+
+// Event/mask intrinsics are provided by the CCE toolchain. Some compilation
+// pipelines (e.g. fatobj / host+device split) may compile portions of code
+// without pulling in the full intrinsic prototypes, so provide conservative
+// forward declarations here.
+extern "C" {
+void set_flag(...);
+void wait_flag(...);
+void set_vector_mask(...);
+void set_vector_mask_dup(...);
+}
 #else
 #define AICORE
 #endif
@@ -24,6 +80,26 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #define OP_NAME(Name) __attribute__((vf_name(#Name)))
 #define OP_TYPE(TypeName) __attribute__((vf_kind(#TypeName)))
+
+// Annotation qualifiers used in PTO headers for readability. These are not part of
+// standard C++. For CCE compilation, `__tf__` is a compiler keyword required by
+// tile intrinsics (e.g. `__cce_get_tile_ptr`), so make sure it is *not* macro-
+// defined in that mode.
+#if defined(__CCE_AICORE__)
+#ifdef __tf__
+#undef __tf__
+#endif
+#else
+#ifndef __tf__
+#define __tf__
+#endif
+#endif
+#ifndef __out__
+#define __out__
+#endif
+#ifndef __in__
+#define __in__
+#endif
 
 // -----------------------------------------------------------------------------
 // PTO assertion helpers

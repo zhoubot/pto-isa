@@ -117,5 +117,54 @@ namespace pto {
                 (dst.data(), src.data(), tmp.data(), validRow, validCol);
         }  
     }
+
+    template <typename T, typename TileDataDst, typename TileDataSrc, int srcstride, int dststride>
+    __tf__ PTO_INTERNAL void TColSumNoTmp(typename TileDataDst::TileDType __out__ dst,
+                                         typename TileDataSrc::TileDType __in__ src,
+                                         int validRow, int validCol) {
+        __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
+        __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
+
+        constexpr int DTypeSize = sizeof(T);
+        int lenBurst = (validCol * DTypeSize + BLOCK_BYTE_SIZE - 1) / BLOCK_BYTE_SIZE;
+
+        if (validRow == 1) {
+            copy_ubuf_to_ubuf(dstPtr, srcPtr, 0, 1, lenBurst, 0, 0);
+            pipe_barrier(PIPE_V);
+            return;
+        }
+
+        copy_ubuf_to_ubuf(dstPtr, srcPtr, 0, 1, lenBurst, 0, 0);
+        pipe_barrier(PIPE_V);
+
+        SequentialSum<T, srcstride, dststride>(dstPtr, srcPtr, validRow, validCol);
+    }
+
+    template <typename TileDataDst, typename TileDataSrc>
+    PTO_INTERNAL void TCOLSUM_IMPL(TileDataDst &dst, TileDataSrc &src) {
+        using T = typename TileDataSrc::DType;
+        static_assert(TileDataDst::Loc == pto::TileType::Vec && TileDataSrc::Loc == pto::TileType::Vec,
+            "Fix: TCOLSUM only support Vec Tile");
+        static_assert(TileDataSrc::isRowMajor && TileDataSrc::SFractal == SLayout::NoneBox,
+            "Fix: TCOLSUM only support Nd fractal Tile");
+        static_assert(TileDataDst::isRowMajor && TileDataDst::SFractal == SLayout::NoneBox,
+            "Fix: TCOLSUM only support Nd fractal Tile");
+        static_assert(std::is_same_v<T, half> || std::is_same_v<T, float> ||
+                      std::is_same_v<T, int16_t> || std::is_same_v<T, int32_t>,
+            "Fix: TCOLSUM input data type is not supported by this instruction.");
+        static_assert(std::is_same_v<typename TileDataDst::DType, T>,
+            "Fix: TCOLSUM input data type must be consistent with the output data type.");
+        PTO_ASSERT(src.GetValidCol() == dst.GetValidCol(),
+            "Fix: TCOLSUM input/output valid col must be consistent.");
+
+        if (src.GetValidRow() == 0 || src.GetValidCol() == 0) {
+            return;
+        }
+        int validRow = src.GetValidRow();
+        int validCol = src.GetValidCol();
+        constexpr int srcstride = TileDataSrc::RowStride;
+        constexpr int dststride = TileDataDst::RowStride;
+        TColSumNoTmp<T, TileDataDst, TileDataSrc, srcstride, dststride>(dst.data(), src.data(), validRow, validCol);
+    }
 }
 #endif

@@ -202,28 +202,48 @@ template <typename TileRes, typename TileLeft, typename TileLeftScale, typename 
 PTO_INTERNAL void TMATMUL_MX_IMPL(
     TileRes &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix, TileRightScale &bScaleMatrix)
 {
-    uint16_t m = aMatrix.GetValidRow();
-    uint16_t k = aMatrix.GetValidCol();
-    uint16_t n = bMatrix.GetValidCol();
-    CheckDynamicMmad(m, k, n);
+    using AType = typename TileLeft::DType;
+    using BType = typename TileRight::DType;
+    constexpr bool isMx = isSupportedFp4Combo<AType, BType> || isSupportedFp8Combo<AType, BType>;
 
-    CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
+    if constexpr (isMx) {
+        uint16_t m = aMatrix.GetValidRow();
+        uint16_t k = aMatrix.GetValidCol();
+        uint16_t n = bMatrix.GetValidCol();
+        CheckDynamicMmad(m, k, n);
 
-    TMatmulMx<TileRes, TileLeft, TileRight, false, true>(cMatrix.data(), aMatrix.data(), bMatrix.data(), m, k, n);
+        CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
+
+        TMatmulMx<TileRes, TileLeft, TileRight, false, true>(cMatrix.data(), aMatrix.data(), bMatrix.data(), m, k, n);
+    } else {
+        (void)aScaleMatrix;
+        (void)bScaleMatrix;
+        TMATMUL_IMPL(cMatrix, aMatrix, bMatrix);
+    }
 }
 
 template <typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
 PTO_INTERNAL void TMATMUL_MX_IMPL(TileRes &cOutMatrix, TileRes &cInMatrix, TileLeft &aMatrix,
     TileLeftScale &aScaleMatrix, TileRight &bMatrix, TileRightScale &bScaleMatrix)
 {
-    uint16_t m = aMatrix.GetValidRow();
-    uint16_t k = aMatrix.GetValidCol();
-    uint16_t n = bMatrix.GetValidCol();
-    CheckDynamicMmad(m, k, n);
+    using AType = typename TileLeft::DType;
+    using BType = typename TileRight::DType;
+    constexpr bool isMx = isSupportedFp4Combo<AType, BType> || isSupportedFp8Combo<AType, BType>;
 
-    CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
+    if constexpr (isMx) {
+        uint16_t m = aMatrix.GetValidRow();
+        uint16_t k = aMatrix.GetValidCol();
+        uint16_t n = bMatrix.GetValidCol();
+        CheckDynamicMmad(m, k, n);
 
-    TMatmulMx<TileRes, TileLeft, TileRight, false, false>(cOutMatrix.data(), aMatrix.data(), bMatrix.data(), m, k, n);
+        CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
+
+        TMatmulMx<TileRes, TileLeft, TileRight, false, false>(cOutMatrix.data(), aMatrix.data(), bMatrix.data(), m, k, n);
+    } else {
+        (void)aScaleMatrix;
+        (void)bScaleMatrix;
+        TMATMUL_ACC_IMPL(cOutMatrix, cInMatrix, aMatrix, bMatrix);
+    }
 }
 
 template <typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale,
@@ -231,17 +251,27 @@ template <typename TileRes, typename TileLeft, typename TileLeftScale, typename 
 PTO_INTERNAL void TMATMUL_MX_IMPL(TileRes &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix,
     TileRightScale &bScaleMatrix, TileBias &biasData)
 {
-    CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
-    static_assert(std::is_same_v<typename TileBias::DType, float>, "TMatmulMX:No supported bias data type.");
-    static_assert((TileBias::Loc == TileType::Bias) && (TileBias::Rows == 1), "TMatmulMX:TileBias must be single row.");
+    using AType = typename TileLeft::DType;
+    using BType = typename TileRight::DType;
+    constexpr bool isMx = isSupportedFp4Combo<AType, BType> || isSupportedFp8Combo<AType, BType>;
 
-    uint16_t m = aMatrix.GetValidRow();
-    uint16_t k = aMatrix.GetValidCol();
-    uint16_t n = bMatrix.GetValidCol();
-    CheckDynamicMmad(m, k, n);
+    if constexpr (isMx) {
+        CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
+        static_assert(std::is_same_v<typename TileBias::DType, float>, "TMatmulMX:No supported bias data type.");
+        static_assert((TileBias::Loc == TileType::Bias) && (TileBias::Rows == 1), "TMatmulMX:TileBias must be single row.");
 
-    TMatmulMxBias<TileRes, TileLeft, TileRight, true, false>(
-        cMatrix.data(), aMatrix.data(), bMatrix.data(), biasData.data(), m, k, n);
+        uint16_t m = aMatrix.GetValidRow();
+        uint16_t k = aMatrix.GetValidCol();
+        uint16_t n = bMatrix.GetValidCol();
+        CheckDynamicMmad(m, k, n);
+
+        TMatmulMxBias<TileRes, TileLeft, TileRight, true, false>(
+            cMatrix.data(), aMatrix.data(), bMatrix.data(), biasData.data(), m, k, n);
+    } else {
+        (void)aScaleMatrix;
+        (void)bScaleMatrix;
+        TMATMUL_BIAS_IMPL(cMatrix, aMatrix, bMatrix, biasData);
+    }
 }
 } // namespace pto
 #endif

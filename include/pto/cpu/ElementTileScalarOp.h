@@ -11,6 +11,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #ifndef ELEMENT_TILE_SCLAR_OP_HPP
 #define ELEMENT_TILE_SCLAR_OP_HPP
 
+#include <type_traits>
+
 #include "pto/cpu/ElementOp.h"
 #include "pto/cpu/parallel.hpp"
 
@@ -117,6 +119,12 @@ namespace pto {
     }
 
     template <typename tile_shape>
+    PTO_INTERNAL void TREMS_IMPL(tile_shape &dst, tile_shape &src, typename tile_shape::DType scalar, tile_shape &tmp) {
+        (void)tmp;
+        TREMS_IMPL(dst, src, scalar);
+    }
+
+    template <typename tile_shape>
     PTO_INTERNAL void TMAXS_IMPL(tile_shape &dst, tile_shape &src, typename tile_shape::DType scalar) {
         unsigned row = dst.GetValidRow();
         unsigned col = dst.GetValidCol();
@@ -148,6 +156,96 @@ namespace pto {
     PTO_INTERNAL void TXORS_IMPL(tile_shape &dst, tile_shape &src, typename tile_shape::DType scalar, tile_shape &tmp) {
         (void)tmp;
         TXORS_IMPL(dst, src, scalar);
+    }
+
+    template <typename tile_shape>
+    PTO_INTERNAL void TSHLS_IMPL(tile_shape &dst, tile_shape &src, typename tile_shape::DType scalar) {
+        using DType = typename tile_shape::DType;
+        static_assert(std::is_integral_v<DType>, "TSHLS: expected integral dtype");
+        unsigned validRow = dst.GetValidRow();
+        unsigned validCol = dst.GetValidCol();
+        if constexpr (tile_shape::SFractal == SLayout::NoneBox) {
+            if constexpr (tile_shape::isRowMajor) {
+                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                    const std::size_t base = r * tile_shape::Cols;
+                    PTO_CPU_VECTORIZE_LOOP
+                    for (std::size_t c = 0; c < validCol; ++c) {
+                        const std::size_t idx = base + c;
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] << scalar);
+                    }
+                });
+            } else {
+                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                    const std::size_t base = c * tile_shape::Rows;
+                    PTO_CPU_VECTORIZE_LOOP
+                    for (std::size_t r = 0; r < validRow; ++r) {
+                        const std::size_t idx = base + r;
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] << scalar);
+                    }
+                });
+            }
+        } else {
+            if constexpr (tile_shape::isRowMajor) {
+                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                    for (std::size_t c = 0; c < validCol; ++c) {
+                        const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] << scalar);
+                    }
+                });
+            } else {
+                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                    for (std::size_t r = 0; r < validRow; ++r) {
+                        const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] << scalar);
+                    }
+                });
+            }
+        }
+    }
+
+    template <typename tile_shape>
+    PTO_INTERNAL void TSHRS_IMPL(tile_shape &dst, tile_shape &src, typename tile_shape::DType scalar) {
+        using DType = typename tile_shape::DType;
+        static_assert(std::is_integral_v<DType>, "TSHRS: expected integral dtype");
+        unsigned validRow = dst.GetValidRow();
+        unsigned validCol = dst.GetValidCol();
+        if constexpr (tile_shape::SFractal == SLayout::NoneBox) {
+            if constexpr (tile_shape::isRowMajor) {
+                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                    const std::size_t base = r * tile_shape::Cols;
+                    PTO_CPU_VECTORIZE_LOOP
+                    for (std::size_t c = 0; c < validCol; ++c) {
+                        const std::size_t idx = base + c;
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] >> scalar);
+                    }
+                });
+            } else {
+                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                    const std::size_t base = c * tile_shape::Rows;
+                    PTO_CPU_VECTORIZE_LOOP
+                    for (std::size_t r = 0; r < validRow; ++r) {
+                        const std::size_t idx = base + r;
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] >> scalar);
+                    }
+                });
+            }
+        } else {
+            if constexpr (tile_shape::isRowMajor) {
+                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                    for (std::size_t c = 0; c < validCol; ++c) {
+                        const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] >> scalar);
+                    }
+                });
+            } else {
+                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                    for (std::size_t r = 0; r < validRow; ++r) {
+                        const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                        dst.data()[idx] = static_cast<DType>(src.data()[idx] >> scalar);
+                    }
+                });
+            }
+        }
     }
 
     template <typename tile_shape>

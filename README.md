@@ -1,6 +1,74 @@
+<p align="center">
+  <img src="assets/pto_logo.svg" alt="PTO logo" width="180" />
+</p>
+
 # PTO ISA Compiler
 
-**Portable Tile Operations (PTO)** - A Domain-Specific Language and Compiler for Heterogeneous Accelerators
+Parallel Tile Operations (PTO) — a small tile-ISA + compiler toolchain for heterogeneous accelerators.
+
+## PTO-AS (`ptoas`) Quickstart
+
+This repo includes the **PTO-AS toolchain**:
+
+- `bin/ptoas`: wrapper that dispatches to an OS/arch-specific `ptoas` binary
+- `ptoas/`: PTO-AS sources + Python frontend (`ptoas/python/`) + tools (`ptoas/tools/`)
+- `kernels/python/`: Python → PTO-AS → `ptoas` → run/compare (CPU ref; optional NPU)
+
+### 0) `ptoas` binary
+
+- Linux aarch64: `bin/linux-aarch64/ptoas` is included.
+- macOS aarch64: build `ptoas` and place it at `bin/macos-aarch64/ptoas` (see `bin/README.md` and `ptoas/mlir/README.md`).
+
+### 1) CPU-only (Ubuntu/macOS aarch64)
+
+```bash
+python3 ptoas/tools/run_e2e_cpu.py --ptoas ./bin/ptoas --outdir /tmp/ptoas_e2e_cpu
+```
+
+### 2) Ascend NPU (Ubuntu aarch64)
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+
+python3 ptoas/tools/run_e2e_npu.py \
+  --ptoas ./bin/ptoas \
+  --ascend-home $ASCEND_HOME_PATH \
+  --run-mode npu \
+  --device 0 \
+  --block-dim 1 \
+  --outdir /tmp/ptoas_e2e_npu
+```
+
+### 3) Regression subset
+
+```bash
+python3 kernels/python/run_regression.py \
+  --ptoas ./bin/ptoas \
+  --ascend-home $ASCEND_HOME_PATH \
+  --run-mode npu \
+  --device 0 \
+  --block-dim 1 \
+  --cases add16,gemm16,rowmax16,softmax16
+```
+
+For simulator runs, use `--run-mode sim --soc a3`.
+
+## Old PTOFunctionBuilder → PTO-AS (GEMM16)
+
+The original frontend lives under `src/compile` (`PTOFunctionBuilder`). For a small end-to-end GEMM example, export it to the **new-format PTO-AS** and compile/run it via `ptoas`:
+
+```bash
+# NPU (Ubuntu aarch64 + Ascend)
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 scripts/ptoas/regenerate_gemm16_pto_test.py --run both --ptoas ./bin/ptoas --device 0
+
+# CPU-only (Ubuntu/macOS aarch64)
+python3 scripts/ptoas/regenerate_gemm16_pto_test.py --run cpu --ptoas ./bin/ptoas
+```
+
+Outputs are written under `build/pto_from_pto/`:
+- `build/pto_from_pto/output_pto/gemm16_pto_test/gemm16.pto`
+- `build/pto_from_pto/output_ascend_a2a3/gemm16_pto_test/gemm16.cpp` (+ `gemm16.bin`)
 
 ## Overview
 
