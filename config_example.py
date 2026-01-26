@@ -1263,7 +1263,7 @@ def analyze_task_dump(dump_file):
         
         # Count by type if available
         lines = content.split('\\n')
-        task_types = {{{{}}}}
+        task_types = dict()
         for line in lines:
             if "func=" in line:
                 # Extract function name
@@ -1607,7 +1607,7 @@ def run_accuracy_test():
         return True
     
     # Read parameters
-    params = {{{{}}}}
+    params = dict()
     if os.path.exists(params_file):
         with open(params_file, 'r') as f:
             for line in f:
