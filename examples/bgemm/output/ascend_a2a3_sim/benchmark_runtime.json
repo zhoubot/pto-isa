@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-26T14:49:09.957873",
+  "timestamp": "2026-01-26T15:04:09.547083",
   "benchmark_type": "runtime",
   "platform": "ascend_a2a3_sim",
   "seq_len_range": {
@@ -13,149 +13,149 @@
       "seq_len": 1024,
       "num_tiles": 32,
       "tasks_submitted": 480,
-      "avg_time_ms": 11.327041000186,
-      "min_time_ms": 11.327041000186,
-      "max_time_ms": 11.327041000186,
-      "tasks_per_ms": 42.37646884054873
+      "avg_time_ms": 13.041166000220983,
+      "min_time_ms": 13.041166000220983,
+      "max_time_ms": 13.041166000220983,
+      "tasks_per_ms": 36.80652481471874
     },
     {
       "seq_len": 2048,
       "num_tiles": 64,
       "tasks_submitted": 960,
-      "avg_time_ms": 13.082416000543162,
-      "min_time_ms": 13.082416000543162,
-      "max_time_ms": 13.082416000543162,
-      "tasks_per_ms": 73.38094125428684
+      "avg_time_ms": 19.37358299983316,
+      "min_time_ms": 19.37358299983316,
+      "max_time_ms": 19.37358299983316,
+      "tasks_per_ms": 49.55201110751002
     },
     {
       "seq_len": 3072,
       "num_tiles": 96,
       "tasks_submitted": 1440,
-      "avg_time_ms": 15.242417000081332,
-      "min_time_ms": 15.242417000081332,
-      "max_time_ms": 15.242417000081332,
-      "tasks_per_ms": 94.47320592215239
+      "avg_time_ms": 18.49591700010933,
+      "min_time_ms": 18.49591700010933,
+      "max_time_ms": 18.49591700010933,
+      "tasks_per_ms": 77.85502065085436
     },
     {
       "seq_len": 4096,
       "num_tiles": 128,
       "tasks_submitted": 1920,
-      "avg_time_ms": 17.374125000060303,
-      "min_time_ms": 17.374125000060303,
-      "max_time_ms": 17.374125000060303,
-      "tasks_per_ms": 110.50916233153244
+      "avg_time_ms": 76.28933400064852,
+      "min_time_ms": 76.28933400064852,
+      "max_time_ms": 76.28933400064852,
+      "tasks_per_ms": 25.16734514924037
     },
     {
       "seq_len": 5120,
       "num_tiles": 160,
       "tasks_submitted": 2400,
-      "avg_time_ms": 20.64933299971017,
-      "min_time_ms": 20.64933299971017,
-      "max_time_ms": 20.64933299971017,
-      "tasks_per_ms": 116.22651443674651
+      "avg_time_ms": 36.288541000430996,
+      "min_time_ms": 36.288541000430996,
+      "max_time_ms": 36.288541000430996,
+      "tasks_per_ms": 66.1365801389341
     },
     {
       "seq_len": 6144,
       "num_tiles": 192,
       "tasks_submitted": 2880,
-      "avg_time_ms": 27.577124999879743,
-      "min_time_ms": 27.577124999879743,
-      "max_time_ms": 27.577124999879743,
-      "tasks_per_ms": 104.43438175707435
+      "avg_time_ms": 33.206457999767736,
+      "min_time_ms": 33.206457999767736,
+      "max_time_ms": 33.206457999767736,
+      "tasks_per_ms": 86.73011737717236
     },
     {
       "seq_len": 7168,
       "num_tiles": 224,
       "tasks_submitted": 3360,
-      "avg_time_ms": 29.422042000078363,
-      "min_time_ms": 29.422042000078363,
-      "max_time_ms": 29.422042000078363,
-      "tasks_per_ms": 114.20009528879916
+      "avg_time_ms": 28.55458300018654,
+      "min_time_ms": 28.55458300018654,
+      "max_time_ms": 28.55458300018654,
+      "tasks_per_ms": 117.66937727572663
     },
     {
       "seq_len": 8192,
       "num_tiles": 256,
       "tasks_submitted": 3840,
-      "avg_time_ms": 32.75166599996737,
-      "min_time_ms": 32.75166599996737,
-      "max_time_ms": 32.75166599996737,
-      "tasks_per_ms": 117.24594406903836
+      "avg_time_ms": 35.60779199960962,
+      "min_time_ms": 35.60779199960962,
+      "max_time_ms": 35.60779199960962,
+      "tasks_per_ms": 107.84156456660102
     },
     {
       "seq_len": 9216,
       "num_tiles": 288,
       "tasks_submitted": 4320,
-      "avg_time_ms": 29.641750000337197,
-      "min_time_ms": 29.641750000337197,
-      "max_time_ms": 29.641750000337197,
-      "tasks_per_ms": 145.74038307289067
+      "avg_time_ms": 36.720834000334435,
+      "min_time_ms": 36.720834000334435,
+      "max_time_ms": 36.720834000334435,
+      "tasks_per_ms": 117.64438683393345
     },
     {
       "seq_len": 10240,
       "num_tiles": 320,
       "tasks_submitted": 4800,
-      "avg_time_ms": 32.81829199931963,
-      "min_time_ms": 32.81829199931963,
-      "max_time_ms": 32.81829199931963,
-      "tasks_per_ms": 146.25989677035938
+      "avg_time_ms": 38.45812500003376,
+      "min_time_ms": 38.45812500003376,
+      "max_time_ms": 38.45812500003376,
+      "tasks_per_ms": 124.81107698297268
     },
     {
       "seq_len": 11264,
       "num_tiles": 352,
       "tasks_submitted": 5280,
-      "avg_time_ms": 36.104292000345595,
-      "min_time_ms": 36.104292000345595,
-      "max_time_ms": 36.104292000345595,
-      "tasks_per_ms": 146.24300069225728
+      "avg_time_ms": 43.40612499981944,
+      "min_time_ms": 43.40612499981944,
+      "max_time_ms": 43.40612499981944,
+      "tasks_per_ms": 121.64181898342603
     },
     {
       "seq_len": 12288,
       "num_tiles": 384,
       "tasks_submitted": 5760,
-      "avg_time_ms": 40.51679099939065,
-      "min_time_ms": 40.51679099939065,
-      "max_time_ms": 40.51679099939065,
-      "tasks_per_ms": 142.16328238054754
+      "avg_time_ms": 40.598749999844586,
+      "min_time_ms": 40.598749999844586,
+      "max_time_ms": 40.598749999844586,
+      "tasks_per_ms": 141.87628929516424
     },
     {
       "seq_len": 13312,
       "num_tiles": 416,
       "tasks_submitted": 6240,
-      "avg_time_ms": 42.16866699971433,
-      "min_time_ms": 42.16866699971433,
-      "max_time_ms": 42.16866699971433,
-      "tasks_per_ms": 147.97716987454862
+      "avg_time_ms": 47.130165999988094,
+      "min_time_ms": 47.130165999988094,
+      "max_time_ms": 47.130165999988094,
+      "tasks_per_ms": 132.39927905201048
     },
     {
       "seq_len": 14336,
       "num_tiles": 448,
       "tasks_submitted": 6720,
-      "avg_time_ms": 42.343082999650505,
-      "min_time_ms": 42.343082999650505,
-      "max_time_ms": 42.343082999650505,
-      "tasks_per_ms": 158.70360691628113
+      "avg_time_ms": 43.2074169993939,
+      "min_time_ms": 43.2074169993939,
+      "max_time_ms": 43.2074169993939,
+      "tasks_per_ms": 155.52885283779557
     },
     {
       "seq_len": 15360,
       "num_tiles": 480,
       "tasks_submitted": 7200,
-      "avg_time_ms": 43.92845899928943,
-      "min_time_ms": 43.92845899928943,
-      "max_time_ms": 43.92845899928943,
-      "tasks_per_ms": 163.90285851175577
+      "avg_time_ms": 53.4243330002937,
+      "min_time_ms": 53.4243330002937,
+      "max_time_ms": 53.4243330002937,
+      "tasks_per_ms": 134.77004944470562
     },
     {
       "seq_len": 16384,
       "num_tiles": 512,
       "tasks_submitted": 7680,
-      "avg_time_ms": 47.6787500001592,
-      "min_time_ms": 47.6787500001592,
-      "max_time_ms": 47.6787500001592,
-      "tasks_per_ms": 161.07804839628466
+      "avg_time_ms": 45.87166700002854,
+      "min_time_ms": 45.87166700002854,
+      "max_time_ms": 45.87166700002854,
+      "tasks_per_ms": 167.42360812819865
     }
   ],
   "summary": {
-    "avg_execution_time_ms": 30.16414056241956,
-    "avg_tasks_per_ms": 124.05718503219398
+    "avg_execution_time_ms": 38.10467443753396,
+    "avg_tasks_per_ms": 103.99086891493528
   }
 }
