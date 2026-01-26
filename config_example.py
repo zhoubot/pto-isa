@@ -1164,6 +1164,7 @@ def compile_ascend_a2a3(code_dir):
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "a2a3_runtime.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_host.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_so_loader.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_binary_loader.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "core", "a2a3_core_worker.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "orchestration", "a2a3_orchestration.c"),
     ]

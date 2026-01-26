@@ -77,8 +77,35 @@ int64_t get_incore_cycle_cost_sim(const char* func_name, int64_t tile_size) {
 // Orchestration Function: bgemm_dynamic
 // Generates task graph for Ascend A2/A3 cycle-accurate simulation
 // =============================================================================
+//
+// Parameters passed via void** array:
+//   [0] A (float*)
+//   [1] B (float*)
+//   [2] C (float*)
+//   [3] P0 (float*)
+//   [4] P1 (float*)
+//   [5] P2 (float*)
+//   [6] seq_len (int32_t)
+//   [7] tile_rows (int32_t)
+//   [8] num_tiles (int32_t)
+//   [9] zero (float)
+// =============================================================================
 
-void bgemm_dynamic(PTORuntime* rt, float* A, float* B, float* C, float* P0, float* P1, float* P2, int32_t seq_len, int32_t tile_rows, int32_t num_tiles, float zero) {
+void bgemm_dynamic(PTORuntime* rt, void* user_data) {
+    // Unpack parameters from void** array
+    void** params = (void**)user_data;
+    (void)params;  // Suppress unused warning if no params
+
+    float* A = (float*)params[0];
+    float* B = (float*)params[1];
+    float* C = (float*)params[2];
+    float* P0 = (float*)params[3];
+    float* P1 = (float*)params[4];
+    float* P2 = (float*)params[5];
+    int32_t seq_len = *(int32_t*)params[6];
+    int32_t tile_rows = *(int32_t*)params[7];
+    int32_t num_tiles = *(int32_t*)params[8];
+    float zero = *(float*)params[9];
 
     int32_t _task_id = 0;
 
@@ -292,16 +319,29 @@ int main(int argc, char** argv) {
     float* P0 = (float*)calloc(1024 * 1024, sizeof(float));
     float* P1 = (float*)calloc(1024 * 1024, sizeof(float));
     float* P2 = (float*)calloc(1024 * 1024, sizeof(float));
-    int32_t seq_len = 16;  // Default, override with argv[1]
-    int32_t tile_rows = 16;  // Default, override with argv[2]
-    int32_t num_tiles = 16;  // Default, override with argv[3]
-    float zero = 1.0f;  // Default test value
+    int32_t seq_len = 16;  // Default
+    int32_t tile_rows = 16;  // Default
+    int32_t num_tiles = 16;  // Default
+    float zero = 1.0f;  // Default
 
     // Parse command line arguments for integer parameters (with offset for --benchmark-only flag)
     if (argc > 1 + arg_offset) seq_len = atoi(argv[1 + arg_offset]);
     if (argc > 2 + arg_offset) tile_rows = atoi(argv[2 + arg_offset]);
     if (argc > 3 + arg_offset) num_tiles = atoi(argv[3 + arg_offset]);
     if (argc > 4 + arg_offset) zero = atoi(argv[4 + arg_offset]);
+
+    // Set up parameter array (void** for orchestration function)
+    void* user_data[10];
+    user_data[0] = (void*)A;
+    user_data[1] = (void*)B;
+    user_data[2] = (void*)C;
+    user_data[3] = (void*)P0;
+    user_data[4] = (void*)P1;
+    user_data[5] = (void*)P2;
+    user_data[6] = (void*)&seq_len;
+    user_data[7] = (void*)&tile_rows;
+    user_data[8] = (void*)&num_tiles;
+    user_data[9] = (void*)&zero;
 
     // Print configuration
     if (!benchmark_only) {
@@ -314,8 +354,8 @@ int main(int argc, char** argv) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
     
-    // Call orchestration function to build task graph
-    bgemm_dynamic(rt, A, B, C, P0, P1, P2, seq_len, tile_rows, num_tiles, zero);
+    // Call orchestration function to build task graph (using void** interface)
+    bgemm_dynamic(rt, (void*)user_data);
     
     clock_gettime(CLOCK_MONOTONIC, &end_time);
     double orch_time_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +

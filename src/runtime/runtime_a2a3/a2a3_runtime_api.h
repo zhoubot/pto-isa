@@ -245,13 +245,14 @@ bool a2a3_runtime_is_initialized(void);
 // =============================================================================
 
 #define A2A3_SUCCESS                 0
-#define A2A3_ERROR_INVALID_CONFIG   -1
-#define A2A3_ERROR_SO_LOAD_FAILED   -2
-#define A2A3_ERROR_FUNC_NOT_FOUND   -3
-#define A2A3_ERROR_MEMORY_ALLOC     -4
-#define A2A3_ERROR_THREAD_CREATE    -5
-#define A2A3_ERROR_NOT_INITIALIZED  -6
-#define A2A3_ERROR_ALREADY_INIT     -7
+#define A2A3_ERROR_INVALID_CONFIG     -1
+#define A2A3_ERROR_SO_LOAD_FAILED     -2
+#define A2A3_ERROR_FUNC_NOT_FOUND     -3
+#define A2A3_ERROR_MEMORY_ALLOC       -4
+#define A2A3_ERROR_THREAD_CREATE      -5
+#define A2A3_ERROR_NOT_INITIALIZED    -6
+#define A2A3_ERROR_ALREADY_INIT       -7
+#define A2A3_ERROR_BINARY_LOAD_FAILED -8
 
 /**
  * Get error message for error code.

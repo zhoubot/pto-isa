@@ -8,8 +8,8 @@ Configuration:
 - Binary Expansion: True
 - Task Dump: True
 - Task Graph PDF: True
-- Benchmark Orchestration: Enabled (tasks/ms)
-- Benchmark Runtime: Enabled (execution time)
+- Benchmark Orchestration: Disabled (tasks/ms)
+- Benchmark Runtime: Disabled (execution time)
 - Sequence Length: 1024 - 16384 tokens (step: 1024)
 - Accuracy Test: True
 - Simulation: True
@@ -45,8 +45,8 @@ CONFIG = {
     "enable_binary_expansion": True,
     "enable_task_dump": True,
     "enable_task_graph_pdf": True,
-    "benchmark_orchestration": True,  # tasks/ms without executing
-    "benchmark_runtime": True,              # actual execution time
+    "benchmark_orchestration": False,  # tasks/ms without executing
+    "benchmark_runtime": False,              # actual execution time
     "test_seq_len_min": 1024,
     "test_seq_len_max": 16384,
     "test_seq_len_step": 1024,
@@ -167,6 +167,10 @@ def generate_code():
                 module=module
             )
             
+            # Create PTO assembly compiler for generating .pto files
+            from compile.pto_compile import PTOModuleCompiler
+            pto_compiler = PTOModuleCompiler()
+            
             for func_name, prog in module.functions.items():
                 # Determine function type
                 is_incore = getattr(prog, 'is_in_core', True)
@@ -208,6 +212,17 @@ def generate_code():
                 with open(output_file, 'w') as f:
                     f.write(code)
                 print(f"    -> {output_file}")
+                
+                # Generate .pto file for InCore functions (PTO assembly text format)
+                if is_incore:
+                    try:
+                        pto_code = pto_compiler.compile_function(prog)
+                        pto_file = os.path.join(target_dir, f"{func_name}.pto")
+                        with open(pto_file, 'w') as f:
+                            f.write(pto_code)
+                        print(f"    -> {pto_file}")
+                    except Exception as e:
+                        print(f"    Warning: Could not generate .pto for {func_name}: {e}")
         elif hasattr(example_module, 'main'):
             print("  Running example main()...")
             example_module.main()
@@ -392,7 +407,7 @@ static int verify_results(const float* expected, const float* actual, size_t cou
         float diff = expected[i] - actual[i];
         if (diff < 0) diff = -diff;
         if (diff > epsilon) {
-            printf("  Mismatch at [%zu]: expected %.6f, got %.6f\n", 
+            printf("  Mismatch at [%zu]: expected %.6f, got %.6f\\n", 
                    i, expected[i], actual[i]);
             errors++;
         }
@@ -405,9 +420,9 @@ static int verify_results(const float* expected, const float* actual, size_t cou
 // =============================================================================
 
 int main(int argc, char** argv) {
-    printf("=======================================================\n");
-    printf("  PTO A2A3 Runtime Test: """ + example_name + """\n");
-    printf("=======================================================\n\n");
+    printf("=======================================================\\n");
+    printf("  PTO A2A3 Runtime Test: """ + example_name + """\\n");
+    printf("=======================================================\\n\\n");
     
     int ret;
     double start_time, end_time;
@@ -415,13 +430,14 @@ int main(int argc, char** argv) {
     // =========================================================================
     // 1. Configure Runtime
     // =========================================================================
-    printf("[1/6] Configuring runtime...\n");
+    printf("[1/6] Configuring runtime...\\n");
     
     A2A3RuntimeConfig config;
     a2a3_config_init_defaults(&config);
     
     // Set paths to compiled .so files
     config.orchestration_so_path = "generated_code/orchestration/lib_orchestration.so";
+    config.orchestration_func_name = """ + '"' + example_name + """_dynamic";  // Orchestration function name
     config.incore_aiv_dir = "generated_code/incore_aiv/";
     config.incore_aic_dir = "generated_code/incore_aic/";
     
@@ -433,41 +449,45 @@ int main(int argc, char** argv) {
     
     config.debug_enabled = true;
     
-    printf("  Orchestration SO: %s\n", config.orchestration_so_path);
-    printf("  InCore AIV dir:   %s\n", config.incore_aiv_dir);
-    printf("  InCore AIC dir:   %s\n", config.incore_aic_dir);
-    printf("  Orch threads:     %d\n", config.num_orch_threads);
-    printf("  Dep threads:      %d\n", config.num_dep_threads);
-    printf("  AIV workers:      %d\n", config.num_aiv_workers);
-    printf("  AIC workers:      %d\n", config.num_aic_workers);
+    // DEBUG_ORCHESTRATION mode: Only run orchestration, skip task execution
+    // Set to false to test full execution with workers
+    config.debug_orchestration_only = false;  // Changed to false for full execution test
+    
+    printf("  Orchestration SO: %s\\n", config.orchestration_so_path);
+    printf("  InCore AIV dir:   %s\\n", config.incore_aiv_dir);
+    printf("  InCore AIC dir:   %s\\n", config.incore_aic_dir);
+    printf("  Orch threads:     %d\\n", config.num_orch_threads);
+    printf("  Dep threads:      %d\\n", config.num_dep_threads);
+    printf("  AIV workers:      %d\\n", config.num_aiv_workers);
+    printf("  AIC workers:      %d\\n", config.num_aic_workers);
     
     // =========================================================================
     // 2. Initialize Runtime
     // =========================================================================
-    printf("\n[2/6] Initializing runtime...\n");
+    printf("\\n[2/6] Initializing runtime...\\n");
     start_time = get_time_ms();
     
     ret = a2a3_runtime_init(&config);
     if (ret != A2A3_SUCCESS) {
-        fprintf(stderr, "ERROR: Failed to initialize runtime: %s\n",
+        fprintf(stderr, "ERROR: Failed to initialize runtime: %s\\n",
                 a2a3_runtime_error_string(ret));
         return 1;
     }
     
     end_time = get_time_ms();
-    printf("  Runtime initialized in %.2f ms\n", end_time - start_time);
+    printf("  Runtime initialized in %.2f ms\\n", end_time - start_time);
     
     // =========================================================================
     // 3. Allocate and Initialize Host Buffers
     // =========================================================================
-    printf("\n[3/6] Allocating host buffers...\n");
+    printf("\\n[3/6] Allocating host buffers...\\n");
     
     float* host_input = (float*)malloc(TEST_INPUT_SIZE);
     float* host_output = (float*)malloc(TEST_OUTPUT_SIZE);
     float* host_expected = (float*)malloc(TEST_OUTPUT_SIZE);  // For verification
     
     if (!host_input || !host_output || !host_expected) {
-        fprintf(stderr, "ERROR: Failed to allocate host buffers\n");
+        fprintf(stderr, "ERROR: Failed to allocate host buffers\\n");
         a2a3_runtime_finalize();
         return 1;
     }
@@ -476,13 +496,13 @@ int main(int argc, char** argv) {
     init_test_data(host_input, TEST_INPUT_SIZE / sizeof(float));
     memset(host_output, 0, TEST_OUTPUT_SIZE);
     
-    printf("  Input buffer:  %zu bytes\n", (size_t)TEST_INPUT_SIZE);
-    printf("  Output buffer: %zu bytes\n", (size_t)TEST_OUTPUT_SIZE);
+    printf("  Input buffer:  %zu bytes\\n", (size_t)TEST_INPUT_SIZE);
+    printf("  Output buffer: %zu bytes\\n", (size_t)TEST_OUTPUT_SIZE);
     
     // =========================================================================
     // 4. Copy Data to Device (copyToDevice)
     // =========================================================================
-    printf("\n[4/6] Copying data to device...\n");
+    printf("\\n[4/6] Copying data to device...\\n");
     start_time = get_time_ms();
     
     // Allocate device buffers
@@ -490,7 +510,7 @@ int main(int argc, char** argv) {
     void* dev_output = a2a3_runtime_malloc(TEST_OUTPUT_SIZE);
     
     if (!dev_input || !dev_output) {
-        fprintf(stderr, "ERROR: Failed to allocate device buffers\n");
+        fprintf(stderr, "ERROR: Failed to allocate device buffers\\n");
         free(host_input);
         free(host_output);
         free(host_expected);
@@ -501,7 +521,7 @@ int main(int argc, char** argv) {
     // Copy input to device
     ret = a2a3_runtime_copy_to_device(dev_input, host_input, TEST_INPUT_SIZE);
     if (ret != A2A3_SUCCESS) {
-        fprintf(stderr, "ERROR: copyToDevice failed: %s\n",
+        fprintf(stderr, "ERROR: copyToDevice failed: %s\\n",
                 a2a3_runtime_error_string(ret));
         a2a3_runtime_free(dev_input);
         a2a3_runtime_free(dev_output);
@@ -513,33 +533,52 @@ int main(int argc, char** argv) {
     }
     
     end_time = get_time_ms();
-    printf("  Data copied to device in %.2f ms\n", end_time - start_time);
+    printf("  Data copied to device in %.2f ms\\n", end_time - start_time);
     
     // =========================================================================
     // 5. Execute Orchestration Function
     // =========================================================================
-    printf("\n[5/6] Executing orchestration function...\n");
+    printf("\\n[5/6] Executing orchestration function...\\n");
     start_time = get_time_ms();
     
-    // Create user data structure to pass buffer pointers
-    struct {
-        void* input;
-        void* output;
-        size_t input_size;
-        size_t output_size;
-    } user_data = {
-        .input = dev_input,
-        .output = dev_output,
-        .input_size = TEST_INPUT_SIZE,
-        .output_size = TEST_OUTPUT_SIZE,
-    };
+    // Allocate additional device buffers for intermediate results
+    // For bgemm: A, B, C, P0, P1, P2 (6 matrix buffers)
+    size_t matrix_size = 64 * 128 * sizeof(float);  // Default tile size
+    void* dev_P0 = a2a3_runtime_malloc(TEST_OUTPUT_SIZE);
+    void* dev_P1 = a2a3_runtime_malloc(TEST_OUTPUT_SIZE);
+    void* dev_P2 = a2a3_runtime_malloc(TEST_OUTPUT_SIZE);
     
-    ret = a2a3_runtime_execute(&user_data);
+    // Set up scalar parameters
+    int32_t seq_len = 64;
+    int32_t tile_rows = 8;
+    int32_t num_tiles = 8;
+    float zero_val = 0.0f;
+    
+    // Create void** array to pass parameters to orchestration function
+    // Order must match orchestration function's parameter extraction
+    void* user_data[16];
+    user_data[0] = dev_input;    // A matrix
+    user_data[1] = (char*)dev_input + TEST_INPUT_SIZE/2;  // B matrix (second half of input)
+    user_data[2] = dev_output;   // C matrix (output)
+    user_data[3] = dev_P0;       // P0 intermediate
+    user_data[4] = dev_P1;       // P1 intermediate
+    user_data[5] = dev_P2;       // P2 intermediate
+    user_data[6] = &seq_len;     // seq_len scalar
+    user_data[7] = &tile_rows;   // tile_rows scalar
+    user_data[8] = &num_tiles;   // num_tiles scalar
+    user_data[9] = &zero_val;    // zero scalar
+    
+    printf("  Params: seq_len=%d, tile_rows=%d, num_tiles=%d\\n", seq_len, tile_rows, num_tiles);
+    
+    ret = a2a3_runtime_execute(user_data);
     if (ret != A2A3_SUCCESS) {
-        fprintf(stderr, "ERROR: Execution failed: %s\n",
+        fprintf(stderr, "ERROR: Execution failed: %s\\n",
                 a2a3_runtime_error_string(ret));
         a2a3_runtime_free(dev_input);
         a2a3_runtime_free(dev_output);
+        a2a3_runtime_free(dev_P0);
+        a2a3_runtime_free(dev_P1);
+        a2a3_runtime_free(dev_P2);
         free(host_input);
         free(host_output);
         free(host_expected);
@@ -548,43 +587,74 @@ int main(int argc, char** argv) {
     }
     
     end_time = get_time_ms();
-    printf("  Execution completed in %.2f ms\n", end_time - start_time);
+    printf("  Execution completed in %.2f ms\\n", end_time - start_time);
     
     // =========================================================================
     // 6. Copy Results from Device (copyFromDevice)
     // =========================================================================
-    printf("\n[6/6] Copying results from device...\n");
+    printf("\\n[6/6] Copying results from device...\\n");
     start_time = get_time_ms();
     
     ret = a2a3_runtime_copy_from_device(host_output, dev_output, TEST_OUTPUT_SIZE);
     if (ret != A2A3_SUCCESS) {
-        fprintf(stderr, "ERROR: copyFromDevice failed: %s\n",
+        fprintf(stderr, "ERROR: copyFromDevice failed: %s\\n",
                 a2a3_runtime_error_string(ret));
     }
     
     end_time = get_time_ms();
-    printf("  Data copied from device in %.2f ms\n", end_time - start_time);
+    printf("  Data copied from device in %.2f ms\\n", end_time - start_time);
     
     // =========================================================================
     // Print Statistics
     // =========================================================================
-    printf("\n");
+    printf("\\n");
     a2a3_runtime_print_stats();
+    
+    // =========================================================================
+    // Save Data for Python Accuracy Verification
+    // =========================================================================
+    printf("\\nSaving data for accuracy verification...\\n");
+    
+    FILE* f_input = fopen("accuracy_input.bin", "wb");
+    FILE* f_output = fopen("accuracy_output.bin", "wb");
+    FILE* f_params = fopen("accuracy_params.txt", "w");
+    
+    if (f_input && f_output && f_params) {
+        fwrite(host_input, 1, TEST_INPUT_SIZE, f_input);
+        fwrite(host_output, 1, TEST_OUTPUT_SIZE, f_output);
+        fprintf(f_params, "input_size=%zu\\n", (size_t)TEST_INPUT_SIZE);
+        fprintf(f_params, "output_size=%zu\\n", (size_t)TEST_OUTPUT_SIZE);
+        fprintf(f_params, "num_tiles=%d\\n", num_tiles);
+        fprintf(f_params, "tile_m=64\\n");
+        fprintf(f_params, "tile_n=128\\n");
+        fprintf(f_params, "tile_k=64\\n");
+        fprintf(f_params, "k_tiles=8\\n");
+        printf("  Saved: accuracy_input.bin, accuracy_output.bin, accuracy_params.txt\\n");
+    } else {
+        printf("  WARNING: Could not save accuracy data files\\n");
+    }
+    
+    if (f_input) fclose(f_input);
+    if (f_output) fclose(f_output);
+    if (f_params) fclose(f_params);
     
     // =========================================================================
     // Cleanup
     // =========================================================================
-    printf("Cleaning up...\n");
+    printf("\\nCleaning up...\\n");
     
     a2a3_runtime_free(dev_input);
     a2a3_runtime_free(dev_output);
+    a2a3_runtime_free(dev_P0);
+    a2a3_runtime_free(dev_P1);
+    a2a3_runtime_free(dev_P2);
     free(host_input);
     free(host_output);
     free(host_expected);
     
     a2a3_runtime_finalize();
     
-    printf("\nTest completed successfully!\n");
+    printf("\\nTest completed successfully!\\n");
     return 0;
 }
 """
@@ -700,7 +770,7 @@ def compile_ascend_a2a3(code_dir):
                 cmd = (
                     f"{ccec_path} -c -O3 -x cce -std=c++17 "
                     f"--cce-aicore-only --cce-aicore-arch=dav-c220-cube "
-                    f"-D__AIC__ "
+                    f"-D__AIC__ -DMEMORY_BASE "
                     f"-mllvm -cce-aicore-stack-size=0x8000 "
                     f"-mllvm -cce-aicore-function-stack-size=0x8000 "
                     f"-I{ROOT_DIR}/include "
@@ -736,7 +806,7 @@ def compile_ascend_a2a3(code_dir):
                 cmd = (
                     f"{ccec_path} -c -O3 -x cce -std=c++17 "
                     f"--cce-aicore-only --cce-aicore-arch=dav-c220-vec "
-                    f"-D__AIV__ "
+                    f"-D__AIV__ -DMEMORY_BASE "
                     f"-mllvm -cce-aicore-stack-size=0x8000 "
                     f"-mllvm -cce-aicore-function-stack-size=0x8000 "
                     f"-I{ROOT_DIR}/include "
@@ -762,7 +832,11 @@ def compile_ascend_a2a3(code_dir):
     # 4. Generate and compile test program
     print("\n  [4/4] Generating and compiling test program...")
     
-    example_name = os.path.basename(os.path.dirname(code_dir))
+    # Get example name from directory structure (e.g., "bgemm" from .../bgemm/output/platform/generated_code)
+    platform_dir = os.path.dirname(code_dir)  # .../bgemm/output/platform
+    output_dir = os.path.dirname(platform_dir)  # .../bgemm/output
+    example_dir = os.path.dirname(output_dir)  # .../bgemm
+    example_name = os.path.basename(example_dir)  # bgemm
     test_file = generate_test_program_template(code_dir, example_name)
     print(f"    Generated: {test_file}")
     
@@ -781,12 +855,17 @@ def compile_ascend_a2a3(code_dir):
         f"-I{code_dir}",
     ]
     
+    # Add CANN SDK include path if available
+    if cann_available:
+        include_paths.append(f"-I{ascend_home}/include")
+    
     # Find all runtime source files needed
     runtime_sources = [
         os.path.join(RUNTIME_DIR, "pto_runtime.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "a2a3_runtime.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_host.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_so_loader.c"),
+        os.path.join(RUNTIME_DIR, "runtime_a2a3", "host", "a2a3_binary_loader.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "core", "a2a3_core_worker.c"),
         os.path.join(RUNTIME_DIR, "runtime_a2a3", "orchestration", "a2a3_orchestration.c"),
     ]
@@ -795,10 +874,17 @@ def compile_ascend_a2a3(code_dir):
     runtime_sources = [s for s in runtime_sources if os.path.exists(s)]
     
     if runtime_sources:
+        # Build link flags
+        link_flags = ["-lpthread", "-ldl"]
+        if cann_available:
+            # Add ACL runtime library when CANN SDK is available
+            link_flags.append(f"-L{ascend_home}/lib64")
+            link_flags.append("-lascendcl")
+        
         cmd = (
             f"gcc {' '.join(compile_flags)} {' '.join(include_paths)} "
             f"-o {test_exe} {test_file} {' '.join(runtime_sources)} "
-            f"-lpthread -ldl"
+            f"{' '.join(link_flags)}"
         )
         
         print(f"    Compiling test program...")
@@ -879,7 +965,7 @@ def analyze_task_dump(dump_file):
         
         # Count by type if available
         lines = content.split('\n')
-        task_types = {}
+        task_types = dict()
         for line in lines:
             if "func=" in line:
                 # Extract function name
@@ -1198,14 +1284,131 @@ def save_benchmark_results(platform_dir, benchmark_type, all_results):
 # =============================================================================
 
 def run_accuracy_test():
-    """Generate and run accuracy tests."""
+    """Generate and run accuracy tests using Python reference implementation."""
     if not CONFIG['enable_accuracy_test']:
         return True
     
     print_header("Accuracy Test")
-    print("  Accuracy testing not yet implemented")
-    print("  (Requires reference implementation)")
-    return True
+    
+    platform_dir = os.path.join(OUTPUT_DIR, CONFIG['target_platform'])
+    
+    # Check if accuracy data files exist
+    input_file = os.path.join(platform_dir, "accuracy_input.bin")
+    output_file = os.path.join(platform_dir, "accuracy_output.bin")
+    params_file = os.path.join(platform_dir, "accuracy_params.txt")
+    
+    if not os.path.exists(input_file) or not os.path.exists(output_file):
+        print("  Accuracy data files not found.")
+        print("  Run test_program first to generate accuracy_input.bin and accuracy_output.bin")
+        return True
+    
+    try:
+        import numpy as np
+    except ImportError:
+        print("  NumPy not available. Skipping accuracy test.")
+        return True
+    
+    # Read parameters
+    params = dict()
+    if os.path.exists(params_file):
+        with open(params_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line:
+                    key, val = line.split('=', 1)
+                    params[key] = int(val)
+    
+    # Default BGEMM parameters
+    num_tiles = params.get('num_tiles', 8)
+    tile_m = params.get('tile_m', 64)
+    tile_n = params.get('tile_n', 128)
+    tile_k = params.get('tile_k', 64)
+    k_tiles = params.get('k_tiles', 8)
+    
+    print(f"  Parameters: num_tiles={num_tiles}, tile_m={tile_m}, tile_n={tile_n}, tile_k={tile_k}, k_tiles={k_tiles}")
+    
+    # Read input and output data
+    input_data = np.fromfile(input_file, dtype=np.float32)
+    output_data = np.fromfile(output_file, dtype=np.float32)
+    
+    print(f"  Input size: {len(input_data)} floats")
+    print(f"  Output size: {len(output_data)} floats")
+    
+    # Split input into A and B matrices (same as test_program.c)
+    half_size = len(input_data) // 2
+    A_flat = input_data[:half_size]
+    B_flat = input_data[half_size:]
+    
+    # Compute expected output using Python reference
+    # BGEMM: For each output tile, C[tile] = sum_k(A[tile*k_tiles+k] @ B[k*num_tiles+tile])
+    print("  Computing Python reference...")
+    
+    tile_size = tile_m * tile_n
+    expected_output = np.zeros(num_tiles * tile_size, dtype=np.float32)
+    
+    for tile in range(num_tiles):
+        # Accumulate partial products for this tile
+        C_tile = np.zeros((tile_m, tile_n), dtype=np.float32)
+        
+        for k in range(k_tiles):
+            # Get A tile: A[tile * k_tiles + k]
+            a_idx = (tile * k_tiles + k) * tile_m * tile_k
+            if a_idx + tile_m * tile_k <= len(A_flat):
+                A_tile = A_flat[a_idx : a_idx + tile_m * tile_k].reshape(tile_m, tile_k)
+            else:
+                A_tile = np.zeros((tile_m, tile_k), dtype=np.float32)
+            
+            # Get B tile: B[k * num_tiles + tile]
+            b_idx = (k * num_tiles + tile) * tile_k * tile_n
+            if b_idx + tile_k * tile_n <= len(B_flat):
+                B_tile = B_flat[b_idx : b_idx + tile_k * tile_n].reshape(tile_k, tile_n)
+            else:
+                B_tile = np.zeros((tile_k, tile_n), dtype=np.float32)
+            
+            # Accumulate: C += A @ B
+            C_tile += np.matmul(A_tile, B_tile)
+        
+        # Store result
+        expected_output[tile * tile_size : (tile + 1) * tile_size] = C_tile.flatten()
+    
+    # Compare results
+    output_elements = num_tiles * tile_size
+    actual = output_data[:output_elements]
+    expected = expected_output[:output_elements]
+    
+    # Compute differences
+    diff = np.abs(expected - actual)
+    max_diff = np.max(diff)
+    max_diff_idx = np.argmax(diff)
+    
+    # Use relative tolerance for floating point
+    rtol = 1e-3  # Relative tolerance
+    atol = 1e-5  # Absolute tolerance
+    
+    # Check for errors
+    errors = np.sum(diff > (atol + rtol * np.abs(expected)))
+    
+    print(f"  Max difference: {max_diff:.6f} at index {max_diff_idx}")
+    print(f"  Expected[{max_diff_idx}]: {expected[max_diff_idx]:.6f}")
+    print(f"  Actual[{max_diff_idx}]: {actual[max_diff_idx]:.6f}")
+    
+    if errors > 0:
+        # Show first few mismatches
+        mismatch_indices = np.where(diff > (atol + rtol * np.abs(expected)))[0][:10]
+        for idx in mismatch_indices:
+            print(f"    Mismatch at [{idx}]: expected {expected[idx]:.6f}, got {actual[idx]:.6f}")
+    
+    print()
+    print("=" * 60)
+    if errors == 0:
+        print("  ACCURACY TEST: PASSED")
+        result = True
+    else:
+        print(f"  ACCURACY TEST: FAILED ({errors} errors out of {output_elements})")
+        result = False
+    print("=" * 60)
+    
+    return result
 
 
 # =============================================================================

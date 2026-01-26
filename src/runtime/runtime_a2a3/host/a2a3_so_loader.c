@@ -124,6 +124,17 @@ void a2a3_unload_orchestration(void) {
 // InCore Function Loading
 // =============================================================================
 
+// Include binary loader for .o file support
+#include "a2a3_binary_loader.h"
+
+/**
+ * Check if a file has .o extension.
+ */
+static bool is_o_file(const char* filename) {
+    const char* ext = strrchr(filename, '.');
+    return ext && strcmp(ext, ".o") == 0;
+}
+
 int a2a3_load_incore_dir(const char* dir_path, bool is_cube) {
     if (!dir_path) {
         fprintf(stderr, "[A2A3 SO Loader] ERROR: dir_path is NULL\n");
@@ -137,16 +148,26 @@ int a2a3_load_incore_dir(const char* dir_path, bool is_cube) {
     }
     
     int loaded_count = 0;
+    int binary_count = 0;
     struct dirent* entry;
+    
+    // First pass: count .o and .so files
+    int o_count = 0, so_count = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        if (is_o_file(entry->d_name)) o_count++;
+        else if (is_so_file(entry->d_name)) so_count++;
+    }
+    rewinddir(dir);
+    
+    // Prefer .o files (AICore binaries) over .so files
+    bool load_o_files = (o_count > 0);
     
     while ((entry = readdir(dir)) != NULL) {
         // Skip . and ..
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-        
-        // Check if it's a .so file
-        if (!is_so_file(entry->d_name)) {
             continue;
         }
         
@@ -160,18 +181,34 @@ int a2a3_load_incore_dir(const char* dir_path, bool is_cube) {
             continue;
         }
         
-        // Load the .so file
-        if (a2a3_load_incore_so(full_path, NULL, is_cube) == 0) {
-            loaded_count++;
+        if (load_o_files) {
+            // Load .o files using binary loader (ELF parsing)
+            if (is_o_file(entry->d_name)) {
+                if (a2a3_load_incore_binary(full_path, NULL, is_cube) == 0) {
+                    binary_count++;
+                }
+            }
+        } else {
+            // Load .so files using dlopen (for CPU simulation/testing)
+            if (is_so_file(entry->d_name)) {
+                if (a2a3_load_incore_so(full_path, NULL, is_cube) == 0) {
+                    loaded_count++;
+                }
+            }
         }
     }
     
     closedir(dir);
     
-    printf("[A2A3 SO Loader] Loaded %d %s functions from %s\n",
-           loaded_count, is_cube ? "AIC" : "AIV", dir_path);
-    
-    return loaded_count;
+    if (load_o_files) {
+        printf("[A2A3 SO Loader] Loaded %d %s binaries (.o) from %s\n",
+               binary_count, is_cube ? "AIC" : "AIV", dir_path);
+        return binary_count;
+    } else {
+        printf("[A2A3 SO Loader] Loaded %d %s functions (.so) from %s\n",
+               loaded_count, is_cube ? "AIC" : "AIV", dir_path);
+        return loaded_count;
+    }
 }
 
 int a2a3_load_incore_so(const char* so_path, const char* func_name, bool is_cube) {
@@ -314,7 +351,8 @@ int a2a3_register_incore(const char* func_name, A2A3InCoreFunc func_ptr, bool is
 }
 
 int a2a3_get_incore_count(void) {
-    return g_incore_count;
+    // Return total count: .so functions + .o binaries
+    return g_incore_count + a2a3_get_incore_binary_count();
 }
 
 void a2a3_unload_all_incore(void) {
@@ -343,6 +381,9 @@ void a2a3_so_loader_init(void) {
     g_orch_func = NULL;
     g_so_loader_initialized = true;
     
+    // Initialize binary loader for .o file support
+    a2a3_binary_loader_init();
+    
     printf("[A2A3 SO Loader] Initialized\n");
 }
 
@@ -351,6 +392,10 @@ void a2a3_so_loader_cleanup(void) {
     
     a2a3_unload_orchestration();
     a2a3_unload_all_incore();
+    
+    // Cleanup binary loader
+    a2a3_binary_loader_cleanup();
+    
     g_so_loader_initialized = false;
     
     printf("[A2A3 SO Loader] Cleanup complete\n");
