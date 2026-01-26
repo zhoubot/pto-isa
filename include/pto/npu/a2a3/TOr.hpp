@@ -28,6 +28,22 @@ struct OrOp {
     }
 };
 
+template <typename T, typename TileDataDst, typename TileDataSrc0, typename TileDataSrc1>
+__tf__ PTO_INTERNAL void TOrScalar(typename TileDataDst::TileDType __out__ dst, typename TileDataSrc0::TileDType __in__ src0,
+    typename TileDataSrc1::TileDType __in__ src1, unsigned validRows, unsigned validCols)
+{
+    __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
+    __ubuf__ T *src0Ptr = (__ubuf__ T *)__cce_get_tile_ptr(src0);
+    __ubuf__ T *src1Ptr = (__ubuf__ T *)__cce_get_tile_ptr(src1);
+
+    for (unsigned r = 0; r < validRows; ++r) {
+        for (unsigned c = 0; c < validCols; ++c) {
+            dstPtr[r * TileDataDst::RowStride + c] =
+                src0Ptr[r * TileDataSrc0::RowStride + c] | src1Ptr[r * TileDataSrc1::RowStride + c];
+        }
+    }
+}
+
 template <typename TileData, unsigned elementsPerRepeat, unsigned blockSizeElem, unsigned dstRowStride,
     unsigned src0RowStride = dstRowStride, unsigned src1RowStride = dstRowStride>
 __tf__ PTO_INTERNAL void TOr(typename TileData::TileDType __out__ dst, typename TileData::TileDType __in__ src0,
@@ -51,7 +67,9 @@ PTO_INTERNAL void TOrCheck(const TileDataDst &dst, const TileDataSrc0 &src0, con
     static_assert(
         std::is_same<T, typename TileDataSrc0::DType>::value && std::is_same<T, typename TileDataSrc1::DType>::value,
         "Fix: TOR the data type of dst must be consistent with of src0 and src1.");
-    static_assert(std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value,
+    static_assert(std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value ||
+                      std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value ||
+                      std::is_same<T, unsigned int>::value || std::is_same<T, int>::value,
         "Fix: TOR has invalid data type.");
     static_assert(TileDataDst::isRowMajor && TileDataSrc0::isRowMajor && TileDataSrc1::isRowMajor,
         "Fix: TOR only support row major layout.");
@@ -67,6 +85,14 @@ template <typename TileDataDst, typename TileDataSrc0, typename TileDataSrc1>
 PTO_INTERNAL void TOR_IMPL(TileDataDst &dst, TileDataSrc0 &src0, TileDataSrc1 &src1) {
     using T = typename TileDataDst::DType;
     TOrCheck<T, TileDataDst, TileDataSrc0, TileDataSrc1>(dst, src0, src1);
+    if constexpr (sizeof(T) == 4) {
+        static_assert(TileDataDst::SFractal == SLayout::NoneBox && TileDataSrc0::SFractal == SLayout::NoneBox &&
+                          TileDataSrc1::SFractal == SLayout::NoneBox,
+            "Fix: TOR b32 fallback only supports non-boxed layouts.");
+        TOrScalar<T, TileDataDst, TileDataSrc0, TileDataSrc1>(
+            dst.data(), src0.data(), src1.data(), dst.GetValidRow(), dst.GetValidCol());
+        return;
+    }
     constexpr unsigned blockSizeElem = BLOCK_BYTE_SIZE / sizeof(T);
     constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(T);
     // when tileshape of src0, src1 and dst are the same, validRows and validCols are also the same

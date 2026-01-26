@@ -69,25 +69,25 @@ struct Shape {
         if constexpr (N5 == DYNAMIC) shape[GlobalTensorDim::DIM_4] = 1;
     }
 
-    PTO_INTERNAL Shape(int n) {
-        static_assert((N1 == DYNAMIC) + (N2 == DYNAMIC) + (N3 == DYNAMIC) + (N4 == DYNAMIC) + (N5 == DYNAMIC) ==
-                          GlobalTensorDim::DIM_1,
-            "1-parameter constructors is only applicable to Stride with 1 dynamic dimension.");
-        if constexpr (N1 == DYNAMIC) shape[GlobalTensorDim::DIM_0] = n;
-        else if constexpr (N2 == DYNAMIC) shape[GlobalTensorDim::DIM_1] = n;
-        else if constexpr (N3 == DYNAMIC) shape[GlobalTensorDim::DIM_2] = n;
+	    PTO_INTERNAL Shape(int n) {
+	        static_assert((N1 == DYNAMIC) + (N2 == DYNAMIC) + (N3 == DYNAMIC) + (N4 == DYNAMIC) + (N5 == DYNAMIC) ==
+	                          GlobalTensorDim::DIM_1,
+	            "1-parameter constructor is only applicable to Shape with 1 dynamic dimension.");
+	        if constexpr (N1 == DYNAMIC) shape[GlobalTensorDim::DIM_0] = n;
+	        else if constexpr (N2 == DYNAMIC) shape[GlobalTensorDim::DIM_1] = n;
+	        else if constexpr (N3 == DYNAMIC) shape[GlobalTensorDim::DIM_2] = n;
         else if constexpr (N4 == DYNAMIC) shape[GlobalTensorDim::DIM_3] = n;
         else if constexpr (N5 == DYNAMIC) shape[GlobalTensorDim::DIM_4] = n;
     }
 
-    PTO_INTERNAL Shape(int n1, int n2) {
-        static_assert((N1 == DYNAMIC) + (N2 == DYNAMIC) + (N3 == DYNAMIC) + (N4 == DYNAMIC) + (N5 == DYNAMIC) ==
-                          GlobalTensorDim::DIM_2,
-            "2-parameter constructors is only applicable to Stride with 2 dynamic dimension.");
+	    PTO_INTERNAL Shape(int n1, int n2) {
+	        static_assert((N1 == DYNAMIC) + (N2 == DYNAMIC) + (N3 == DYNAMIC) + (N4 == DYNAMIC) + (N5 == DYNAMIC) ==
+	                          GlobalTensorDim::DIM_2,
+	            "2-parameter constructor is only applicable to Shape with 2 dynamic dimensions.");
 
-        int idx = 0;
-        const int vals[] = {n1, n2};
-        if constexpr (N1 == DYNAMIC) shape[GlobalTensorDim::DIM_0] = vals[idx++];
+	        int idx = 0;
+	        const int vals[] = {n1, n2};
+	        if constexpr (N1 == DYNAMIC) shape[GlobalTensorDim::DIM_0] = vals[idx++];
         if constexpr (N2 == DYNAMIC) shape[GlobalTensorDim::DIM_1] = vals[idx++];
         if constexpr (N3 == DYNAMIC) shape[GlobalTensorDim::DIM_2] = vals[idx++];
         if constexpr (N4 == DYNAMIC) shape[GlobalTensorDim::DIM_3] = vals[idx++];
@@ -97,7 +97,7 @@ struct Shape {
     PTO_INTERNAL Shape(int n1, int n2, int n3) {
         static_assert((N1 == DYNAMIC) + (N2 == DYNAMIC) + (N3 == DYNAMIC) + (N4 == DYNAMIC) + (N5 == DYNAMIC) ==
                           GlobalTensorDim::DIM_3,
-            "3-parameter constructors is only applicable to Stride with 3 dynamic dimension.");
+            "3-parameter constructor is only applicable to Shape with 3 dynamic dimensions.");
         int idx = 0;
         const int vals[] = {n1, n2, n3};
         if constexpr (N1 == DYNAMIC) shape[GlobalTensorDim::DIM_0] = vals[idx++];
@@ -110,7 +110,7 @@ struct Shape {
     PTO_INTERNAL Shape(int n1, int n2, int n3, int n4) {
         static_assert((N1 == DYNAMIC) + (N2 == DYNAMIC) + (N3 == DYNAMIC) + (N4 == DYNAMIC) + (N5 == DYNAMIC) ==
                           GlobalTensorDim::DIM_4,
-            "4-parameter constructors is only applicable to Stride with 4 dynamic dimension.");
+            "4-parameter constructor is only applicable to Shape with 4 dynamic dimensions.");
         int idx = 0;
         const int vals[] = {n1, n2, n3, n4};
         if constexpr (N1 == DYNAMIC) shape[GlobalTensorDim::DIM_0] = vals[idx++];
@@ -147,7 +147,7 @@ struct Stride {
     PTO_INTERNAL Stride(int n) {
         static_assert((SN1 == DYNAMIC) + (SN2 == DYNAMIC) + (SN3 == DYNAMIC) + (SN4 == DYNAMIC) + (SN5 == DYNAMIC) ==
                           GlobalTensorDim::DIM_1,
-            "1-parameter constructors is only applicable to Stride with 1 dynamic dimension.");
+            "1-parameter constructor is only applicable to Stride with 1 dynamic dimension.");
 
         if constexpr (SN1 == DYNAMIC) stride[GlobalTensorDim::DIM_0] = n;
         else if constexpr (SN2 == DYNAMIC) stride[GlobalTensorDim::DIM_1] = n;
@@ -159,7 +159,7 @@ struct Stride {
     PTO_INTERNAL Stride(int n1, int n2) {
         static_assert((SN1 == DYNAMIC) + (SN2 == DYNAMIC) + (SN3 == DYNAMIC) + (SN4 == DYNAMIC) + (SN5 == DYNAMIC) ==
                           GlobalTensorDim::DIM_2,
-            "2-parameter constructors is only applicable to Stride with 2 dynamic dimension.");
+            "2-parameter constructor is only applicable to Stride with 2 dynamic dimensions.");
         int idx = 0;
         const int vals[] = {n1, n2};
         if constexpr (SN1 == DYNAMIC) stride[GlobalTensorDim::DIM_0] = vals[idx++];
@@ -172,7 +172,7 @@ struct Stride {
     PTO_INTERNAL Stride(int n1, int n2, int n3) {
         static_assert((SN1 == DYNAMIC) + (SN2 == DYNAMIC) + (SN3 == DYNAMIC) + (SN4 == DYNAMIC) + (SN5 == DYNAMIC) ==
                           GlobalTensorDim::DIM_3,
-            "3-parameter constructors is only applicable to Stride with 3 dynamic dimension.");
+            "3-parameter constructor is only applicable to Stride with 3 dynamic dimensions.");
         int idx = 0;
         const int vals[] = {n1, n2, n3};
         if constexpr (SN1 == DYNAMIC) stride[GlobalTensorDim::DIM_0] = vals[idx++];
@@ -185,7 +185,7 @@ struct Stride {
     PTO_INTERNAL Stride(int n1, int n2, int n3, int n4) {
         static_assert((SN1 == DYNAMIC) + (SN2 == DYNAMIC) + (SN3 == DYNAMIC) + (SN4 == DYNAMIC) + (SN5 == DYNAMIC) ==
                           GlobalTensorDim::DIM_4,
-            "4-parameter constructors is only applicable to Stride with 4 dynamic dimension.");
+            "4-parameter constructor is only applicable to Stride with 4 dynamic dimensions.");
         int idx = 0;
         const int vals[] = {n1, n2, n3, n4};
         if constexpr (SN1 == DYNAMIC) stride[GlobalTensorDim::DIM_0] = vals[idx++];
@@ -806,7 +806,7 @@ struct ConvTileShape {
 
     PTO_INTERNAL ConvTileShape(int n) {
         static_assert(dynamicDimCount == 1,
-            "1-parameter constructors is only applicable to Shape with 1 dynamic dimension.");
+            "1-parameter constructor is only applicable to Shape with 1 dynamic dimension.");
         
         int val_idx = 0;
         const int vals[] = {n};
@@ -815,7 +815,7 @@ struct ConvTileShape {
 
     PTO_INTERNAL ConvTileShape(int n1, int n2) {
         static_assert(dynamicDimCount == 2,
-            "2-parameter constructors is only applicable to Shape with 2 dynamic dimension.");
+            "2-parameter constructor is only applicable to Shape with 2 dynamic dimensions.");
 
         int val_idx = 0;
         const int vals[] = {n1, n2};
@@ -824,7 +824,7 @@ struct ConvTileShape {
 
     PTO_INTERNAL ConvTileShape(int n1, int n2, int n3) {
         static_assert(dynamicDimCount == 3,
-            "3-parameter constructors is only applicable to Shape with 3 dynamic dimension.");
+            "3-parameter constructor is only applicable to Shape with 3 dynamic dimensions.");
 
         int val_idx = 0;
         const int vals[] = {n1, n2, n3};
@@ -833,7 +833,7 @@ struct ConvTileShape {
 
     PTO_INTERNAL ConvTileShape(int n1, int n2, int n3, int n4) {
         static_assert(dynamicDimCount == 4,
-            "4-parameter constructors is only applicable to Shape with 4 dynamic dimension.");
+            "4-parameter constructor is only applicable to Shape with 4 dynamic dimensions.");
 
         int val_idx = 0;
         const int vals[] = {n1, n2, n3, n4};
@@ -841,7 +841,7 @@ struct ConvTileShape {
     }
     PTO_INTERNAL ConvTileShape(int n1, int n2, int n3, int n4, int n5) {
         static_assert(dynamicDimCount == 5,
-            "5-parameter constructors is only applicable to Shape with 5 dynamic dimension.");
+            "5-parameter constructor is only applicable to Shape with 5 dynamic dimensions.");
 
         int val_idx = 0;
         const int vals[] = {n1, n2, n3, n4, n5};

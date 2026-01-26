@@ -138,5 +138,20 @@ namespace pto {
         validRow, validCol, VFImplKind::VFIMPL_DEFAULT);
     }
   }
+
+  template <typename TileDataOut, typename TileDataIn>
+  PTO_INTERNAL void TCOLSUM_IMPL(TileDataOut &dst, TileDataIn &src) {
+    int validCol = src.GetValidCol();
+    int validRow = src.GetValidRow();
+    TColReduceCheck<TileDataOut, TileDataIn>(validRow, validCol, dst.GetValidCol());
+    if (validCol == 0 || validRow == 0) {
+      return;
+    }
+
+    using T = typename TileDataIn::DType;
+    __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst.data());
+    __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src.data());
+    TColReduceInstr<TColSumOp<T>, T, TileDataIn>(dstPtr, srcPtr, validRow, validCol, VFImplKind::VFIMPL_DEFAULT);
+  }
 }
 #endif

@@ -18,6 +18,8 @@ full text of the License.
 
 namespace pto {
 
+#ifdef _DEBUG
+
 
 template <typename T> PTO_INTERNAL constexpr const __gm__ char *GetDTypeName() {
   return "unknown";
@@ -203,6 +205,12 @@ template <typename T> PTO_INTERNAL void TPRINT_IMPL(T &src) {
                   "TPRINT: Only Tile and GlobalTensor are supported.");
   }
 }
+
+#else  // !_DEBUG
+
+template <typename T> PTO_INTERNAL void TPRINT_IMPL(T &src) { (void)src; }
+
+#endif // _DEBUG
 } // namespace pto
 
 #endif

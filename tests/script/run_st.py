@@ -252,8 +252,8 @@ def run_gen_data(golden_path):
         build_dir = "build/"
         os.chdir(build_dir)
 
-        gloden_gen_cmd = [sys.executable, "gen_data.py"]
-        output = run_command(gloden_gen_cmd, verbose=verbose)
+        golden_gen_cmd = [sys.executable, "gen_data.py"]
+        output = run_command(golden_gen_cmd, verbose=verbose)
         if verbose and output:
             log(output)
     except Exception as e:
@@ -328,7 +328,7 @@ def run_binary(testcase, run_mode, args="all"):
                 raise
             if run_mode == "sim" and log_dir is not None:
                 _summarize_set_wait_flags(log_dir)
-        else : # all
+        else:  # all
             cmd = ["./" + testcase]
             log(f"run testcase : {testcase}")
             output = run_command(cmd, verbose=verbose)
@@ -366,7 +366,7 @@ def main():
         if args.soc_version == "a3":
             target_dir = os.path.dirname(os.path.dirname(script_path))
             target_dir = target_dir + "/npu/a2a3/src/st"
-        else : # a5
+        else:  # a5
             target_dir = os.path.dirname(os.path.dirname(script_path))
             target_dir = target_dir + "/npu/a5/src/st"
 

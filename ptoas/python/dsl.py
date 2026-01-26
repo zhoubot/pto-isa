@@ -145,6 +145,8 @@ _PTO_ISA_OPS: tuple[str, ...] = (
     "tmax",
     "texpands",
     "tload",
+    "tpush",
+    "tpop",
     "tprefetch",
     "tcmps",
     "tcmp",

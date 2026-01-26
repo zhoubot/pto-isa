@@ -174,22 +174,22 @@
       4. GU (compute_gu) running on vector cores consumes pv_part and accumulates into `runningOTile`.
 
   - **Intra Cube Core and Vector Core pipelines:**
-    - The matmul_macro_pto and assign_running_acc_tile provided the leftTile/rightTile/AccTile double buffering pipeline mechanism for cube core level pipeline accross different perload sequence of compute_qk and compute_pv calls
-    - Inputs k_tile, p_tile (intermediate between CV), v_tile matTiles are double buffered to provide smooth pipeline
+    - The matmul_macro_pto and assign_running_acc_tile provide the leftTile/rightTile/AccTile double-buffering pipeline mechanism for cube-core pipelines across different preload sequences of compute_qk and compute_pv calls.
+    - Inputs k_tile, p_tile (intermediate between CV), and v_tile matTiles are double buffered to provide a smooth pipeline.
     - Compute_p qk_tile input and p_tile output are double buffered, and expT has multi-preload-buffer to allow preload result late forwarding
 
   - **Buffer Allocation and Reuse Strategy**
-    - Each stage should have it input and output ping/pong buffer allocated, but the buffer allocation is limited by the hardware on-chip matTile/vecTile buffer (L1/UB) size.
+    - Each stage should have its input and output ping/pong buffers allocated, but the allocation is limited by the hardware on-chip matTile/vecTile buffer (L1/UB) size.
     - Ping‑pong AccTile assignment for accumulators is done via `assign_running_acc_tile()` to avoid write-after-read hazards when overlapping producers/consumers.
-    - The design is allow out-of-order execution for Reordering the pipeline stage schedule below.
+    - The design allows out-of-order execution by reordering the pipeline stage schedule below.
 
-  - **Reorder the pipeline stage execution schedule to resolve datadpenency**
-    - Lets look at an example for Head=128 S0=128 and S1=512 case, for CUBE_S1=128 tiling, there are totally 4 loops each with compute_qk->compute_p->compute_pv->compute_gu, and there is data depenency between stage in the loop. compute_qk & compute_pv stages are executed in cube core, and compute_pv & compute_gu stages are executed in vector core.
-    Without software pipelining (pre-executing qk, p, and later pv) the execution would be fully in sequence below:
+  - **Reorder the pipeline stage execution schedule to resolve data dependency**
+    - Let's look at an example with Head=128, S0=128, and S1=512. With CUBE_S1=128 tiling, there are 4 loops (compute_qk->compute_p->compute_pv->compute_gu), and there is data dependency between stages in the loop. compute_qk and compute_pv run on the cube core, and compute_p and compute_gu run on the vector core.
+    Without software pipelining (pre-executing qk, p, and later pv) the execution would be fully sequential:
     <div>
     <img src="fa_pipeline_preload0_generated.svg" alt="Inter CV FIFOs and intra stage ping/pong" />
     </div>
-    With pre-execution of qk, p (and later pv) would resolve the data depenency and keep the vector compute resoruce fully busy, in theory below showing the intra-core (tload,tcompute,tstore) and inter-CV-stage pipeline 
+    With pre-execution of qk, p (and later pv), the data dependency is resolved and the vector compute resource is kept busy. Below shows the intra-core (tload,tcompute,tstore) and inter-CV-stage pipeline.
     <div>
     <img src="fa_pipeline_preload2_generated.svg" alt="Inter CV FIFOs and intra stage ping/pong" />
     </div>    
@@ -203,10 +203,10 @@
   ## 4. Multicore task split, tiling and load balancing (TODO)
 
   - **Multicore tiling and work distribution:**
-    - For BNSD (Batch, no-of-Head, Seqlen, HEAD_SIZE) QKV input, with intermediate QK(S0,S1) during computation, since S1 is the reduce axis, multi-core tiling should be split base on (B,N,S/Cube-S0), while in Flash-decoding case, since (B,N,S/Cube-S0) is small multi-core tiling could split in S1 axis and each core keeping partial O and have another kernel to do final GU.
+    - For BNSD (Batch, no-of-Head, Seqlen, HEAD_SIZE) QKV input, with intermediate QK(S0,S1) during computation, since S1 is the reduce axis, multi-core tiling should be split based on (B,N,S/Cube-S0). In the Flash-decoding case, since (B,N,S/Cube-S0) is small, multi-core tiling could instead split along the S1 axis, and each core keeps a partial O and another kernel performs the final GU.
 
   - **Load balancing guidance:**
-    - Consider the compution sparity when casual attention mask (TODO) applied, mulit-core tiling also need to take core unbalanced loading along the S0 axis.  
+    - Consider the computation sparsity when a causal attention mask (TODO) is applied. Multi-core tiling also needs to handle load imbalance along the S0 axis.  
 
   ## 5. Precision Debugging with INTERMEDIATE_CHECK
 

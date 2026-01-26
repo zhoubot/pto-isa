@@ -100,6 +100,8 @@ static std::string elemToCpp(const std::string &dtype) {
     return "int32_t";
   if (dtype == "u32")
     return "uint32_t";
+  if (dtype == "u8")
+    return "uint8_t";
   llvm::report_fatal_error(llvm::Twine("Unsupported dtype: ") + dtype);
 }
 
@@ -1138,15 +1140,25 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         return "FIX";
       if (opEnum == "TMATMUL")
         return "M";
+      if (opEnum == "TMATMUL_MX")
+        return "M";
+      if (opEnum == "TMATMUL_BIAS")
+        return "M";
       if (opEnum == "TMOV_V2V")
         return "V";
       if (opEnum == "TMOV_V2M" || opEnum == "TEXTRACT_V2M" || opEnum == "TMOV_A2V" || opEnum == "TMOV_A2M")
+        return "FIX";
+      if (opEnum == "TEXTRACT_A2M" || opEnum == "TINSERT_A2M")
+        return "FIX";
+      if (opEnum == "TEXTRACT" || opEnum == "TINSERT")
         return "FIX";
       if (opEnum == "TMOV_M2B" || opEnum == "TMOV_M2L" || opEnum == "TMOV_M2R" || opEnum == "TEXTRACT_M2LR")
         return "MTE1";
       if (opEnum == "TMOV_M2S")
         return "FIX";
       if (opEnum == "TCI")
+        return "S";
+      if (opEnum == "TRESHAPE")
         return "S";
       // Default: most remaining PTO ops are vector pipe on A2/A3 (see `include/pto/npu/a2a3/TSync.hpp`).
       if (opEnum.starts_with("T"))

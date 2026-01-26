@@ -41,10 +41,10 @@ Use these codes referenced in the assertion index:
 ## Assertion Index
 
 ### Compile-time checks (`static_assert`)
-- **SA-0001** 1-parameter constructors is only applicable to Stride with 1 dynamic dimension. (At: `include/pto/common/pto_tile.hpp:137 (+1)`; Fix: `FIX-A01,FIX-A09`)
-- **SA-0002** 2-parameter constructors is only applicable to Stride with 2 dynamic dimension. (At: `include/pto/common/pto_tile.hpp:149 (+1)`; Fix: `FIX-A01,FIX-A09`)
-- **SA-0003** 3-parameter constructors is only applicable to Stride with 3 dynamic dimension. (At: `include/pto/common/pto_tile.hpp:162 (+1)`; Fix: `FIX-A01,FIX-A09`)
-- **SA-0004** 4-parameter constructors is only applicable to Stride with 4 dynamic dimension. (At: `include/pto/common/pto_tile.hpp:100 (+1)`; Fix: `FIX-A01,FIX-A09`)
+- **SA-0001** `1-parameter constructor is only applicable to Shape with 1 dynamic dimension.` / `1-parameter constructor is only applicable to Stride with 1 dynamic dimension.` (At: `include/pto/common/pto_tile.hpp:72` / `include/pto/common/pto_tile.hpp:147`; Fix: `FIX-A01,FIX-A09`)
+- **SA-0002** `2-parameter constructor is only applicable to Shape with 2 dynamic dimensions.` / `2-parameter constructor is only applicable to Stride with 2 dynamic dimensions.` (At: `include/pto/common/pto_tile.hpp:83` / `include/pto/common/pto_tile.hpp:159`; Fix: `FIX-A01,FIX-A09`)
+- **SA-0003** `3-parameter constructor is only applicable to Shape with 3 dynamic dimensions.` / `3-parameter constructor is only applicable to Stride with 3 dynamic dimensions.` (At: `include/pto/common/pto_tile.hpp:97` / `include/pto/common/pto_tile.hpp:172`; Fix: `FIX-A01,FIX-A09`)
+- **SA-0004** `4-parameter constructor is only applicable to Shape with 4 dynamic dimensions.` / `4-parameter constructor is only applicable to Stride with 4 dynamic dimensions.` (At: `include/pto/common/pto_tile.hpp:110` / `include/pto/common/pto_tile.hpp:185`; Fix: `FIX-A01,FIX-A09`)
 - **SA-0005** Acc Type support int32_t or float. (At: `include/pto/npu/a5/TMatmul.hpp:121`; Fix: `-`)
 - **SA-0006** BFractal_ is RowMajor and SFractal_ is NoneBox: Rows must be 32 bytes align, \ BFractal_ is ColMa… (At: `include/pto/common/pto_tile.hpp:658`; Fix: `FIX-A04`)
 - **SA-0007** cols must be divisible by C0Size for Layout::NZ (At: `include/pto/common/pto_tile.hpp:409 (+1)`; Fix: `FIX-A03`)

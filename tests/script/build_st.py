@@ -151,15 +151,17 @@ def main():
     parser.add_argument("-r", "--run-mode", required=True, help="运行模式（如 sim or npu)")
     parser.add_argument("-v", "--soc-version", required=True, help="SOC版本 只支持 a3 or a5")
     parser.add_argument("-t", "--testcase", required=True, help="需要执行的用例")
-    parser.add_argument("-g", "--gtest_filter", required=False, help="可选 需要执行的具体case名")
+    parser.add_argument(
+        "-g",
+        "--gtest_filter",
+        required=False,
+        help="可选 需要执行的具体case名（build_st.py 中忽略；仅为与 run_st.py 参数兼容）",
+    )
 
     args = parser.parse_args()
     default_soc_version = "Ascend910B1"
     if args.soc_version == "a5":
         default_soc_version = "Ascend910_9599"
-    default_cases = "all"
-    if args.gtest_filter != None:
-        default_cases = args.gtest_filter
 
     original_dir = os.getcwd()
     try:
@@ -169,7 +171,7 @@ def main():
         if args.soc_version == "a3":
             target_dir = os.path.dirname(os.path.dirname(script_path))
             target_dir = target_dir + "/npu/a2a3/src/st"
-        else : # a5
+        else:  # a5
             target_dir = os.path.dirname(os.path.dirname(script_path))
             target_dir = target_dir + "/npu/a5/src/st"
 

@@ -194,6 +194,22 @@ class PTO:
     def store(self, dst: Tensor, src: Tile, r: int = 0, c: int = 0) -> None:
         self.tstore(dst, src, r, c)
 
+    # --- GM FIFO ops (prototype) ---
+
+    def tpush(self, dst: Tensor, src: Tile, token: int = 0) -> None:
+        # Statement-form op (no destination tile).
+        self._p.op("tpush", [dst.ref, src.ref, self._fmt(token)])
+
+    def push(self, dst: Tensor, src: Tile, token: int = 0) -> None:
+        self.tpush(dst, src, token)
+
+    def tpop(self, dst: Tile, src: Tensor, token: int = 0) -> Tile:
+        self._p.assign(dst.ref, "tpop", [src.ref, self._fmt(token)])
+        return dst
+
+    def pop(self, dst: Tile, src: Tensor, token: int = 0) -> Tile:
+        return self.tpop(dst, src, token)
+
     def tprint(self, src: Any) -> None:
         # Statement-form op (no destination).
         self._p.op("tprint", [self._fmt(src)])
@@ -260,6 +276,8 @@ _PTO_KNOWN_OPS: tuple[str, ...] = (
     "tmax",
     "texpands",
     "tload",
+    "tpush",
+    "tpop",
     "tprefetch",
     "tcmps",
     "tcmp",

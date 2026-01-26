@@ -13,6 +13,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #include <pto/common/constants.hpp>
 #include <pto/common/utils.hpp>
+#include <type_traits>
 
 namespace pto {
   #define SMALL_RPT (4)
@@ -274,6 +275,18 @@ namespace pto {
   }
 
   /* NOT */
+  template <typename T, typename DstTile, typename SrcTile>
+  __tf__ PTO_INTERNAL void TNotScalar(typename DstTile::TileDType __out__ dstData, typename SrcTile::TileDType __in__ srcData,
+                                      unsigned validRow, unsigned validCol) {
+    __ubuf__ T *dst = (__ubuf__ T *)__cce_get_tile_ptr(dstData);
+    __ubuf__ T *src = (__ubuf__ T *)__cce_get_tile_ptr(srcData);
+    for (unsigned r = 0; r < validRow; ++r) {
+      for (unsigned c = 0; c < validCol; ++c) {
+        dst[r * DstTile::RowStride + c] = ~src[r * SrcTile::RowStride + c];
+      }
+    }
+  }
+
   template <typename T>
   struct NotOp {
     PTO_INTERNAL static void UnaryInstr(__ubuf__ T* dst, __ubuf__ T* src, uint8_t repeat,
@@ -283,6 +296,15 @@ namespace pto {
   };
   template <typename DstTile, typename SrcTile>
   PTO_INTERNAL void TNOT_IMPL(DstTile &dst, SrcTile &src) {
+    using T = typename DstTile::DType;
+    if constexpr (std::is_integral_v<T> && sizeof(T) == 4) {
+      static_assert(DstTile::SFractal == SLayout::NoneBox && SrcTile::SFractal == SLayout::NoneBox,
+                    "Fix: TNOT b32 fallback only supports non-boxed layouts.");
+      unsigned validRow = dst.GetValidRow();
+      unsigned validCol = dst.GetValidCol();
+      TNotScalar<T, DstTile, SrcTile>(dst.data(), src.data(), validRow, validCol);
+      return;
+    }
     TUNARY_IMPL<NotOp<typename DstTile::DType>, DstTile, SrcTile, false>(dst, src);
   }
 

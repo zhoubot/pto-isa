@@ -11,8 +11,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <iomanip>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -27,6 +29,29 @@ static std::string trim(std::string s) {
   while (!s.empty() && isSpace((unsigned char)s.back()))
     s.pop_back();
   return s;
+}
+
+static uint64_t parseIntLiteralOrZero(const std::string &s) {
+  auto t = trim(s);
+  if (t.rfind("0x", 0) == 0 || t.rfind("0X", 0) == 0) {
+    char *end = nullptr;
+    auto v = std::strtoull(t.c_str(), &end, 16);
+    if (end && *end == '\0')
+      return v;
+    return 0;
+  }
+  char *end = nullptr;
+  auto v = std::strtoull(t.c_str(), &end, 10);
+  if (end && *end == '\0')
+    return v;
+  return 0;
+}
+
+static std::string normalizeHexAddr(const std::string &s) {
+  auto v = parseIntLiteralOrZero(s);
+  std::ostringstream ss;
+  ss << "0x" << std::hex << v;
+  return ss.str();
 }
 
 static llvm::StringRef stripDialect(llvm::StringRef opName) {
@@ -91,15 +116,23 @@ static llvm::StringRef pipeForOpEnum(llvm::StringRef opEnum) {
   if (opEnum == "TSTORE_ACC")
     // Acc -> GM store uses FIX pipe (see A5 ST `tstore_acc2gm` patterns).
     return "FIX";
+  if (opEnum == "TRESHAPE")
+    return "S";
   if (opEnum == "TMATMUL")
     return "M";
   if (opEnum == "TMATMUL_MX")
+    return "M";
+  if (opEnum == "TMATMUL_BIAS")
     return "M";
   if (opEnum == "TMOV_V2V")
     return "V";
   if (opEnum == "TMOV_V2M" || opEnum == "TEXTRACT_V2M" || opEnum == "TMOV_A2V" || opEnum == "TMOV_A2M")
     return "FIX";
   if (opEnum == "TEXTRACT_A2M" || opEnum == "TINSERT_A2M")
+    return "FIX";
+  // Fallback spelling used when we can't disambiguate TEXTRACT/TINSERT variants from operand metadata.
+  // These operations are implemented on PIPE_FIX for Acc->Mat and Vec->Mat paths on A2/A3.
+  if (opEnum == "TEXTRACT" || opEnum == "TINSERT")
     return "FIX";
   if (opEnum == "TMOV_M2B" || opEnum == "TMOV_M2L" || opEnum == "TMOV_M2R" || opEnum == "TEXTRACT_M2LR")
     return "MTE1";
@@ -126,6 +159,15 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
   // Minimal mapping for the prototype. Must return an enum value from `pto::Op`.
   if (opcode == "tload")
     return "TLOAD";
+  if (opcode == "tprefetch")
+    return "TLOAD";
+  if (opcode == "mgather")
+    return "TLOAD";
+  if (opcode == "mscatter")
+    return "TSTORE_VEC";
+
+  if (opcode == "tpop")
+    return "TLOAD";
 
   if (opcode == "tstore") {
     auto operands = readOperands(op);
@@ -133,6 +175,23 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
     if (operands.size() < 2)
       return "";
     auto src = stripIndexing(operands.back());
+    auto it = argTypes.find(src);
+    if (it == argTypes.end())
+      return "TSTORE_VEC";
+    auto loc = parseTileLocFromType(it->second);
+    if (loc == "Acc")
+      return "TSTORE_ACC";
+    if (loc == "Mat")
+      return "TSTORE_MAT";
+    return "TSTORE_VEC";
+  }
+
+  if (opcode == "tpush") {
+    auto operands = readOperands(op);
+    // Prototype: operands = [dstTensor, srcTile, token]
+    if (operands.size() < 2)
+      return "";
+    auto src = stripIndexing(operands[1]);
     auto it = argTypes.find(src);
     if (it == argTypes.end())
       return "TSTORE_VEC";
@@ -185,7 +244,8 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
 
   if (opcode == "textract") {
     auto operands = readOperands(op);
-    if (operands.size() != 2)
+    // Prototype: operands = [dstTile, srcTile, (optional indexRow), (optional indexCol)].
+    if (operands.size() < 2)
       return "";
     auto dst = stripIndexing(operands[0]);
     auto src = stripIndexing(operands[1]);
@@ -206,7 +266,8 @@ static std::string opcodeToOpEnum(llvm::StringRef opcode, mlir::Operation *op,
 
   if (opcode == "tinsert") {
     auto operands = readOperands(op);
-    if (operands.size() != 2)
+    // Prototype: operands = [dstTile, srcTile, (optional indexRow), (optional indexCol)].
+    if (operands.size() < 2)
       return "";
     auto dst = stripIndexing(operands[0]);
     auto src = stripIndexing(operands[1]);
@@ -249,9 +310,11 @@ static bool opcodeDefinesTile(llvm::StringRef opcode) {
   // - tstore: writes to GM, does not define a tile
   // - tsync/record_event: meta
   // - tassign: binds address, not a data-producing tile op
+  if (opcode == "mgather")
+    return true;
   if (!opcode.starts_with("t"))
     return false;
-  return opcode != "tstore" && opcode != "tsync" && opcode != "record_event" && opcode != "tassign";
+  return opcode != "tstore" && opcode != "tpush" && opcode != "tsync" && opcode != "record_event" && opcode != "tassign";
 }
 
 static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Operation *op,
@@ -259,6 +322,13 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
   auto operands = readOperands(op);
   if (operands.empty())
     return {};
+
+  // tpush: operands = [dstTensor, srcTile, token]
+  if (opcode == "tpush") {
+    if (operands.size() >= 2)
+      return {stripIndexing(trim(operands[1]))};
+    return {};
+  }
 
   // tstore: operands = [dstTensor, (optional indices...), srcTile]
   if (opcode == "tstore") {
@@ -268,11 +338,11 @@ static std::vector<std::string> opcodeTileUses(llvm::StringRef opcode, mlir::Ope
   }
 
   // tload: operands = [dstTile, srcTensor]
-  if (opcode == "tload")
+  if (opcode == "tload" || opcode == "tpop")
     return {};
 
-  // Generic `t*` DPS-like ops: operands = [dst, src0, src1, ...]
-  if (opcode.starts_with("t")) {
+  // Generic `t*` / mgather/mscatter DPS-like ops: operands = [dst, src0, src1, ...]
+  if (opcode.starts_with("t") || opcode == "mgather" || opcode == "mscatter") {
     std::vector<std::string> uses;
     for (size_t i = 1; i < operands.size(); ++i) {
       auto base = stripIndexing(trim(operands[i]));
@@ -362,6 +432,7 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     // Collect tile types so we can choose TMOV/TSTORE enum variants correctly.
     // Also collect constants so we can prove some loops execute at least once.
     std::map<std::string, std::string> argTypes;
+    std::map<std::string, std::string> tileKeys;
     std::map<std::string, std::string> constMap;
     module.walk([&](mlir::Operation *op) {
       auto name = op->getName().getStringRef();
@@ -377,10 +448,26 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         auto operands = readOperands(op);
         if (operands.empty())
           return;
+        auto tileName = trim(operands[0]);
         auto typeSig = op->getAttrOfType<mlir::StringAttr>("typesig");
         if (!typeSig)
           return;
-        argTypes[trim(operands[0])] = typeSig.getValue().str();
+        auto typeStr = typeSig.getValue().str();
+        argTypes[tileName] = typeStr;
+
+        // Track alias keys for tiles that share the same underlying buffer address.
+        // Key format: "<loc>@<addr>" (e.g. "Right@0x8000"). This lets the sync insertion pass
+        // reason about hazards on reused physical buffers, even when multiple tile variables
+        // are assigned to the same address slot by the address allocator.
+        std::string addrStr;
+        if (operands.size() >= 2)
+          addrStr = trim(operands[1]);
+        auto loc = parseTileLocFromType(typeStr);
+        if (!addrStr.empty() && !loc.empty()) {
+          tileKeys[tileName] = (loc.str() + "@" + normalizeHexAddr(addrStr));
+        } else {
+          tileKeys[tileName] = tileName;
+        }
         return;
       }
       if (name == "pto.const") {
@@ -394,6 +481,13 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     });
 
     mlir::OpBuilder b(module.getContext());
+
+    auto keyForTile = [&](const std::string &sym) -> std::string {
+      auto it = tileKeys.find(sym);
+      if (it != tileKeys.end())
+        return it->second;
+      return sym;
+    };
 
     auto canonicalOpEnumForPipe = [&](llvm::StringRef pipe) -> llvm::StringRef {
       // Pick a stable representative op enum for each pipe so event insertion can
@@ -683,7 +777,8 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           auto operands = readOperands(consumer);
           if (!operands.empty()) {
             auto dst = stripIndexing(trim(operands[0]));
-            auto itPrev = tileState.find(dst);
+            auto dstKey = keyForTile(dst);
+            auto itPrev = tileState.find(dstKey);
             if (itPrev != tileState.end()) {
               auto &prev = itPrev->second;
               if (prev.def.op && !prev.def.pipe.empty() && prev.def.pipe != consPipe &&
@@ -701,9 +796,10 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           std::set<std::pair<std::string, std::string>> insertedPairs;
           for (auto &useSym : opcodeTileUses(consOpcode, consumer, argTypes)) {
             auto use = stripIndexing(trim(useSym));
-            auto defIt = tileState.find(use);
+            auto useKey = keyForTile(use);
+            auto defIt = tileState.find(useKey);
             if (defIt == tileState.end())
-              defIt = tileState.emplace(use, TileSyncState{}).first;
+              defIt = tileState.emplace(useKey, TileSyncState{}).first;
             auto &defState = defIt->second;
             auto &def = defState.def;
             if (def.op && !def.pipe.empty() && def.pipe != consPipe) {
@@ -719,33 +815,75 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
           }
         }
 
-        // Treat `tstore(src_tile)` as a pipe access to that tile storage. Later overwrites must wait
+        // Track last-access pipe for tile operands (RAR/WAR hazards):
+        //
+        // Many kernels reuse the same tile buffers across ops/iterations. If a tile is *read* on one pipe (e.g. V),
+        // then later overwritten by another (e.g. MTE2 via tload), we must fence the pipes to avoid the overwrite
+        // clobbering the in-flight read. Record the consumer pipe as the tile's last access so the existing
+        // overwrite-hazard logic can insert the required fence when the tile is redefined.
+        for (auto &useSym : opcodeTileUses(consOpcode, consumer, argTypes)) {
+          auto use = stripIndexing(trim(useSym));
+          auto useKey = keyForTile(use);
+          auto it = tileState.find(useKey);
+          if (it == tileState.end())
+            continue;
+          TileSyncState st;
+          st.def = DefInfo{consumer, consEnum, consPipe.str()};
+          st.waitedPipes.insert(consPipe.str());
+          it->second = std::move(st);
+        }
+
+        // Treat `tstore/tpush(src_tile)` as a pipe access to that tile storage. Later overwrites must wait
         // for the store pipe to finish reading from it (WAR hazard across iterations/tiles).
-        if (consOpcode == "tstore") {
+        if (consOpcode == "tstore" || consOpcode == "tpush" || consOpcode == "mscatter") {
           auto operands = readOperands(consumer);
-          if (operands.size() >= 2) {
-            auto src = stripIndexing(trim(operands.back()));
+          std::optional<std::string> src;
+          if (consOpcode == "tstore") {
+            if (operands.size() >= 2)
+              src = stripIndexing(trim(operands.back()));
+          } else if (consOpcode == "tpush") {
+            // tpush(dst_global, src_tile, token)
+            if (operands.size() >= 2)
+              src = stripIndexing(trim(operands[1]));
+          } else {
+            // mscatter(dst_global, src_tile, idx_tile) — treat the first tile operand as the stored tile.
+            for (auto &o : operands) {
+              auto base = stripIndexing(trim(o));
+              if (argTypes.count(base) && isTileTypeString(argTypes.at(base))) {
+                src = base;
+                break;
+              }
+            }
+          }
+          if (src) {
             TileSyncState st;
             st.def = DefInfo{consumer, consEnum, consPipe.str()};
             st.waitedPipes.insert(consPipe.str());
-            tileState[src] = std::move(st);
+            tileState[keyForTile(*src)] = std::move(st);
 
-            // A5 correctness: after Acc->GM store, fence FIX -> M so the next matmul cannot
-            // overwrite L0C while the store is still in-flight (see ST `tstore_acc2gm`).
-            if (consEnum == "TSTORE_ACC")
-              insertFencePairAfter(consumer, "FIX", "M", "TSTORE_ACC", "TMATMUL");
-          }
-        }
+	            // A5 correctness: after Acc->GM store, fence FIX -> M so the next matmul cannot
+	            // overwrite L0C while the store is still in-flight (see ST `tstore_acc2gm`).
+	            if (consEnum == "TSTORE_ACC")
+	              insertFencePairAfter(consumer, "FIX", "M", "TSTORE_ACC", "TMATMUL");
+
+	            // A2/A3 correctness: Vec/Mat -> GM stores use PIPE_MTE3, and many kernels reuse the same tile
+	            // buffers across loop iterations. Insert a conservative fence so the next iteration's loads
+	            // (PIPE_MTE2) cannot overwrite a tile buffer while MTE3 is still reading it.
+	            if (consPipe == "MTE3")
+	              insertFencePairAfter(consumer, "MTE3", "MTE2", consEnum, "TLOAD");
+	          }
+	        }
 
 	        // Update last-def for tile results.
 	        if (opcodeDefinesTile(consOpcode)) {
 	          auto operands = readOperands(consumer);
 	          if (!operands.empty()) {
 	            auto dst = stripIndexing(trim(operands[0]));
+              auto dstKey = keyForTile(dst);
             TileSyncState st;
             st.def = DefInfo{consumer, consEnum, consPipe.str()};
             st.waitedPipes.insert(consPipe.str());
-            tileState[dst] = std::move(st);
+            tileState[dstKey] = std::move(st);
           }
         }
 

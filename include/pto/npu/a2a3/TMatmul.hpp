@@ -125,5 +125,36 @@ PTO_INTERNAL void TMATMUL_BIAS_IMPL(
     TMatmulBias<TileRes, TileLeft, TileRight, true, false>(
         cMatrix.data(), aMatrix.data(), bMatrix.data(), biasData.data(), m, k, n, kDirectionAlign);
 }
+
+// TMATMUL_MX is not a distinct hardware instruction on A2/A3 today. Keep the public
+// PTO ISA surface available by treating it as a regular matmul / matmul_acc / matmul_bias,
+// while still accepting (currently unused) scale tiles for forward compatibility.
+template <typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
+PTO_INTERNAL void TMATMUL_MX_IMPL(TileRes &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix,
+    TileRightScale &bScaleMatrix)
+{
+    (void)aScaleMatrix;
+    (void)bScaleMatrix;
+    TMATMUL_IMPL(cMatrix, aMatrix, bMatrix);
+}
+
+template <typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
+PTO_INTERNAL void TMATMUL_MX_IMPL(TileRes &cOutMatrix, TileRes &cInMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix,
+    TileRight &bMatrix, TileRightScale &bScaleMatrix)
+{
+    (void)aScaleMatrix;
+    (void)bScaleMatrix;
+    TMATMUL_ACC_IMPL(cOutMatrix, cInMatrix, aMatrix, bMatrix);
+}
+
+template <typename TileRes, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale,
+    typename TileBias>
+PTO_INTERNAL void TMATMUL_MX_IMPL(TileRes &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix,
+    TileRightScale &bScaleMatrix, TileBias &biasData)
+{
+    (void)aScaleMatrix;
+    (void)bScaleMatrix;
+    TMATMUL_BIAS_IMPL(cMatrix, aMatrix, bMatrix, biasData);
+}
 } // namespace pto
 #endif

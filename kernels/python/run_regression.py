@@ -305,6 +305,7 @@ def _cases() -> list[Case]:
 
         # pyPTO API coverage (one kernel covers multiple shapes with <=32KB tiles).
         Case(name="api_memory_ops", py=base / "pypto_api_suite.py", kernel="api_memory_ops", arch="dav-c220-vec"),
+        Case(name="api_push_pop_ops", py=base / "pypto_api_suite.py", kernel="api_push_pop_ops", arch="dav-c220-vec"),
         Case(name="api_vec_binary_ops", py=base / "pypto_api_suite.py", kernel="api_vec_binary_ops", arch="dav-c220-vec"),
         Case(name="api_vec_unary_ops", py=base / "pypto_api_suite.py", kernel="api_vec_unary_ops", arch="dav-c220-vec"),
         Case(name="api_vec_scalar_ops", py=base / "pypto_api_suite.py", kernel="api_vec_scalar_ops", arch="dav-c220-vec"),
@@ -319,6 +320,37 @@ def _cases() -> list[Case]:
             arch="dav-c220-cube",
             input_scale=0.1,
         ),
+        Case(
+            name="api_matmul_bias_ops",
+            py=base / "pypto_api_suite.py",
+            kernel="api_matmul_bias_ops",
+            arch="dav-c220-cube",
+            input_scale=0.1,
+        ),
+        Case(
+            name="api_matmul_mx_ops",
+            py=base / "pypto_api_suite.py",
+            kernel="api_matmul_mx_ops",
+            arch="dav-c220-cube",
+            input_scale=0.1,
+        ),
+        Case(name="api_memory_extra_ops", py=base / "pypto_api_suite.py", kernel="api_memory_extra_ops", arch="dav-c220-vec"),
+        Case(name="api_addc_ops", py=base / "pypto_api_suite.py", kernel="api_addc_ops", arch="dav-c220-vec"),
+        Case(name="api_bitwise_shift_ops", py=base / "pypto_api_suite.py", kernel="api_bitwise_shift_ops", arch="dav-c220-vec"),
+        Case(name="api_part_ops", py=base / "pypto_api_suite.py", kernel="api_part_ops", arch="dav-c220-vec"),
+        Case(name="api_rem_ops", py=base / "pypto_api_suite.py", kernel="api_rem_ops", arch="dav-c220-vec"),
+        Case(name="api_cmp_select_ops", py=base / "pypto_api_suite.py", kernel="api_cmp_select_ops", arch="dav-c220-vec"),
+        Case(name="api_col_expand_ops", py=base / "pypto_api_suite.py", kernel="api_col_expand_ops", arch="dav-c220-vec"),
+        Case(name="api_fillpad_ops", py=base / "pypto_api_suite.py", kernel="api_fillpad_ops", arch="dav-c220-vec"),
+        Case(
+            name="api_extract_insert_reshape_ops",
+            py=base / "pypto_api_suite.py",
+            kernel="api_extract_insert_reshape_ops",
+            arch="dav-c220-cube",
+            input_scale=0.1,
+        ),
+        Case(name="api_sort_ops", py=base / "pypto_api_suite.py", kernel="api_sort_ops", arch="dav-c220-vec"),
+        Case(name="api_gather_scatter_ops", py=base / "pypto_api_suite.py", kernel="api_gather_scatter_ops", arch="dav-c220-vec"),
     ]
 
 

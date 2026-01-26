@@ -327,7 +327,7 @@ class _Compiler:
 
         if fn in ("prologue", "epilogue", "comment", "program"):
             raise FrontendError(f"cannot assign the result of {fn}(...); use it as a statement")
-        if fn in ("tstore", "store"):
+        if fn in ("tstore", "store", "tpush"):
             raise FrontendError("tstore/store does not return a value; use it as a statement")
         if fn in ("record_event", "wait_event"):
             raise FrontendError(f"{fn}(...) does not return a value; use it as a statement")
@@ -718,6 +718,15 @@ class _Compiler:
                 r = self._opnd(call.args[1])
                 c = self._opnd(call.args[2])
             self._t.line(f"pto.tstore {dst}[{r}, {c}], {src}")
+            return
+
+        if fn == "tpush":
+            if len(call.args) != 3:
+                raise FrontendError("tpush(dst_tensor, src_tile, token)")
+            dst = self._opnd(call.args[0])
+            src = self._opnd(call.args[1])
+            token = self._opnd(call.args[2])
+            self._t.line(f"pto.tpush {dst}, {src}, {token}")
             return
 
         if fn in ("record_event", "wait_event"):

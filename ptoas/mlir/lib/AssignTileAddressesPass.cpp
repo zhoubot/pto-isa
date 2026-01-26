@@ -94,6 +94,23 @@ static uint64_t alignUp(uint64_t v, uint64_t align) {
   return (v + mask) & ~mask;
 }
 
+static uint64_t avoidReservedVecUbRange(uint64_t addr, uint64_t step) {
+  // A2/A3 UB scratch reserves [TMP_UB_OFFSET, TMP_UB_OFFSET + TMP_UB_SIZE) for compiler helpers.
+  // Keep auto-assigned Vec tile addresses out of that range to avoid clobbering scratch.
+  constexpr uint64_t kTmpUbOffset = 184ull * 1024ull;
+  constexpr uint64_t kTmpUbSize = 8ull * 1024ull;
+  constexpr uint64_t reservedStart = kTmpUbOffset;
+  constexpr uint64_t reservedEnd = kTmpUbOffset + kTmpUbSize;
+
+  // Addresses/steps are 4KB-aligned, so overlap checks are cheap.
+  const uint64_t end = addr + step;
+  if (addr < reservedStart && end > reservedStart)
+    return alignUp(reservedEnd, 0x1000);
+  if (addr >= reservedStart && addr < reservedEnd)
+    return alignUp(reservedEnd, 0x1000);
+  return addr;
+}
+
 static uint64_t tileBytesFromTypeOrDefault(llvm::StringRef typeStr) {
   // Prefer `fractal=<bytes>` when present, else fall back to a conservative default.
   if (auto fractal = findTypeKV(typeStr, "fractal=")) {
@@ -625,19 +642,21 @@ struct AssignTileAddressesPass
       auto allocOne = [&](const std::string &stage, const TileDecl &decl) -> std::string {
         auto &st = stateByStage[stage];
         auto loc = tileLocOrEmpty(decl.typeStr);
+        const uint64_t step = stepForLoc(loc, decl.typeStr);
         uint64_t addr = 0;
         if (loc == "Vec") {
           addr = alignUp(st.nextVec, 0x1000);
-          st.nextVec = addr + stepForLoc(loc, decl.typeStr);
+          addr = avoidReservedVecUbRange(addr, step);
+          st.nextVec = addr + step;
         } else if (loc == "Mat") {
           addr = alignUp(st.nextMat, 0x20000);
-          st.nextMat = addr + stepForLoc(loc, decl.typeStr);
+          st.nextMat = addr + step;
         } else if (isDedicatedLoc(loc)) {
           addr = alignUp(st.nextDedicated[loc], 0x1000);
-          st.nextDedicated[loc] = addr + stepForLoc(loc, decl.typeStr);
+          st.nextDedicated[loc] = addr + step;
         } else {
           addr = alignUp(st.nextOther, 0x1000);
-          st.nextOther = addr + stepForLoc(loc, decl.typeStr);
+          st.nextOther = addr + step;
         }
         std::ostringstream ss;
         ss << "0x" << std::hex << addr;
@@ -669,7 +688,6 @@ struct AssignTileAddressesPass
 
     // Track per-loc address ranges.
     uint64_t nextVec = 0x0;
-    uint64_t nextMat = 0x0;
     uint64_t nextOther = 0x10000;
     std::map<std::string, uint64_t> nextDedicated;
 
@@ -686,13 +704,152 @@ struct AssignTileAddressesPass
       auto step = stepForLoc(loc, decl.typeStr);
       if (loc == "Vec")
         nextVec = std::max(nextVec, addrLit + step);
-      else if (loc == "Mat")
-        nextMat = std::max(nextMat, addrLit + step);
       else if (isDedicatedLoc(loc))
         nextDedicated[loc] = std::max(nextDedicated[loc], addrLit + step);
       else
         nextOther = std::max(nextOther, alignUp(addrLit + step, 0x1000));
     }
+
+    // Hardware scratch size limits for MEMORY_BASE (A2/A3):
+    // - Vec(UB): 192KB total, but [184KB,192KB) is reserved for compiler helpers.
+    // - Mat(L1): 512KB total.
+    // - Left/Right: 64KB each.
+    // - Acc: 128KB total.
+    //
+    // The prototype frontend declares many tiles up front. To avoid overflowing these fixed buffers,
+    // perform a simple live-range based address reuse for Mat and dedicated L0 tiles.
+    struct LiveRange {
+      std::string name;
+      int first = std::numeric_limits<int>::max();
+      int last = std::numeric_limits<int>::min();
+    };
+
+    std::map<std::string, LiveRange> ranges;
+    for (auto &[tileName, decl] : tiles) {
+      (void)decl;
+      ranges[tileName] = LiveRange{tileName};
+    }
+
+    auto recordUseAtIndex = [&](llvm::StringRef tileName, int idx) -> void {
+      auto it = ranges.find(tileName.str());
+      if (it == ranges.end())
+        return;
+      it->second.first = std::min(it->second.first, idx);
+      it->second.last = std::max(it->second.last, idx);
+    };
+
+    int topIndex = 0;
+    for (auto &topOp : *top) {
+      std::set<std::string> usedHere;
+      topOp.walk([&](mlir::Operation *op) {
+        auto name = op->getName().getStringRef();
+        if (name == "pto.alloc_tile")
+          return;
+        auto operands = readOperands(op);
+        for (auto &o : operands) {
+          auto base = stripIndexing(trim(o));
+          if (tiles.count(base))
+            usedHere.insert(base);
+        }
+      });
+      for (auto &t : usedHere)
+        recordUseAtIndex(t, topIndex);
+      topIndex++;
+    }
+
+    // Build a per-tile address plan for Mat and dedicated locs.
+    std::map<std::string, std::string> plannedAddr;
+
+    auto allocWithReuse = [&](llvm::StringRef loc, uint64_t totalBytes, uint64_t slotBytes) -> void {
+      if (slotBytes == 0)
+        return;
+      const uint64_t maxSlots = totalBytes / slotBytes;
+      if (maxSlots == 0)
+        return;
+
+      struct Item {
+        std::string name;
+        int first;
+        int last;
+      };
+      std::vector<Item> items;
+      for (auto &[tileName, decl] : tiles) {
+        if (tilesWithAddr.count(tileName))
+          continue;
+        if (tileLocOrEmpty(decl.typeStr) != loc)
+          continue;
+        auto it = ranges.find(tileName);
+        int first = std::numeric_limits<int>::max();
+        int last = std::numeric_limits<int>::min();
+        if (it != ranges.end()) {
+          first = it->second.first;
+          last = it->second.last;
+        }
+        // Unused tiles: place them at the end to maximize reuse.
+        if (first == std::numeric_limits<int>::max() || last == std::numeric_limits<int>::min()) {
+          first = std::numeric_limits<int>::max() / 2;
+          last = first;
+        }
+        items.push_back(Item{tileName, first, last});
+      }
+      if (items.empty())
+        return;
+
+      std::sort(items.begin(), items.end(), [&](const Item &a, const Item &b) {
+        if (a.first != b.first)
+          return a.first < b.first;
+        return a.last < b.last;
+      });
+
+      // Reuse slots based on conservative live ranges. This keeps addresses within fixed on-core banks
+      // (Vec/Mat/L0*) while avoiding overlap for simultaneously-live tiles.
+      struct Active {
+        int last;
+        uint64_t slot;
+      };
+      auto byLast = [](const Active &a, const Active &b) { return a.last > b.last; };
+      std::priority_queue<Active, std::vector<Active>, decltype(byLast)> active(byLast);
+
+      auto bySlot = [](uint64_t a, uint64_t b) { return a > b; };
+      std::priority_queue<uint64_t, std::vector<uint64_t>, decltype(bySlot)> freeSlots(bySlot);
+
+      uint64_t nextSlot = 0;
+      for (auto &it : items) {
+        while (!active.empty() && active.top().last < it.first) {
+          freeSlots.push(active.top().slot);
+          active.pop();
+        }
+
+        uint64_t slot = 0;
+        if (!freeSlots.empty()) {
+          slot = freeSlots.top();
+          freeSlots.pop();
+        } else {
+          if (nextSlot >= maxSlots) {
+            llvm::report_fatal_error(llvm::Twine("out of tile banks (need spill/rewrite): loc=") + loc +
+                                     " (slots=" + std::to_string(maxSlots) + ") tile=" + it.name);
+          }
+          slot = nextSlot++;
+        }
+
+        uint64_t addr = slot * slotBytes;
+        std::ostringstream ss;
+        ss << "0x" << std::hex << addr;
+        plannedAddr[it.name] = ss.str();
+        active.push(Active{it.last, slot});
+      }
+    };
+
+    // Mat(L1): 512KB total, allocate in 0x20000 slots (matches common L1 bank spacing on A2/A3).
+    allocWithReuse("Mat", 512ull * 1024ull, 0x20000);
+    // Dedicated locs: allocate within their fixed banks.
+    allocWithReuse("Left", 64ull * 1024ull, 0x8000);
+    allocWithReuse("Right", 64ull * 1024ull, 0x8000);
+    allocWithReuse("Acc", 128ull * 1024ull, 0x8000);
+    allocWithReuse("Bias", 64ull * 1024ull, 0x8000);
+    allocWithReuse("ScaleLeft", 64ull * 1024ull, 0x8000);
+    allocWithReuse("ScaleRight", 64ull * 1024ull, 0x8000);
+    allocWithReuse("Scaling", 64ull * 1024ull, 0x8000);
 
     // Assign missing addresses (by attaching a numeric literal to `pto.alloc_tile`).
     for (auto &[tileName, decl] : tiles) {
@@ -701,13 +858,17 @@ struct AssignTileAddressesPass
       auto loc = tileLocOrEmpty(decl.typeStr);
 
       uint64_t addr = 0;
-      if (loc == "Vec") {
+      std::string addrLit;
+      if (auto it = plannedAddr.find(tileName); it != plannedAddr.end()) {
+        addrLit = it->second;
+        addr = parseIntLiteralOrZero(addrLit);
+      } else if (loc == "Vec") {
         addr = alignUp(nextVec, 0x1000);
-        nextVec = addr + stepForLoc(loc, decl.typeStr);
-      } else if (loc == "Mat") {
-        addr = alignUp(nextMat, 0x20000);
-        nextMat = addr + stepForLoc(loc, decl.typeStr);
+        auto step = stepForLoc(loc, decl.typeStr);
+        addr = avoidReservedVecUbRange(addr, step);
+        nextVec = addr + step;
       } else if (isDedicatedLoc(loc)) {
+        // Fallback for dedicated locs not in our fixed list.
         addr = alignUp(nextDedicated[loc], 0x1000);
         nextDedicated[loc] = addr + stepForLoc(loc, decl.typeStr);
       } else {
@@ -715,10 +876,11 @@ struct AssignTileAddressesPass
         addr = alignUp(nextOther, 0x1000);
         nextOther = addr + step;
       }
-
-      std::ostringstream ss;
-      ss << "0x" << std::hex << addr;
-      auto addrLit = ss.str();
+      if (addrLit.empty()) {
+        std::ostringstream ss;
+        ss << "0x" << std::hex << addr;
+        addrLit = ss.str();
+      }
 
       mlir::OpBuilder b(module.getContext());
       auto operands = readOperands(decl.declOp);
