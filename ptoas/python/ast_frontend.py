@@ -745,6 +745,24 @@ class _Compiler:
             self._t.line(f"pto.{fn} {{src_op=#op<{src_op}>, dst_op=#op<{dst_op}>, token={token}}}")
             return
 
+        if fn == "tsync":
+            if call.args:
+                raise FrontendError('tsync(...) only supports keyword args: pipe="V"')
+            if not call.keywords:
+                self._t.line("pto.tsync")
+                return
+            kwargs = {kw.arg: kw.value for kw in call.keywords if kw.arg is not None}
+            if set(kwargs) != {"pipe"}:
+                raise FrontendError("tsync(...) only supports keyword args: pipe=...")
+            pipe = self._eval_const(kwargs["pipe"])
+            if not isinstance(pipe, str) or not pipe:
+                raise FrontendError("tsync(pipe=...) must be a non-empty string literal")
+            if pipe != "V":
+                # A2/A3 single-pipe barriers only support Vector (see `include/pto/npu/a2a3/TSync.hpp`).
+                raise FrontendError('tsync(pipe=...) only supports pipe="V" on A2/A3')
+            self._t.line(f'pto.tsync {{pipe="{pipe}"}}')
+            return
+
         a = opnds()
         if not a:
             # Allow opcode-only marker statements.

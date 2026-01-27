@@ -87,6 +87,9 @@ std::string compileCceToBin(const std::string &ccePath, const std::string &outBi
   bishengCmd.push_back("-xcce");
   bishengCmd.push_back("--cce-aicore-arch=" + opts.arch);
   bishengCmd.push_back("-std=c++17");
+  // Optimize by default: complex vector kernels can exceed the 32KB stack-frame
+  // limit under -O0 due to register spills.
+  bishengCmd.push_back("-O2");
   // The emitted source includes `#define MEMORY_BASE` / `#define REGISTER_BASE`,
   // so we don't need (and should avoid) duplicating it on the command line.
 
