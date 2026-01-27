@@ -423,6 +423,25 @@ static bool hasFencePairAfter(mlir::Operation *producer, llvm::StringRef srcOp, 
   return waitTokA.getValue() == recTokA.getValue();
 }
 
+static bool hasFenceBefore(mlir::Operation *consumer, llvm::StringRef srcOp, llvm::StringRef dstOp) {
+  // Look backward through a contiguous "meta" region (record/wait/tsync) immediately before `consumer`.
+  // If any wait_event matches the requested (src_op, dst_op), treat the fence as already present.
+  for (auto *p = consumer ? consumer->getPrevNode() : nullptr; p; p = p->getPrevNode()) {
+    auto name = p->getName().getStringRef();
+    if (name == "pto.tsync" || name == "pto.record_event")
+      continue;
+    if (name == "pto.wait_event") {
+      auto s = p->getAttrOfType<mlir::StringAttr>("src_op");
+      auto d = p->getAttrOfType<mlir::StringAttr>("dst_op");
+      if (s && d && s.getValue() == srcOp && d.getValue() == dstOp)
+        return true;
+      continue;
+    }
+    break;
+  }
+  return false;
+}
+
 struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::OperationPass<mlir::ModuleOp>> {
   void runOnOperation() override {
     auto module = getOperation();
@@ -479,6 +498,63 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
         return;
       }
     });
+
+    // Lightweight constant propagation for index arithmetic so we can:
+    // - prove `scf.for` loops execute (or execute >1 times)
+    // - keep producer state across loops to insert correct fences for tstore/tmov
+    //
+    // We only fold a minimal subset of `pto.i*` ops used in loop-bound computations.
+    auto resolveIntConst = [&](std::string s) -> std::optional<int64_t> {
+      s = trim(s);
+      if (s.empty())
+        return std::nullopt;
+      if (s[0] == '%') {
+        auto it = constMap.find(s);
+        if (it == constMap.end())
+          return std::nullopt;
+        s = trim(it->second);
+      }
+      char *end = nullptr;
+      long long v = std::strtoll(s.c_str(), &end, 10);
+      if (!end || *end != '\0')
+        return std::nullopt;
+      return static_cast<int64_t>(v);
+    };
+
+    auto tryFoldIndexOp = [&](mlir::Operation *op) -> void {
+      auto name = stripDialect(op->getName().getStringRef());
+      if (!(name == "iadd" || name == "isub" || name == "imul" || name == "idiv" || name == "irem"))
+        return;
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        return;
+      auto dst = trim(operands[0]);
+      auto lhs = resolveIntConst(operands[1]);
+      auto rhs = resolveIntConst(operands[2]);
+      if (!lhs || !rhs)
+        return;
+      int64_t out = 0;
+      if (name == "iadd") {
+        out = *lhs + *rhs;
+      } else if (name == "isub") {
+        out = *lhs - *rhs;
+      } else if (name == "imul") {
+        out = (*lhs) * (*rhs);
+      } else if (name == "idiv") {
+        if (*rhs == 0)
+          return;
+        out = *lhs / *rhs;
+      } else if (name == "irem") {
+        if (*rhs == 0)
+          return;
+        out = *lhs % *rhs;
+      } else {
+        return;
+      }
+      constMap[dst] = std::to_string(out);
+    };
+
+    module.walk([&](mlir::Operation *op) { tryFoldIndexOp(op); });
 
     mlir::OpBuilder b(module.getContext());
 
@@ -563,9 +639,16 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
       if (srcPipe == dstPipe)
         return;
 
-      auto srcOp = !srcOpEnum.empty() ? srcOpEnum : canonicalOpEnumForPipe(srcPipe);
-      auto dstOp = !dstOpEnum.empty() ? dstOpEnum : canonicalOpEnumForPipe(dstPipe);
+      (void)srcOpEnum;
+      (void)dstOpEnum;
+      // Synchronization is pipe-based on A2/A3; use canonical op enums for stability.
+      auto srcOp = canonicalOpEnumForPipe(srcPipe);
+      auto dstOp = canonicalOpEnumForPipe(dstPipe);
       if (srcOp.empty() || dstOp.empty())
+        return;
+
+      // Keep the pass stable if re-run.
+      if (hasFenceBefore(anchor, srcOp, dstOp))
         return;
 
       auto tok = allocTokenForPipes(srcPipe, dstPipe);
@@ -583,8 +666,11 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
       if (srcPipe == dstPipe)
         return;
 
-      auto srcOp = !srcOpEnum.empty() ? srcOpEnum : canonicalOpEnumForPipe(srcPipe);
-      auto dstOp = !dstOpEnum.empty() ? dstOpEnum : canonicalOpEnumForPipe(dstPipe);
+      (void)srcOpEnum;
+      (void)dstOpEnum;
+      // Synchronization is pipe-based on A2/A3; use canonical op enums for stability.
+      auto srcOp = canonicalOpEnumForPipe(srcPipe);
+      auto dstOp = canonicalOpEnumForPipe(dstPipe);
       if (srcOp.empty() || dstOp.empty())
         return;
 
@@ -601,6 +687,13 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
     auto insertTsyncVBefore = [&](mlir::Operation *anchor) -> void {
       if (!anchor)
         return;
+      // Keep the pass stable if re-run.
+      if (auto *p = anchor->getPrevNode(); p && p->getName().getStringRef() == "pto.tsync") {
+        auto pipeA = p->getAttrOfType<mlir::StringAttr>("pipe");
+        auto pipe = pipeA ? trim(pipeA.getValue().str()) : std::string("V");
+        if (pipe.empty() || pipe == "V")
+          return;
+      }
       b.setInsertionPoint(anchor);
       mlir::OperationState st(anchor->getLoc(), "pto.tsync");
       st.addAttribute("pipe", b.getStringAttr("V"));
@@ -621,31 +714,18 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
 		          // If we can prove the loop executes at least once (constant bounds), propagate the
 		          // resulting tile defs to the outer scope so consumers after the loop (e.g. tstore)
 	          // can see producers inside the loop.
-	          auto resolveInt = [&](std::string s) -> std::optional<int64_t> {
-	            s = trim(s);
-	            if (s.empty())
-	              return std::nullopt;
-	            if (s[0] == '%') {
-	              auto itC = constMap.find(s);
-	              if (itC == constMap.end())
-	                return std::nullopt;
-	              s = trim(itC->second);
-	            }
-	            char *end = nullptr;
-	            long long v = std::strtoll(s.c_str(), &end, 10);
-	            if (!end || *end != '\0')
-	              return std::nullopt;
-	            return static_cast<int64_t>(v);
-	          };
-
 	          bool mustRunAtLeastOnce = false;
+	          bool mayRunMoreThanOnce = true;
 	          auto loopOperands = readOperands(consumer);
 	          if (loopOperands.size() == 4) {
-	            auto lb = resolveInt(loopOperands[1]);
-	            auto ub = resolveInt(loopOperands[2]);
-	            auto step = resolveInt(loopOperands[3]);
-	            if (lb && ub && step && *step > 0 && *lb < *ub)
-	              mustRunAtLeastOnce = true;
+	            auto lb = resolveIntConst(loopOperands[1]);
+	            auto ub = resolveIntConst(loopOperands[2]);
+	            auto step = resolveIntConst(loopOperands[3]);
+	            if (lb && ub && step && *step > 0) {
+	              mustRunAtLeastOnce = (*lb < *ub);
+	              // >=2 iterations if lb + step < ub
+	              mayRunMoreThanOnce = ((*lb + *step) < *ub);
+	            }
 	          }
 
 	          for (auto &r : consumer->getRegions())
@@ -653,6 +733,14 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
 	              auto incoming = tileState;
 	              auto inner = tileState;
 	              self(r.front(), inner, self);
+	              // Loop-carried hazards: the loop body executes repeatedly, so end-of-iter tile states
+	              // feed into the next iteration's overwrites/uses. Re-run once with the end state as
+	              // the incoming state to insert the missing cross-iteration fences (conservative).
+	              if (mayRunMoreThanOnce) {
+	                auto carried = inner;
+	                self(r.front(), carried, self);
+	                inner = std::move(carried);
+	              }
 	              if (mustRunAtLeastOnce) {
 	                std::map<std::string, TileSyncState> out = std::move(inner);
 	                for (auto &kv : out) {
@@ -734,10 +822,27 @@ struct InsertEventsPass : public mlir::PassWrapper<InsertEventsPass, mlir::Opera
             };
 
             if (itT == thenState.end() || itE == elseState.end()) {
-              // Defined/updated in only one branch: if the symbol existed before the `scf.if`, treat the missing
-              // branch as "kept previous value" and merge by pipe. Otherwise, invalidate.
+              // Defined/updated in only one branch:
+              // - If the symbol existed before the `scf.if`, treat the missing branch as "kept previous value"
+              //   and merge by pipe.
+              // - Otherwise, keep the known branch state conservatively. Dropping it loses dependency info and
+              //   can produce missing waits in common ping-pong GEMM patterns (leading to L0 conflicts).
               if (itIn == tileState.end()) {
-                merged.erase(k);
+                const TileSyncState *only = (itT != thenState.end()) ? &itT->second : &itE->second;
+                if (!only || only->def.pipe.empty()) {
+                  merged.erase(k);
+                  continue;
+                }
+                auto canon = canonicalOpEnumForPipe(only->def.pipe);
+                if (canon.empty()) {
+                  merged.erase(k);
+                  continue;
+                }
+                TileSyncState out;
+                out.def = DefInfo{consumer, canon.str(), only->def.pipe};
+                out.waitedPipes.clear();
+                out.waitedPipes.insert(only->def.pipe);
+                merged[k] = std::move(out);
                 continue;
               }
               const TileSyncState &t = (itT != thenState.end()) ? itT->second : itIn->second;

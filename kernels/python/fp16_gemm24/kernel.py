@@ -72,10 +72,6 @@ def fp16_gemm24():
                     if lane == 0:
                         a_mat0 = pto.load(A, m0, k0)
                         b_mat0 = pto.load(B, k0, n0)
-                        # Loop-carried hazard: previous TMATMUL may still be reading t_a0/t_b0 (L0A/L0B)
-                        # while we overwrite them via TMOV (PIPE_MTE1). Insert an explicit M->MTE1 fence.
-                        pto.record_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=4)
-                        pto.wait_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=4)
                         a0 = pto.mov(a_mat0)
                         b0 = pto.mov(b_mat0)
                         if kt == 0:
@@ -85,17 +81,10 @@ def fp16_gemm24():
                     else:
                         a_mat1 = pto.load(A, m0, k0)
                         b_mat1 = pto.load(B, k0, n0)
-                        # Same hazard for ping-pong buffer 1.
-                        pto.record_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=5)
-                        pto.wait_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=5)
                         a1 = pto.mov(a_mat1)
                         b1 = pto.mov(b_mat1)
                         c = pto.matmul_acc(c, a1, b1)
 
-                # Ensure the final TMATMUL completes before storing the Acc tile to GM.
-                # InsertEventsPass currently misses this M->FIX fence for some loop shapes.
-                pto.record_event(src_op="TMATMUL", dst_op="TSTORE_ACC", token=0)
-                pto.wait_event(src_op="TMATMUL", dst_op="TSTORE_ACC", token=0)
                 pto.store(C, m0, n0, c)
 
     pto.epilogue()

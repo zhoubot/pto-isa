@@ -98,19 +98,12 @@ def sparse_attn_topk_split():
                     q_mat = pto.load(q_in, qh0, kk)
                     kt0 = kt_row0 + kk
                     kt_mat = pto.load(kt_in, kt0, kj)
-                    # Loop-carried hazard: TMATMUL may still be reading the previous
-                    # q_left/kt_right tiles (L0A/L0B) while we overwrite them via TMOV (MTE1).
-                    pto.record_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=4)
-                    pto.wait_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=4)
                     q_left = pto.mov(q_mat)
                     kt_right = pto.mov(kt_mat)
                     if kk == 0:
                         scores_acc = pto.matmul(q_left, kt_right)
                     else:
                         scores_acc = pto.matmul_acc(scores_acc, q_left, kt_right)
-                # Ensure the final TMATMUL completes before storing the Acc tile to GM.
-                pto.record_event(src_op="TMATMUL", dst_op="TSTORE_ACC", token=0)
-                pto.wait_event(src_op="TMATMUL", dst_op="TSTORE_ACC", token=0)
                 pto.store(scores_gm, qh0, kj, scores_acc)
 
     # -------------------------------------------------------------------------
@@ -170,18 +163,12 @@ def sparse_attn_topk_split():
                     p_mat = pto.load(probs_gm, qh0, kk)
                     v0 = v_row0 + kk
                     v_mat = pto.load(v_in, v0, dj)
-                    # Loop-carried hazard: TMATMUL may still be reading p_left/v_right while
-                    # we overwrite them via TMOV (MTE1).
-                    pto.record_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=5)
-                    pto.wait_event(src_op="TMATMUL", dst_op="TMOV_M2L", token=5)
                     p_left = pto.mov(p_mat)
                     v_right = pto.mov(v_mat)
                     if kk == 0:
                         out_acc = pto.matmul(p_left, v_right)
                     else:
                         out_acc = pto.matmul_acc(out_acc, p_left, v_right)
-                pto.record_event(src_op="TMATMUL", dst_op="TSTORE_ACC", token=1)
-                pto.wait_event(src_op="TMATMUL", dst_op="TSTORE_ACC", token=1)
                 pto.store(out, qh0, dj, out_acc)
 
     pto.epilogue()
