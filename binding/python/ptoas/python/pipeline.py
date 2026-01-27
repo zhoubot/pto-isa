@@ -88,7 +88,13 @@ def extract_cce_set_wait_lines(*, cce_path: Path, limit: int = 200) -> list[str]
     return out
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    here = Path(__file__).resolve()
+    for p in here.parents:
+        # `version.info` is a stable repo-root marker in this project.
+        if (p / "version.info").exists():
+            return p
+    # Fallback: keep the old relative behavior (best-effort).
+    return here.parents[4]
 
 
 def ascend_include_dirs(ascend_home: Path) -> list[str]:

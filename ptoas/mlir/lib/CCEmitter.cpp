@@ -105,10 +105,99 @@ static std::string elemToCpp(const std::string &dtype) {
   llvm::report_fatal_error(llvm::Twine("Unsupported dtype: ") + dtype);
 }
 
+static size_t dtypeBytesOrZero(const std::string &dtype) {
+  if (dtype == "f16" || dtype == "bf16")
+    return 2;
+  if (dtype == "f32")
+    return 4;
+  if (dtype == "f64")
+    return 8;
+  if (dtype == "i8" || dtype == "u8")
+    return 1;
+  if (dtype == "i16" || dtype == "u16")
+    return 2;
+  if (dtype == "i32" || dtype == "u32")
+    return 4;
+  if (dtype == "i64" || dtype == "u64")
+    return 8;
+  return 0;
+}
+
 static std::string intOrDynamic(const std::string &v) {
-  if (v == "dyn")
+  if (v == "dyn" || v == "?")
     return "pto::DYNAMIC";
   return v;
+}
+
+static std::vector<std::string> shapeTo5(const std::vector<std::string> &shape);
+static std::vector<std::string> strideTo5(const std::vector<std::string> &stride);
+
+static std::optional<int64_t> tryParseIntLiteralI64(const std::string &raw) {
+  auto t = trim(raw);
+  if (t.empty())
+    return std::nullopt;
+  if (t == "dyn" || t == "?")
+    return std::nullopt;
+  if (!t.empty() && t[0] == '%')
+    return std::nullopt;
+
+  int base = 10;
+  if (t.rfind("0x", 0) == 0 || t.rfind("0X", 0) == 0)
+    base = 16;
+  char *end = nullptr;
+  auto v = std::strtoll(t.c_str(), &end, base);
+  if (!end || *end != '\0')
+    return std::nullopt;
+  return static_cast<int64_t>(v);
+}
+
+static std::string inferLayoutOrDefault(const std::string &dtype, const std::vector<std::string> &shapeIn,
+                                        const std::vector<std::string> &strideIn) {
+  auto shape = shapeTo5(shapeIn);
+  auto stride = strideTo5(strideIn);
+
+  std::vector<int64_t> sh(5), st(5);
+  for (size_t i = 0; i < 5; ++i) {
+    auto shOpt = tryParseIntLiteralI64(shape[i]);
+    auto stOpt = tryParseIntLiteralI64(stride[i]);
+    if (!shOpt || !stOpt)
+      return "ND";
+    sh[i] = *shOpt;
+    st[i] = *stOpt;
+  }
+
+  // NZ (Fractal) inference (see ptoas/IR_SPEC.md).
+  if (auto bytes = dtypeBytesOrZero(dtype); bytes != 0) {
+    const bool alignMatch = (sh[2] == 16) && (sh[2] * sh[3] * static_cast<int64_t>(bytes) == 512);
+    const bool strideMatch = (st[4] == 1) && (st[3] == sh[4]);
+    if (alignMatch && strideMatch)
+      return "NZ";
+  }
+
+  // ND (row-major) inference.
+  bool isRowMajor = (st[4] == 1);
+  for (int i = 0; i < 4; ++i) {
+    if (st[i] != st[i + 1] * sh[i + 1]) {
+      isRowMajor = false;
+      break;
+    }
+  }
+  if (isRowMajor)
+    return "ND";
+
+  // DN (col-major) inference.
+  bool isColMajor = (st[0] == 1);
+  for (int i = 0; i < 4; ++i) {
+    if (st[i + 1] != st[i] * sh[i]) {
+      isColMajor = false;
+      break;
+    }
+  }
+  if (isColMajor)
+    return "DN";
+
+  // Default.
+  return "ND";
 }
 
 static std::vector<std::string> defaultStrideForShape5(const std::vector<std::string> &shape5) {
@@ -238,11 +327,15 @@ struct ConstInfo {
   std::string type;  // type text
 };
 
-static bool isTileType(const std::string &typeStr) { return llvm::StringRef(typeStr).starts_with("!pto.tile<"); }
+static bool isTileType(const std::string &typeStr) {
+  auto s = llvm::StringRef(typeStr);
+  return s.starts_with("!pto.tile<") || s.starts_with("!pto.tile_buf<");
+}
 
 static bool isTensorType(const std::string &typeStr) {
   auto s = llvm::StringRef(typeStr);
-  return s.starts_with("!pto.tensor<") || s.starts_with("!pto.gtensor<");
+  return s.starts_with("!pto.tensor<") || s.starts_with("!pto.tensor_view<") || s.starts_with("!pto.partition_tensor_view<") ||
+         s.starts_with("!pto.gtensor<");
 }
 
 static std::vector<std::string> readOperands(mlir::Operation *op);
@@ -257,6 +350,8 @@ struct AllocTileInfo {
   std::string tileName;                 // with leading %
   std::string typeStr;                  // !pto.tile<...>
   std::optional<std::string> addrValue; // optional address operand (e.g. %addr_x)
+  std::optional<std::string> validRowValue; // optional runtime valid_row (dyn tiles)
+  std::optional<std::string> validColValue; // optional runtime valid_col (dyn tiles)
   mlir::Operation *declOp = nullptr;    // pto.alloc_tile op (for attrs like ptoas.tile_addrs)
 };
 
@@ -285,8 +380,6 @@ static std::string buildTensorTypeFromMakeView(mlir::Operation *op) {
     llvm::report_fatal_error("pto.make_tensor_view missing dtype=...");
 
   auto layout = extractScalarAfterKeyOrEmpty(opts, "layout=");
-  if (layout.empty())
-    layout = "ND";
 
   auto shapeLit = extractBracketListOrEmpty(opts, "shape=");
   if (shapeLit.empty())
@@ -306,6 +399,11 @@ static std::string buildTensorTypeFromMakeView(mlir::Operation *op) {
     else
       stride = defaultStrideForShape5(shapeTo5(shape));
   }
+
+  if (layout.empty() || layout == "AUTO" || layout == "auto" || layout == "infer" || layout == "Infer")
+    layout = inferLayoutOrDefault(dtype, shape, stride);
+  if (layout.empty())
+    layout = "ND";
 
   std::ostringstream ss;
   ss << "!pto.tensor<dtype=" << dtype << ", shape=[";
@@ -358,6 +456,48 @@ static SubviewInfo readSubview(mlir::Operation *op) {
   return out;
 }
 
+struct PartitionViewInfo {
+  std::string viewName;               // with leading %
+  std::string baseView;               // with leading % (view or %argN)
+  std::vector<std::string> offsets5;  // 5D offsets (DIM_0..DIM_4)
+  std::vector<std::string> sizes5;    // 5D sizes (DIM_0..DIM_4)
+  std::optional<std::string> typeStr; // optional explicit typesig
+};
+
+static PartitionViewInfo readPartitionView(mlir::Operation *op) {
+  auto operands = readOperands(op);
+  if (operands.size() < 2)
+    llvm::report_fatal_error("pto.partition_view expects at least 2 operands (%view, %base)");
+
+  std::string opts;
+  for (size_t i = 2; i < operands.size(); ++i) {
+    if (!opts.empty())
+      opts += ", ";
+    opts += operands[i];
+  }
+
+  auto offsetsLit = extractBracketListOrEmpty(opts, "offsets=");
+  if (offsetsLit.empty())
+    offsetsLit = extractBracketListOrEmpty(opts, "offset=");
+  if (offsetsLit.empty())
+    llvm::report_fatal_error("pto.partition_view missing offsets=[...]");
+
+  auto sizesLit = extractBracketListOrEmpty(opts, "sizes=");
+  if (sizesLit.empty())
+    sizesLit = extractBracketListOrEmpty(opts, "size=");
+  if (sizesLit.empty())
+    llvm::report_fatal_error("pto.partition_view missing sizes=[...]");
+
+  PartitionViewInfo out;
+  out.viewName = trim(operands[0]);
+  out.baseView = trim(operands[1]);
+  out.offsets5 = offsetTo5(parseList2or5(offsetsLit));
+  out.sizes5 = shapeTo5(parseList2or5(sizesLit));
+  if (auto typeSig = op->getAttrOfType<mlir::StringAttr>("typesig"))
+    out.typeStr = typeSig.getValue().str();
+  return out;
+}
+
 static AllocTileInfo readAllocTile(mlir::Operation *op) {
   auto operands = readOperands(op);
   if (operands.empty())
@@ -368,8 +508,60 @@ static AllocTileInfo readAllocTile(mlir::Operation *op) {
   AllocTileInfo out;
   out.tileName = trim(operands[0]);
   out.typeStr = typeSig.getValue().str();
-  if (operands.size() >= 2)
-    out.addrValue = trim(operands[1]);
+  if (operands.size() >= 2) {
+    // Support both positional (legacy) and keyword (new) operands:
+    //   %t = pto.alloc_tile %addr : !pto.tile<...>
+    //   %t = pto.alloc_tile addr=%addr valid_row=%vr valid_col=%vc : !pto.tile_buf<...>
+    std::string opts;
+    for (size_t i = 1; i < operands.size(); ++i) {
+      if (!opts.empty())
+        opts += ", ";
+      opts += operands[i];
+    }
+
+    auto normalizeEq = [](std::string s) -> std::string {
+      // Remove whitespace around '=' so both `k=v` and `k = v` are accepted.
+      std::string out;
+      out.reserve(s.size());
+      for (size_t i = 0; i < s.size(); ++i) {
+        char ch = s[i];
+        if (ch != '=') {
+          out.push_back(ch);
+          continue;
+        }
+        // Drop trailing spaces in `out`.
+        while (!out.empty() && std::isspace(static_cast<unsigned char>(out.back())))
+          out.pop_back();
+        out.push_back('=');
+        // Skip following spaces in `s`.
+        while (i + 1 < s.size() && std::isspace(static_cast<unsigned char>(s[i + 1])))
+          i++;
+      }
+      return out;
+    };
+
+    auto optsNorm = normalizeEq(opts);
+    auto addrKw = extractScalarAfterKeyOrEmpty(optsNorm, "addr=");
+    auto vrKw = extractScalarAfterKeyOrEmpty(optsNorm, "valid_row=");
+    auto vcKw = extractScalarAfterKeyOrEmpty(optsNorm, "valid_col=");
+    if (!addrKw.empty())
+      out.addrValue = addrKw;
+    if (!vrKw.empty())
+      out.validRowValue = vrKw;
+    if (!vcKw.empty())
+      out.validColValue = vcKw;
+
+    // Legacy positional addr (only if no keyword addr=... was present).
+    for (size_t i = 1; i < operands.size() && !out.addrValue; ++i) {
+      auto t = trim(operands[i]);
+      if (t.find('=') != std::string::npos)
+        continue;
+      if (t.rfind("valid_row", 0) == 0 || t.rfind("valid_col", 0) == 0)
+        continue;
+      out.addrValue = t;
+      break;
+    }
+  }
   out.declOp = op;
   return out;
 }
@@ -538,6 +730,10 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     if (isTensorType(a.typeStr)) {
       auto kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tensor");
       if (!kvOpt)
+        kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tensor_view");
+      if (!kvOpt)
+        kvOpt = tryParseAngleKVs(a.typeStr, "!pto.partition_tensor_view");
+      if (!kvOpt)
         kvOpt = tryParseAngleKVs(a.typeStr, "!pto.gtensor"); // compat
       if (!kvOpt)
         llvm::report_fatal_error(llvm::Twine("tensor type parse failed: ") + a.typeStr);
@@ -547,6 +743,8 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       tensorArgs.push_back({a, std::move(kv)});
     } else if (isTileType(a.typeStr)) {
       auto kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tile");
+      if (!kvOpt)
+        kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tile_buf");
       if (!kvOpt)
         llvm::report_fatal_error(llvm::Twine("tile type parse failed: ") + a.typeStr);
       auto kv = *kvOpt;
@@ -572,6 +770,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
   os << "#include \"kernel_operator.h\"\n";
   os << "#include <cstdint>\n";
   os << "#if defined(__CCE_AICORE__)\n";
+  os << "#include <new>\n";
   os << "#include <pto/pto-inst.hpp>\n";
   os << "using namespace pto;\n";
   os << "#endif\n\n";
@@ -719,12 +918,31 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     auto slayout = kv.count("slayout") ? kv.at("slayout") : "NoneBox";
     auto fractal = kv.count("fractal") ? kv.at("fractal") : defaultFractalBytesForTileLoc(loc);
     auto pad = kv.count("pad") ? kv.at("pad") : "Null";
-    auto valid = kv.count("valid") ? kv.at("valid") : (kv.at("rows") + "x" + kv.at("cols"));
-    auto x = valid.find('x');
-    if (x == std::string::npos)
-      llvm::report_fatal_error("tile valid must be RxC");
-    auto vrow = intOrDynamic(valid.substr(0, x));
-    auto vcol = intOrDynamic(valid.substr(x + 1));
+    std::string vrowTok;
+    std::string vcolTok;
+    if (kv.count("v_row") || kv.count("v_col")) {
+      vrowTok = kv.count("v_row") ? kv.at("v_row") : "dyn";
+      vcolTok = kv.count("v_col") ? kv.at("v_col") : "dyn";
+    } else {
+      auto valid = kv.count("valid") ? kv.at("valid") : (kv.at("rows") + "x" + kv.at("cols"));
+      auto x = valid.find('x');
+      if (x == std::string::npos)
+        llvm::report_fatal_error("tile valid must be RxC");
+      vrowTok = valid.substr(0, x);
+      vcolTok = valid.substr(x + 1);
+    }
+    if (!vrowTok.empty() && vrowTok[0] == '%') {
+      auto it = constMap.find(vrowTok);
+      if (it != constMap.end())
+        vrowTok = it->second;
+    }
+    if (!vcolTok.empty() && vcolTok[0] == '%') {
+      auto it = constMap.find(vcolTok);
+      if (it != constMap.end())
+        vcolTok = it->second;
+    }
+    auto vrow = intOrDynamic(trim(vrowTok));
+    auto vcol = intOrDynamic(trim(vcolTok));
 
     auto baseName = t.a.name.substr(1);
     os << "  using " << baseName << "_Tile = Tile<" << cppTileType(loc) << ", " << elemCpp << ", " << rows << ", "
@@ -835,6 +1053,101 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     return ss.str();
   };
 
+  auto emitPartitionViewStmt = [&](mlir::Operation *op) -> std::string {
+    auto pv = readPartitionView(op);
+    if (pv.viewName.empty() || pv.viewName[0] != '%')
+      llvm::report_fatal_error("pto.partition_view destination must be a %name symbol");
+
+    // Resolve base before registering the new view to avoid accidental self-reference.
+    auto baseVar = resolve(pv.baseView);
+    auto viewKey = pv.viewName.substr(1);
+    auto viewVar = "g_" + viewKey;
+    localTensorVars[pv.viewName] = viewVar;
+    if (auto it = tensorInfoByResolvedName.find(baseVar); it != tensorInfoByResolvedName.end())
+      tensorInfoByResolvedName[viewVar] = it->second;
+
+    auto it = tensorInfoByResolvedName.find(baseVar);
+    if (it == tensorInfoByResolvedName.end())
+      llvm::report_fatal_error("pto.partition_view base must resolve to a known GlobalTensor");
+
+    auto isIntLit = [&](const std::string &s) -> bool {
+      auto t = trim(s);
+      if (t.empty())
+        return false;
+      if (t.rfind("0x", 0) == 0 || t.rfind("0X", 0) == 0) {
+        char *end = nullptr;
+        (void)std::strtoull(t.c_str(), &end, 16);
+        return end && *end == '\0';
+      }
+      if (t[0] == '-')
+        return false;
+      for (char ch : t)
+        if (!std::isdigit(static_cast<unsigned char>(ch)))
+          return false;
+      return true;
+    };
+
+    std::vector<std::string> shapeTpl;
+    std::vector<std::string> shapeDynArgs;
+    shapeTpl.reserve(5);
+    shapeDynArgs.reserve(5);
+    for (auto &raw : pv.sizes5) {
+      auto tok = trim(raw);
+      if (tok == "dyn" || tok == "?")
+        llvm::report_fatal_error("pto.partition_view sizes must be concrete values (use literals or SSA values)");
+
+      // Const substitution: allow `%c*` to appear in sizes.
+      if (!tok.empty() && tok[0] == '%') {
+        auto itC = constMap.find(tok);
+        if (itC != constMap.end())
+          tok = itC->second;
+      }
+
+      if (!tok.empty() && tok[0] == '%') {
+        shapeTpl.push_back("pto::DYNAMIC");
+        shapeDynArgs.push_back(resolve(tok));
+        continue;
+      }
+      if (!isIntLit(tok)) {
+        shapeTpl.push_back("pto::DYNAMIC");
+        shapeDynArgs.push_back(resolve(tok));
+        continue;
+      }
+      shapeTpl.push_back(tok);
+    }
+
+    auto shapeName = sanitizeStageForKernelName(viewKey) + "_Shape";
+    auto tensorName = sanitizeStageForKernelName(viewKey) + "_Tensor";
+
+    std::ostringstream ss;
+    ss << "  auto* " << viewVar << "_base = " << baseVar << ".data();\n";
+    ss << "  using " << shapeName << " = ::pto::Shape<" << intOrDynamic(shapeTpl[0]) << ", " << intOrDynamic(shapeTpl[1])
+       << ", " << intOrDynamic(shapeTpl[2]) << ", " << intOrDynamic(shapeTpl[3]) << ", " << intOrDynamic(shapeTpl[4])
+       << ">;\n";
+    ss << "  using " << tensorName << " = GlobalTensor<" << it->second.elemCpp << ", " << shapeName << ", "
+       << it->second.strideTypeName << ", " << it->second.layoutCpp << ">;\n";
+    ss << "  " << tensorName << " " << viewVar << "(" << viewVar << "_base";
+    if (!shapeDynArgs.empty()) {
+      ss << ", " << shapeName << "(";
+      for (size_t i = 0; i < shapeDynArgs.size(); ++i) {
+        if (i)
+          ss << ", ";
+        ss << shapeDynArgs[i];
+      }
+      ss << ")";
+    }
+    ss << ");\n";
+
+    ss << "  auto " << viewVar << "_off = (" << resolve(pv.offsets5[0]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_0) + (" << resolve(pv.offsets5[1]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_1) + (" << resolve(pv.offsets5[2]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_2) + (" << resolve(pv.offsets5[3]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_3) + (" << resolve(pv.offsets5[4]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_4);\n";
+    ss << "  TASSIGN(" << viewVar << ", " << viewVar << "_base + " << viewVar << "_off);\n";
+    return ss.str();
+  };
+
   auto lookupTileAddrForStage = [&](mlir::Operation *allocTileOp,
                                     const std::string &stage) -> std::optional<std::string> {
     if (!allocTileOp)
@@ -852,30 +1165,90 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
     return v;
   };
 
-  // Tile address binding:
-  // - Single-kernel: use `pto.alloc_tile` baked-in address operand (typically from `--assign-tile-addrs`).
-  // - Split-kernel: prefer stage-specific addresses from `ptoas.tile_addrs` (assigned by the pass).
-  for (auto &at : allocTiles) {
+  auto emitAllocTileStmt = [&](mlir::Operation *op) -> std::string {
+    auto at = readAllocTile(op);
     auto tileName = trim(at.tileName);
+
     if (stageFilter && stageAwareKernels) {
       if (!usedTiles.count(tileName))
-        continue;
+        return "";
+    }
+
+    // Parse tile type to decide whether valid_row/valid_col are dynamic.
+    auto kvOpt = tryParseAngleKVs(at.typeStr, "!pto.tile");
+    if (!kvOpt)
+      kvOpt = tryParseAngleKVs(at.typeStr, "!pto.tile_buf");
+    if (!kvOpt)
+      llvm::report_fatal_error("alloc_tile type parse failed");
+    auto kv = *kvOpt;
+
+    std::string vrowTok;
+    std::string vcolTok;
+    if (kv.count("v_row") || kv.count("v_col")) {
+      vrowTok = kv.count("v_row") ? kv["v_row"] : "dyn";
+      vcolTok = kv.count("v_col") ? kv["v_col"] : "dyn";
+    } else if (kv.count("valid")) {
+      auto valid = kv["valid"];
+      auto x = valid.find('x');
+      if (x == std::string::npos)
+        llvm::report_fatal_error("tile valid must be RxC");
+      vrowTok = valid.substr(0, x);
+      vcolTok = valid.substr(x + 1);
+    } else {
+      // Default: valid == rows x cols.
+      vrowTok = kv.count("rows") ? kv["rows"] : "";
+      vcolTok = kv.count("cols") ? kv["cols"] : "";
+    }
+
+    auto dynRow = (trim(vrowTok) == "dyn" || trim(vrowTok) == "?");
+    auto dynCol = (trim(vcolTok) == "dyn" || trim(vcolTok) == "?");
+
+    std::ostringstream ss;
+
+    // Initialize dynamic valid masks via placement-new.
+    if (dynRow || dynCol) {
+      if (dynRow && !at.validRowValue)
+        llvm::report_fatal_error("pto.alloc_tile missing valid_row=... for dyn v_row");
+      if (dynCol && !at.validColValue)
+        llvm::report_fatal_error("pto.alloc_tile missing valid_col=... for dyn v_col");
+      if (!dynRow && at.validRowValue)
+        llvm::report_fatal_error("pto.alloc_tile provides valid_row=... but tile v_row is static");
+      if (!dynCol && at.validColValue)
+        llvm::report_fatal_error("pto.alloc_tile provides valid_col=... but tile v_col is static");
+
+      auto baseName = tileName.substr(1);
+      ss << "  new (&" << resolve(tileName) << ") " << baseName << "_Tile(";
+      if (dynRow && dynCol) {
+        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << "), static_cast<size_t>("
+           << resolve(*at.validColValue) << ")";
+      } else if (dynRow) {
+        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << ")";
+      } else if (dynCol) {
+        ss << "static_cast<size_t>(" << resolve(*at.validColValue) << ")";
+      }
+      ss << ");\n";
+    } else {
+      if (at.validRowValue || at.validColValue)
+        llvm::report_fatal_error("pto.alloc_tile provides valid_row/valid_col but tile valid is static");
+    }
+
+    // Address binding (optional in single-kernel mode; required in stage-aware mode).
+    if (stageFilter && stageAwareKernels) {
       std::optional<std::string> addr = lookupTileAddrForStage(at.declOp, *stageFilter);
       if (!addr && at.addrValue)
         addr = *at.addrValue;
       if (!addr) {
-        llvm::report_fatal_error(llvm::Twine("missing tile address for ") + tileName + " in stage " +
-                                 *stageFilter + " (enable --assign-tile-addrs)");
+        llvm::report_fatal_error(llvm::Twine("missing tile address for ") + tileName + " in stage " + *stageFilter +
+                                 " (enable --assign-tile-addrs)");
       }
-      os << "  TASSIGN(" << resolve(tileName) << ", " << resolve(*addr) << ");\n";
+      ss << "  TASSIGN(" << resolve(tileName) << ", " << resolve(*addr) << ");\n";
     } else {
-      if (!at.addrValue)
-        continue;
-      os << "  TASSIGN(" << resolve(tileName) << ", " << resolve(*at.addrValue) << ");\n";
+      if (at.addrValue)
+        ss << "  TASSIGN(" << resolve(tileName) << ", " << resolve(*at.addrValue) << ");\n";
     }
-  }
-  if (!allocTiles.empty())
-    os << "\n";
+
+    return ss.str();
+  };
 
   auto emitInstrCall = [&](mlir::Operation *op, const std::string *assignEvent) -> std::string {
     auto opcode = mnemonicFor(op->getName().getStringRef());
@@ -1302,7 +1675,15 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
         os << indentExtra(emitSubviewStmt(op), extra);
         continue;
       }
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.alloc_tile")
+      if (name == "pto.partition_view") {
+        os << indentExtra(emitPartitionViewStmt(op), extra);
+        continue;
+      }
+      if (name == "pto.alloc_tile") {
+        os << indentExtra(emitAllocTileStmt(op), extra);
+        continue;
+      }
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view")
         continue;
 
       if (name == "scf.for") {
@@ -1456,6 +1837,10 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
     if (isTensorType(a.typeStr)) {
       auto kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tensor");
       if (!kvOpt)
+        kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tensor_view");
+      if (!kvOpt)
+        kvOpt = tryParseAngleKVs(a.typeStr, "!pto.partition_tensor_view");
+      if (!kvOpt)
         kvOpt = tryParseAngleKVs(a.typeStr, "!pto.gtensor"); // compat
       if (!kvOpt)
         llvm::report_fatal_error(llvm::Twine("tensor type parse failed: ") + a.typeStr);
@@ -1465,6 +1850,8 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       tensorArgs.push_back({a, std::move(kv)});
     } else if (isTileType(a.typeStr)) {
       auto kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tile");
+      if (!kvOpt)
+        kvOpt = tryParseAngleKVs(a.typeStr, "!pto.tile_buf");
       if (!kvOpt)
         llvm::report_fatal_error(llvm::Twine("tile type parse failed: ") + a.typeStr);
       auto kv = *kvOpt;
@@ -1477,6 +1864,7 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
   std::ostringstream os;
   os << "// Generated by ptoas (CPU simulator)\n";
   os << "#define __CPU_SIM\n";
+  os << "#include <new>\n";
   os << "#include <pto/pto-inst.hpp>\n";
   os << "#include <cstdint>\n";
   os << "using namespace pto;\n\n";
@@ -1532,12 +1920,31 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
     auto slayout = kv.count("slayout") ? kv.at("slayout") : "NoneBox";
     auto fractal = kv.count("fractal") ? kv.at("fractal") : defaultFractalBytesForTileLoc(loc);
     auto pad = kv.count("pad") ? kv.at("pad") : "Null";
-    auto valid = kv.count("valid") ? kv.at("valid") : (kv.at("rows") + "x" + kv.at("cols"));
-    auto x = valid.find('x');
-    if (x == std::string::npos)
-      llvm::report_fatal_error("tile valid must be RxC");
-    auto vrow = intOrDynamic(valid.substr(0, x));
-    auto vcol = intOrDynamic(valid.substr(x + 1));
+    std::string vrowTok;
+    std::string vcolTok;
+    if (kv.count("v_row") || kv.count("v_col")) {
+      vrowTok = kv.count("v_row") ? kv.at("v_row") : "dyn";
+      vcolTok = kv.count("v_col") ? kv.at("v_col") : "dyn";
+    } else {
+      auto valid = kv.count("valid") ? kv.at("valid") : (kv.at("rows") + "x" + kv.at("cols"));
+      auto x = valid.find('x');
+      if (x == std::string::npos)
+        llvm::report_fatal_error("tile valid must be RxC");
+      vrowTok = valid.substr(0, x);
+      vcolTok = valid.substr(x + 1);
+    }
+    if (!vrowTok.empty() && vrowTok[0] == '%') {
+      auto it = constMap.find(vrowTok);
+      if (it != constMap.end())
+        vrowTok = it->second;
+    }
+    if (!vcolTok.empty() && vcolTok[0] == '%') {
+      auto it = constMap.find(vcolTok);
+      if (it != constMap.end())
+        vcolTok = it->second;
+    }
+    auto vrow = intOrDynamic(trim(vrowTok));
+    auto vcol = intOrDynamic(trim(vcolTok));
 
     auto baseName = t.a.name.substr(1);
     os << "  using " << baseName << "_Tile = Tile<" << cppTileType(loc) << ", " << elemCpp << ", " << rows << ", "
@@ -1645,14 +2052,178 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
     return ss.str();
   };
 
-  // Tile address binding (new-format PTO-AS removes explicit `tassign`).
-  for (auto &at : allocTiles) {
-    if (!at.addrValue)
-      continue;
-    os << "  TASSIGN(" << resolve(at.tileName) << ", " << resolve(*at.addrValue) << ");\n";
-  }
-  if (!allocTiles.empty())
-    os << "\n";
+  auto emitPartitionViewStmt = [&](mlir::Operation *op) -> std::string {
+    auto pv = readPartitionView(op);
+    if (pv.viewName.empty() || pv.viewName[0] != '%')
+      llvm::report_fatal_error("pto.partition_view destination must be a %name symbol");
+
+    auto baseVar = resolve(pv.baseView);
+    auto viewKey = pv.viewName.substr(1);
+    auto viewVar = "g_" + viewKey;
+    localTensorVars[pv.viewName] = viewVar;
+    if (auto it = tensorInfoByResolvedName.find(baseVar); it != tensorInfoByResolvedName.end())
+      tensorInfoByResolvedName[viewVar] = it->second;
+
+    auto it = tensorInfoByResolvedName.find(baseVar);
+    if (it == tensorInfoByResolvedName.end())
+      llvm::report_fatal_error("pto.partition_view base must resolve to a known GlobalTensor");
+
+    auto isIntLit = [&](const std::string &s) -> bool {
+      auto t = trim(s);
+      if (t.empty())
+        return false;
+      if (t.rfind("0x", 0) == 0 || t.rfind("0X", 0) == 0) {
+        char *end = nullptr;
+        (void)std::strtoull(t.c_str(), &end, 16);
+        return end && *end == '\0';
+      }
+      if (t[0] == '-')
+        return false;
+      for (char ch : t)
+        if (!std::isdigit(static_cast<unsigned char>(ch)))
+          return false;
+      return true;
+    };
+
+    std::vector<std::string> shapeTpl;
+    std::vector<std::string> shapeDynArgs;
+    shapeTpl.reserve(5);
+    shapeDynArgs.reserve(5);
+    for (auto &raw : pv.sizes5) {
+      auto tok = trim(raw);
+      if (tok == "dyn" || tok == "?")
+        llvm::report_fatal_error("pto.partition_view sizes must be concrete values (use literals or SSA values)");
+
+      if (!tok.empty() && tok[0] == '%') {
+        auto itC = constMap.find(tok);
+        if (itC != constMap.end())
+          tok = itC->second;
+      }
+
+      if (!tok.empty() && tok[0] == '%') {
+        shapeTpl.push_back("pto::DYNAMIC");
+        shapeDynArgs.push_back(resolve(tok));
+        continue;
+      }
+      if (!isIntLit(tok)) {
+        shapeTpl.push_back("pto::DYNAMIC");
+        shapeDynArgs.push_back(resolve(tok));
+        continue;
+      }
+      shapeTpl.push_back(tok);
+    }
+
+    auto sanitizeIdent = [&](const std::string &in) -> std::string {
+      std::string out;
+      out.reserve(in.size());
+      for (char ch : in) {
+        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')
+          out.push_back(ch);
+        else
+          out.push_back('_');
+      }
+      if (out.empty())
+        return "tmp";
+      if (std::isdigit(static_cast<unsigned char>(out.front())))
+        out.insert(out.begin(), '_');
+      return out;
+    };
+
+    auto shapeName = sanitizeIdent(viewKey) + "_Shape";
+    auto tensorName = sanitizeIdent(viewKey) + "_Tensor";
+
+    std::ostringstream ss;
+    ss << "  auto* " << viewVar << "_base = " << baseVar << ".data();\n";
+    ss << "  using " << shapeName << " = ::pto::Shape<" << intOrDynamic(shapeTpl[0]) << ", " << intOrDynamic(shapeTpl[1])
+       << ", " << intOrDynamic(shapeTpl[2]) << ", " << intOrDynamic(shapeTpl[3]) << ", " << intOrDynamic(shapeTpl[4])
+       << ">;\n";
+    ss << "  using " << tensorName << " = GlobalTensor<" << it->second.elemCpp << ", " << shapeName << ", "
+       << it->second.strideTypeName << ", " << it->second.layoutCpp << ">;\n";
+    ss << "  " << tensorName << " " << viewVar << "(" << viewVar << "_base";
+    if (!shapeDynArgs.empty()) {
+      ss << ", " << shapeName << "(";
+      for (size_t i = 0; i < shapeDynArgs.size(); ++i) {
+        if (i)
+          ss << ", ";
+        ss << shapeDynArgs[i];
+      }
+      ss << ")";
+    }
+    ss << ");\n";
+
+    ss << "  auto " << viewVar << "_off = (" << resolve(pv.offsets5[0]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_0) + (" << resolve(pv.offsets5[1]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_1) + (" << resolve(pv.offsets5[2]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_2) + (" << resolve(pv.offsets5[3]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_3) + (" << resolve(pv.offsets5[4]) << ") * " << baseVar
+       << ".GetStride(GlobalTensorDim::DIM_4);\n";
+    ss << "  TASSIGN(" << viewVar << ", " << viewVar << "_base + " << viewVar << "_off);\n";
+    return ss.str();
+  };
+
+  auto emitAllocTileStmt = [&](mlir::Operation *op) -> std::string {
+    auto at = readAllocTile(op);
+    auto tileName = trim(at.tileName);
+
+    auto kvOpt = tryParseAngleKVs(at.typeStr, "!pto.tile");
+    if (!kvOpt)
+      kvOpt = tryParseAngleKVs(at.typeStr, "!pto.tile_buf");
+    if (!kvOpt)
+      llvm::report_fatal_error("alloc_tile type parse failed");
+    auto kv = *kvOpt;
+
+    std::string vrowTok;
+    std::string vcolTok;
+    if (kv.count("v_row") || kv.count("v_col")) {
+      vrowTok = kv.count("v_row") ? kv["v_row"] : "dyn";
+      vcolTok = kv.count("v_col") ? kv["v_col"] : "dyn";
+    } else if (kv.count("valid")) {
+      auto valid = kv["valid"];
+      auto x = valid.find('x');
+      if (x == std::string::npos)
+        llvm::report_fatal_error("tile valid must be RxC");
+      vrowTok = valid.substr(0, x);
+      vcolTok = valid.substr(x + 1);
+    } else {
+      vrowTok = kv.count("rows") ? kv["rows"] : "";
+      vcolTok = kv.count("cols") ? kv["cols"] : "";
+    }
+
+    auto dynRow = (trim(vrowTok) == "dyn" || trim(vrowTok) == "?");
+    auto dynCol = (trim(vcolTok) == "dyn" || trim(vcolTok) == "?");
+
+    std::ostringstream ss;
+
+    if (dynRow || dynCol) {
+      if (dynRow && !at.validRowValue)
+        llvm::report_fatal_error("pto.alloc_tile missing valid_row=... for dyn v_row");
+      if (dynCol && !at.validColValue)
+        llvm::report_fatal_error("pto.alloc_tile missing valid_col=... for dyn v_col");
+      if (!dynRow && at.validRowValue)
+        llvm::report_fatal_error("pto.alloc_tile provides valid_row=... but tile v_row is static");
+      if (!dynCol && at.validColValue)
+        llvm::report_fatal_error("pto.alloc_tile provides valid_col=... but tile v_col is static");
+
+      auto baseName = tileName.substr(1);
+      ss << "  new (&" << resolve(tileName) << ") " << baseName << "_Tile(";
+      if (dynRow && dynCol) {
+        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << "), static_cast<size_t>("
+           << resolve(*at.validColValue) << ")";
+      } else if (dynRow) {
+        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << ")";
+      } else if (dynCol) {
+        ss << "static_cast<size_t>(" << resolve(*at.validColValue) << ")";
+      }
+      ss << ");\n";
+    } else {
+      if (at.validRowValue || at.validColValue)
+        llvm::report_fatal_error("pto.alloc_tile provides valid_row/valid_col but tile valid is static");
+    }
+
+    if (at.addrValue)
+      ss << "  TASSIGN(" << resolve(tileName) << ", " << resolve(*at.addrValue) << ");\n";
+    return ss.str();
+  };
 
   auto emitInstrCallCpu = [&](mlir::Operation *op) -> std::string {
     auto opcode = mnemonicFor(op->getName().getStringRef());
@@ -1897,7 +2468,15 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         os << indentExtra(emitSubviewStmt(&op), extra);
         continue;
       }
-      if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.alloc_tile")
+      if (name == "pto.partition_view") {
+        os << indentExtra(emitPartitionViewStmt(&op), extra);
+        continue;
+      }
+      if (name == "pto.alloc_tile") {
+        os << indentExtra(emitAllocTileStmt(&op), extra);
+        continue;
+      }
+      if (name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view")
         continue;
 
       if (name == "scf.for") {

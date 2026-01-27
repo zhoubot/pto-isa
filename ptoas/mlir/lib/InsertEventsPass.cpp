@@ -63,7 +63,8 @@ static llvm::StringRef stripDialect(llvm::StringRef opName) {
 static bool isPtoMetaOp(mlir::Operation *op) {
   auto name = op->getName().getStringRef();
   return name == "pto.arg" || name == "pto.const" || name == "pto.make_tensor_view" || name == "pto.subview" ||
-         name == "pto.alloc_tile" || name == "pto.record_event" || name == "pto.wait_event" || name == "pto.tsync";
+         name == "pto.partition_view" || name == "pto.alloc_tile" || name == "pto.record_event" ||
+         name == "pto.wait_event" || name == "pto.tsync";
 }
 
 static bool isPtoInstrOp(mlir::Operation *op) {

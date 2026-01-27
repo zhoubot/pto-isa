@@ -11,9 +11,22 @@
 ; An instruction is one line. PTO-AS uses destination-passing style (DPS):
 ; destination values are explicit operands (typically the first operand).
 ; Type signatures are recommended for readability but optional.
-<instr_stmt>     ::= <opcode> [ <operand_list> ] [ <attr_dict> ] [ ':' <type_sig> ] ';'?
-<assign_stmt>    ::= <value> '=' <opcode> [ <operand_list> ] [ <attr_dict> ] [ ':' <type_sig> ] ';'?
+<instr_stmt>     ::= <opcode> [ <operand_part> ] [ <attr_dict> ] [ ':' <type_sig> ] ';'?
+<assign_stmt>    ::= <value> '=' <opcode> [ <operand_part> ] [ <attr_dict> ] [ ':' <type_sig> ] ';'?
+
+; Operands can be written either as a plain list (destination-first DPS),
+; or via explicit MLIR-style `ins(...)` / `outs(...)` groups.
+<operand_part>   ::= <operand_list> | <ins_out_groups>
 <operand_list>   ::= <operand> { ',' <operand> }
+
+<ins_out_groups> ::= <ins_group> <outs_group>
+                   | <outs_group> <ins_group>
+                   | <ins_group>
+                   | <outs_group>
+<ins_group>      ::= 'ins' '(' [ <typed_operand_list> ] ')'
+<outs_group>     ::= 'outs' '(' [ <typed_operand_list> ] ')'
+<typed_operand_list> ::= <typed_operand> { ',' <typed_operand> }
+<typed_operand>  ::= <operand> [ ':' <type> ]
 
 ; Operands may be named values, an indexed memory view (PTX-like), or an opaque attribute literal (e.g. `#pto.op<TADD>`).
 <operand>        ::= <value> | <value> '[' <index> ',' <index> ']' | <opaque_attr>

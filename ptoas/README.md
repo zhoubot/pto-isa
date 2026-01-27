@@ -3,6 +3,7 @@
 This folder contains:
 
 - A draft MLIR dialect definition (TableGen) for PTO Assembly / PTO intrinsics.
+- A consolidated IR specification (`ptoas/IR_SPEC.md`) describing `make_tensor_view` / `partition_view` / `tload` semantics.
 - Utilities to migrate documentation examples from SSA-style PTO-AS to a destination-passing style (DPS) syntax.
 - A prototype end-to-end pipeline that can translate a `*.pto` program into an AscendC kernel that calls PTO intrinsics, and build it with `bisheng` to produce a `*.bin`.
 

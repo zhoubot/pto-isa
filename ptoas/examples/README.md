@@ -9,4 +9,4 @@
 
 Related:
 
-- `ptoas/python/pto_asm.py` can generate equivalent `*.pto` programs from Python.
+- `binding/python/ptoas/python/pto_asm.py` can generate equivalent `*.pto` programs from Python.

@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 # Example Python kernel definitions for the AST frontend.
-# These functions are parsed (not executed) by ptoas/python/ast_frontend.py.
+# These functions are parsed (not executed) by `ptoas.python.ast_frontend`.
+
+import sys
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_BINDING_PY = _REPO_ROOT / "binding" / "python"
+if str(_BINDING_PY) not in sys.path:
+    sys.path.insert(0, str(_BINDING_PY))
 
 from pto_as import PTO
 

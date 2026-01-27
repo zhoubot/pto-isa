@@ -691,7 +691,7 @@ $PTOAS "$OUT/gemm256.pto" \
 
 - `extern "C" void ptoas_launch(void *stream, uint32_t blockDim, void *arg0, void *arg1, void *arg2)`
 
-`ptoas.python.pipeline.build_fatobj_so_from_cce`（源码在 `ptoas/python/pipeline.py`）会：
+`ptoas.python.pipeline.build_fatobj_so_from_cce`（源码在 `binding/python/ptoas/python/pipeline.py`）会：
 
 1) 读取 `gemm256.cce.cpp`
 2) 生成一个 wrapper `combined.cpp`，包含 `ptoas_launch`，并在里面 launch 你生成的 kernel

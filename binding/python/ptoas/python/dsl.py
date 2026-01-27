@@ -26,7 +26,7 @@ class _NotExecutableError(RuntimeError):
 
 
 def _noexec() -> None:
-    raise _NotExecutableError("ptoas python DSL is not executable; compile it with ptoas/python/binding.py")
+    raise _NotExecutableError("ptoas python DSL is not executable; compile it with ptoas.python.binding")
 
 
 @dataclass(frozen=True)

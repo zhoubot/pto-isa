@@ -246,8 +246,8 @@ PY
 
 ## Where the pieces live (for readers who want to dig deeper)
 
-- Python frontend → PTO-AS: `ptoas/python/binding.py` (calls AST frontend)
-- End-to-end compilation helpers: `ptoas/python/pipeline.py`
+- Python frontend → PTO-AS: `binding/python/ptoas/python/binding.py` (calls AST frontend)
+- End-to-end compilation helpers: `binding/python/ptoas/python/pipeline.py`
 - `ptoas` tool build/run: `ptoas/mlir/README.md`
 
 ## Troubleshooting

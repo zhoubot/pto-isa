@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_BINDING_PY = _REPO_ROOT / "binding" / "python"
+if str(_BINDING_PY) not in sys.path:
+    sys.path.insert(0, str(_BINDING_PY))
 
 from ptoas.python import ast_frontend, pipeline  # noqa: E402
 from ptoas.python.host_codegen import emit_acl_host_cpp  # noqa: E402

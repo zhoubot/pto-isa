@@ -6,7 +6,7 @@ from __future__ import annotations
 This module is intentionally lightweight:
 
 - The *primary* compilation path in this repo parses Python source via `ast`:
-  `ptoas/python/ast_frontend.py` → emits PTO-AS text.
+  `ptoas.python.ast_frontend` (`binding/python/ptoas/python/ast_frontend.py`) → emits PTO-AS text.
 - This runtime builder exists for ergonomics and IDE friendliness: you can
   execute `build()` to produce PTO-AS text without string templates.
 

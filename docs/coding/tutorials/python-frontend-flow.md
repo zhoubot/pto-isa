@@ -14,11 +14,12 @@ Recommended env vars:
 ```bash
 export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
 export PTOAS=$PWD/ptoas/mlir/build/bin/ptoas
+export PYTHONPATH="$PWD/binding/python:${PYTHONPATH:-}"
 ```
 
 ## Stage 0: Write the kernel (Python)
 
-Kernels are **parsed (not executed)** by the AST frontend (`ptoas/python/ast_frontend.py`), so keep to the supported subset:
+Kernels are **parsed (not executed)** by the AST frontend (`binding/python/ptoas/python/ast_frontend.py`), so keep to the supported subset:
 
 - straight-line statements
 - `for ... in range(...)`

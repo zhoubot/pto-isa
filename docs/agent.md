@@ -351,12 +351,14 @@ Notes:
 
 There is also a small Python “binding” layer that can **generate PTO-AS** and drive the full toolchain:
 
-- Low-level PTO-AS builder (generates `*.pto` text): `ptoas/python/pto_asm.py`
-- AST-based frontend (Python -> PTO-AS, supports `for`/`if` + tensor arg metadata): `ptoas/python/ast_frontend.py`
-- Simple Python binding (compile `foo.py` -> `foo.pto`): `ptoas/python/binding.py`
-- DSL stubs for IDE/type checking (not executable): `ptoas/python/dsl.py`
-- Shared compile/run helpers: `ptoas/python/pipeline.py`
-- Host C++ launcher generator (emits `host.cpp` that calls `ptoas_launch` from a fatobj `.so`): `ptoas/python/host_codegen.py`
+- Python packages live under `binding/python`. If you want to import them directly, set:
+  - `export PYTHONPATH="$PWD/binding/python:${PYTHONPATH:-}"`
+- Low-level PTO-AS builder (generates `*.pto` text): `binding/python/ptoas/python/pto_asm.py`
+- AST-based frontend (Python -> PTO-AS, supports `for`/`if` + tensor arg metadata): `binding/python/ptoas/python/ast_frontend.py`
+- Simple Python binding (compile `foo.py` -> `foo.pto`): `binding/python/ptoas/python/binding.py`
+- DSL stubs for IDE/type checking (not executable): `binding/python/ptoas/python/dsl.py`
+- Shared compile/run helpers: `binding/python/ptoas/python/pipeline.py`
+- Host C++ launcher generator (emits `host.cpp` that calls `ptoas_launch` from a fatobj `.so`): `binding/python/ptoas/python/host_codegen.py`
 - End-to-end runner (Python frontend -> `*.pto` -> `ptoas` -> CPU+NPU run -> compare):
 
 ```bash
@@ -558,7 +560,7 @@ python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "
 
 Notes:
 
-- `ptoas/python/ast_frontend.py` ignores Python docstrings / bare string expression statements inside the kernel body.
+- `binding/python/ptoas/python/ast_frontend.py` ignores Python docstrings / bare string expression statements inside the kernel body.
   Use `# ...` comments or `pto.comment("...")` for remarks you want to preserve in the generated PTO-AS.
 
 ### Control Flow In PTO-AS (Prototype)

@@ -10,6 +10,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 
 #include <cctype>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <utility>
@@ -226,6 +227,104 @@ static std::string normalizePtoMnemonic(std::string op) {
   return op;
 }
 
+struct InsOutOperands {
+  std::vector<std::string> ins;
+  std::vector<std::string> outs;
+};
+
+static std::optional<InsOutOperands> tryParseInsOutOperands(const std::string &operandsPart) {
+  auto text = trim(operandsPart);
+  if (text.empty())
+    return std::nullopt;
+
+  InsOutOperands out;
+
+  auto parseGroup = [&](const char *kw, std::vector<std::string> &dst) {
+    const size_t kwLen = std::strlen(kw);
+    int depthParen = 0, depthBrack = 0, depthAngle = 0, depthBrace = 0;
+    for (size_t i = 0; i < text.size(); ++i) {
+      char ch = text[i];
+      switch (ch) {
+      case '(':
+        depthParen++;
+        break;
+      case ')':
+        depthParen = std::max(0, depthParen - 1);
+        break;
+      case '[':
+        depthBrack++;
+        break;
+      case ']':
+        depthBrack = std::max(0, depthBrack - 1);
+        break;
+      case '<':
+        depthAngle++;
+        break;
+      case '>':
+        depthAngle = std::max(0, depthAngle - 1);
+        break;
+      case '{':
+        depthBrace++;
+        break;
+      case '}':
+        depthBrace = std::max(0, depthBrace - 1);
+        break;
+      default:
+        break;
+      }
+
+      if (depthParen != 0 || depthBrack != 0 || depthAngle != 0 || depthBrace != 0)
+        continue;
+
+      if (i + kwLen + 1 > text.size())
+        continue;
+      if (i != 0 && !std::isspace(static_cast<unsigned char>(text[i - 1])))
+        continue;
+      if (text.compare(i, kwLen, kw) != 0)
+        continue;
+      size_t l = i + kwLen;
+      if (l >= text.size() || text[l] != '(')
+        continue;
+
+      int pDepth = 0;
+      size_t r = std::string::npos;
+      for (size_t j = l; j < text.size(); ++j) {
+        if (text[j] == '(')
+          pDepth++;
+        else if (text[j] == ')') {
+          pDepth--;
+          if (pDepth == 0) {
+            r = j;
+            break;
+          }
+        }
+      }
+      if (r == std::string::npos)
+        llvm::report_fatal_error("Unclosed ins/outs group");
+
+      std::string inner = trim(text.substr(l + 1, r - l - 1));
+      for (auto &it : splitTopLevelCommas(inner)) {
+        auto item = trim(it);
+        if (item.empty())
+          continue;
+        // Drop optional type annotation: `%x : <type>`.
+        if (auto colon = findTopLevelChar(item, ':')) {
+          item = trim(item.substr(0, *colon));
+        }
+        if (!item.empty())
+          dst.push_back(std::move(item));
+      }
+      return;
+    }
+  };
+
+  parseGroup("ins", out.ins);
+  parseGroup("outs", out.outs);
+  if (out.ins.empty() && out.outs.empty())
+    return std::nullopt;
+  return out;
+}
+
 } // namespace
 
 mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, std::string &errorOut) {
@@ -416,12 +515,30 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
       std::string operandsPart, attrDict, typeSig;
       splitAttrAndTypeSig(rest, operandsPart, attrDict, typeSig);
 
-      auto rhsOperands = splitTopLevelCommas(operandsPart);
       llvm::SmallVector<mlir::Attribute> operandAttrs;
-      operandAttrs.reserve(1 + rhsOperands.size());
-      operandAttrs.push_back(b.getStringAttr(lhs));
-      for (auto &opnd : rhsOperands)
-        operandAttrs.push_back(b.getStringAttr(opnd));
+      if (auto io = tryParseInsOutOperands(operandsPart)) {
+        // Canonicalize to "outs..., ins..." so downstream passes can keep using
+        // destination-first conventions.
+        if (!io->outs.empty()) {
+          operandAttrs.reserve(io->outs.size() + io->ins.size());
+          for (auto &o : io->outs)
+            operandAttrs.push_back(b.getStringAttr(o));
+          for (auto &i : io->ins)
+            operandAttrs.push_back(b.getStringAttr(i));
+        } else {
+          // Allow `%dst = pto.op ins(...)` sugar when outs(...) is omitted.
+          operandAttrs.reserve(1 + io->ins.size());
+          operandAttrs.push_back(b.getStringAttr(lhs));
+          for (auto &i : io->ins)
+            operandAttrs.push_back(b.getStringAttr(i));
+        }
+      } else {
+        auto rhsOperands = splitTopLevelCommas(operandsPart);
+        operandAttrs.reserve(1 + rhsOperands.size());
+        operandAttrs.push_back(b.getStringAttr(lhs));
+        for (auto &opnd : rhsOperands)
+          operandAttrs.push_back(b.getStringAttr(opnd));
+      }
 
       mlir::OperationState st(loc, ("pto." + opcode).c_str());
       st.addAttribute("operands", b.getArrayAttr(operandAttrs));
@@ -451,7 +568,16 @@ mlir::ModuleOp parsePTOASFile(const std::string &path, mlir::MLIRContext &ctx, s
     std::string operandsPart, attrDict, typeSig;
     splitAttrAndTypeSig(rest, operandsPart, attrDict, typeSig);
 
-    auto operands = splitTopLevelCommas(operandsPart);
+    std::vector<std::string> operands;
+    if (auto io = tryParseInsOutOperands(operandsPart)) {
+      operands.reserve(io->outs.size() + io->ins.size());
+      for (auto &o : io->outs)
+        operands.push_back(o);
+      for (auto &i : io->ins)
+        operands.push_back(i);
+    } else {
+      operands = splitTopLevelCommas(operandsPart);
+    }
     llvm::SmallVector<mlir::Attribute> operandAttrs;
     operandAttrs.reserve(operands.size());
     for (auto &op : operands)

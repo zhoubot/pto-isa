@@ -9,8 +9,9 @@ _THIS_DIR = Path(__file__).resolve().parent
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_BINDING_PY = _REPO_ROOT / "binding" / "python"
+if str(_BINDING_PY) not in sys.path:
+    sys.path.insert(0, str(_BINDING_PY))
 
 from ptoas.python import pipeline  # noqa: E402
 from gemm_pto import make_gemm16_pto  # noqa: E402

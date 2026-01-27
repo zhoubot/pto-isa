@@ -25,10 +25,21 @@ For convenience, frontends may also accept an SSA-style *destination sugar*:
 %dst = pto.tadd %src0, %src1 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 
+To make side-effecting operand order explicit, PTO-AS also supports MLIR-style `ins(...)` / `outs(...)` groups
+as pure surface syntax sugar:
+
+```text
+pto.tadd  ins(%src0 : !pto.tile<...>, %src1 : !pto.tile<...>)
+         outs(%dst  : !pto.tile<...>)
+```
+
+The prototype assembler normalizes `ins/outs` to the same destination-first operand order used by the
+destination-passing style.
+
 PTO-AS is a synchronous, line-ordered format: there is no `wait(...)` clause and no implicit event result. If a program
 needs to model an explicit dependency, it uses an explicit instruction (for example `tsync`) with event operands.
 
-Operands may also include indexed forms (commonly used by memory ops):
+Operands may also include indexed forms (legacy; commonly used by memory ops):
 
 ```text
 tload %t0, %sv[%c0, %c1] : (!pto.tile<...>, !pto.tensor<...>, index, index)
@@ -40,7 +51,7 @@ Type signatures (`: ...`) are recommended for readability but may be omitted whe
 
 PTO-AS uses MLIR-like type spellings and maps them to the public C++ template types in `include/pto/*`.
 
-### 2.1 Tile values: `!pto.tile<...>`
+### 2.1 Tile values: `!pto.tile<...>` / `!pto.tile_buf<...>`
 
 `!pto.tile<...>` corresponds to `pto::Tile<...>` from `include/pto/common/pto_tile.hpp` and the enums in:
 
@@ -77,8 +88,10 @@ Notes:
 
 - `valid=<rowValid>x<colValid>` maps to `RowValid_` / `ColValid_` (use `dyn` to represent `pto::DYNAMIC`).
 - `fractal` is in **bytes** (matches `SFractalSize_`).
+- `!pto.tile_buf<...>` is an equivalent spelling that uses `v_row=` / `v_col=` fields instead of `valid=` for
+  dynamic/half-dynamic valid shapes (recommended for new IR).
 
-### 2.2 Global memory / views: `!pto.tensor<...>`
+### 2.2 Global memory / views: `!pto.tensor<...>` / `!pto.tensor_view<...>`
 
 `!pto.tensor<...>` corresponds to `pto::GlobalTensor<Element_, Shape_, Stride_, Layout_>` from
 `include/pto/common/pto_tile.hpp` and `pto::Layout`.
@@ -109,6 +122,9 @@ Notes:
 
 - `shape` / `stride` are 5-D (use `dyn` to represent `pto::DYNAMIC` in any dimension).
 - `layout` names follow the `pto::Layout` enum in `include/pto/common/pto_tile.hpp` (e.g. `ND`, `DN`, `NZ`, `MX_A_ND`, ...).
+- The prototype also accepts:
+  - `!pto.tensor_view<...>` (alias of `!pto.tensor<...>`)
+  - `!pto.partition_tensor_view<...>` (alias intended for results of `pto.partition_view`)
 
 ### 2.3 Events: `!pto.event<...>`
 
@@ -160,12 +176,25 @@ New-format declarations (recommended):
   %x_blk = pto.subview %x, offsets=[%r0, 0]
   ```
 
+- Partition views (offset + logical window) from an existing tensor view:
+
+  ```text
+  %p = pto.partition_view %x, offsets=[%r0, 0], sizes=[16, 16]
+  ```
+
 - Tile allocation (optionally binds an address, replacing `tassign`):
 
   ```text
   %tx = pto.alloc_tile %addr_x : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
   ```
   If the address is omitted, `ptoas` can assign a default address via `--assign-tile-addrs`.
+
+  Dynamic valid shape (recommended spelling):
+
+  ```text
+  %t = pto.alloc_tile addr=%addr valid_row=%vr valid_col=%vc
+    : !pto.tile_buf<loc=Vec, dtype=f16, rows=32, cols=32, v_row=dyn, v_col=dyn, blayout=RowMajor, slayout=NoneBox, fractal=512, pad=Null>
+  ```
 
 ## 4.1 Explicit Events (prototype)
 
