@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Prefer static zlib when linking the `ptoas` tool to reduce runtime deps and
+# improve portability across deployments.
+set(ZLIB_USE_STATIC_LIBS ON)
+
 find_package(LLVM REQUIRED CONFIG)
 find_package(MLIR REQUIRED CONFIG)
 
@@ -52,10 +56,14 @@ target_link_libraries(ptoas_passes PUBLIC
   LLVMSupport
 )
 
-add_executable(ptoas tools/ptoas_main.cpp)
+add_executable(ptoas
+  tools/ptoas_main.cpp
+  tools/glibc_compat.cpp
+)
 set_target_properties(ptoas PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 llvm_update_compile_flags(ptoas)
 target_include_directories(ptoas PRIVATE include)
+target_link_options(ptoas PRIVATE -static-libgcc)
 target_link_libraries(ptoas PRIVATE
   ptoas_core
   ptoas_passes
