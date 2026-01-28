@@ -256,6 +256,13 @@ def _cases() -> list[Case]:
         Case(name="tiled_add128", py=base / "tiled_add128.py", kernel="tiled_add128", arch="dav-c220-vec"),
         # SPMD / multi-block stress tests (per-case block_dim).
         Case(
+            name="spmd_tiled_add_18x19",
+            py=base / "spmd_tiled_add_18x19.py",
+            kernel="spmd_tiled_add_18x19",
+            arch="dav-c220-vec",
+            block_dim=4,
+        ),
+        Case(
             name="spmd_tiled_add256",
             py=base / "spmd_tiled_add256.py",
             kernel="spmd_tiled_add256",

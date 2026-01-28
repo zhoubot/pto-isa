@@ -42,16 +42,29 @@ class TileType:
     blayout: str = "RowMajor"
     valid_rows: int | None = None
     valid_cols: int | None = None
+    # Dynamic valid shape (recommended): emitted as `!pto.tile_buf<..., v_row=..., v_col=...>`.
+    # Use the string "dyn" to represent `pto::DYNAMIC`.
+    v_row: int | str | None = None
+    v_col: int | str | None = None
     slayout: str = "NoneBox"
     fractal: int | None = None
     pad: str = "Null"
 
     def __str__(self) -> str:
-        valid_rows = self.rows if self.valid_rows is None else self.valid_rows
-        valid_cols = self.cols if self.valid_cols is None else self.valid_cols
         fractal = self.fractal
         if fractal is None:
             fractal = 1024 if self.loc == "Acc" else 512
+        if self.v_row is not None or self.v_col is not None:
+            v_row = self.rows if self.v_row is None else self.v_row
+            v_col = self.cols if self.v_col is None else self.v_col
+            return (
+                f"!pto.tile_buf<loc={self.loc}, dtype={self.dtype}, rows={self.rows}, cols={self.cols}, "
+                f"v_row={v_row}, v_col={v_col}, blayout={self.blayout}, slayout={self.slayout}, "
+                f"fractal={fractal}, pad={self.pad}>"
+            )
+
+        valid_rows = self.rows if self.valid_rows is None else self.valid_rows
+        valid_cols = self.cols if self.valid_cols is None else self.valid_cols
         return (
             f"!pto.tile<loc={self.loc}, dtype={self.dtype}, rows={self.rows}, cols={self.cols}, "
             f"blayout={self.blayout}, valid={valid_rows}x{valid_cols}, slayout={self.slayout}, "

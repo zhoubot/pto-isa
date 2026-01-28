@@ -1205,7 +1205,7 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
 
     std::ostringstream ss;
 
-    // Initialize dynamic valid masks via placement-new.
+    // Initialize dynamic valid masks.
     if (dynRow || dynCol) {
       if (dynRow && !at.validRowValue)
         llvm::report_fatal_error("pto.alloc_tile missing valid_row=... for dyn v_row");
@@ -1216,17 +1216,12 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       if (!dynCol && at.validColValue)
         llvm::report_fatal_error("pto.alloc_tile provides valid_col=... but tile v_col is static");
 
-      auto baseName = tileName.substr(1);
-      ss << "  new (&" << resolve(tileName) << ") " << baseName << "_Tile(";
-      if (dynRow && dynCol) {
-        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << "), static_cast<size_t>("
-           << resolve(*at.validColValue) << ")";
-      } else if (dynRow) {
-        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << ")";
-      } else if (dynCol) {
-        ss << "static_cast<size_t>(" << resolve(*at.validColValue) << ")";
-      }
-      ss << ");\n";
+      if (dynRow)
+        ss << "  " << resolve(tileName) << ".RowMaskInternal = static_cast<int>(" << resolve(*at.validRowValue)
+           << ");\n";
+      if (dynCol)
+        ss << "  " << resolve(tileName) << ".ColMaskInternal = static_cast<int>(" << resolve(*at.validColValue)
+           << ");\n";
     } else {
       if (at.validRowValue || at.validColValue)
         llvm::report_fatal_error("pto.alloc_tile provides valid_row/valid_col but tile valid is static");
@@ -1290,6 +1285,16 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       return "  auto " + dst + " = (" + resolve(operands[1]) + ") + (" + resolve(operands[2]) + ");\n";
     }
 
+    if (opcode == "isub") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("isub expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      return "  auto " + dst + " = (" + resolve(operands[1]) + ") - (" + resolve(operands[2]) + ");\n";
+    }
+
     if (opcode == "imul") {
       auto operands = readOperands(op);
       if (operands.size() != 3)
@@ -1318,6 +1323,30 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       if (!dst.empty() && dst[0] == '%')
         dst = dst.substr(1);
       return "  auto " + dst + " = (" + resolve(operands[1]) + ") % (" + resolve(operands[2]) + ");\n";
+    }
+
+    if (opcode == "imin") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("imin expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      auto a = resolve(operands[1]);
+      auto b = resolve(operands[2]);
+      return "  auto " + dst + " = ((" + a + ") < (" + b + ")) ? (" + a + ") : (" + b + ");\n";
+    }
+
+    if (opcode == "imax") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("imax expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      auto a = resolve(operands[1]);
+      auto b = resolve(operands[2]);
+      return "  auto " + dst + " = ((" + a + ") > (" + b + ")) ? (" + a + ") : (" + b + ");\n";
     }
 
     auto emitIcmp = [&](const char *expect, const char *cxxOp) -> std::optional<std::string> {
@@ -1397,19 +1426,21 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto c0 = resolve(idx->second);
 
       auto ti = tensorInfoByResolvedName.find(src);
-      auto td = tileDimsByResolvedName.find(dst);
-      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+      const bool dstIsTile = tileDimsByResolvedName.find(dst) != tileDimsByResolvedName.end();
+      if (ti != tensorInfoByResolvedName.end() && dstIsTile) {
         std::ostringstream ss;
         ss << "  // NOTE: tload with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  //       Use the tile's *valid* shape so partial tiles (valid<rows/cols>) satisfy TLOAD's shape contract.\n";
         ss << "  {\n";
         ss << "    auto* " << src << "_ptr = " << src << ".data();\n";
         ss << "    auto " << src << "_off = (" << r0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TloadShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TloadShape = ::pto::Shape<1, 1, 1, ::pto::DYNAMIC, ::pto::DYNAMIC>;\n";
         ss << "    using TloadTensor = GlobalTensor<" << ti->second.elemCpp << ", TloadShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
-        ss << "    TloadTensor " << src << "_view(" << src << "_ptr);\n";
+        ss << "    TloadTensor " << src << "_view(" << src << "_ptr, TloadShape(" << dst << ".GetValidRow(), " << dst
+           << ".GetValidCol()));\n";
         ss << "    TASSIGN(" << src << "_view, " << src << "_ptr + " << src << "_off);\n";
         ss << "    TLOAD(" << dst << ", " << src << "_view);\n";
         ss << "  }\n";
@@ -1441,19 +1472,21 @@ std::string emitCceFromModule(mlir::ModuleOp module, const std::string &repoRoot
       auto c0 = resolve(idx->second);
 
       auto ti = tensorInfoByResolvedName.find(dst);
-      auto td = tileDimsByResolvedName.find(src);
-      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+      const bool srcIsTile = tileDimsByResolvedName.find(src) != tileDimsByResolvedName.end();
+      if (ti != tensorInfoByResolvedName.end() && srcIsTile) {
         std::ostringstream ss;
         ss << "  // NOTE: tstore with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  //       Use the tile's *valid* shape so partial tiles (valid<rows/cols>) satisfy TSTORE's shape contract.\n";
         ss << "  {\n";
         ss << "    auto* " << dst << "_ptr = " << dst << ".data();\n";
         ss << "    auto " << dst << "_off = (" << r0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TstoreShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TstoreShape = ::pto::Shape<1, 1, 1, ::pto::DYNAMIC, ::pto::DYNAMIC>;\n";
         ss << "    using TstoreTensor = GlobalTensor<" << ti->second.elemCpp << ", TstoreShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
-        ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr);\n";
+        ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr, TstoreShape(" << src << ".GetValidRow(), " << src
+           << ".GetValidCol()));\n";
         ss << "    TASSIGN(" << dst << "_view, " << dst << "_ptr + " << dst << "_off);\n";
         ss << "    TSTORE(" << dst << "_view, " << src << ");\n";
         ss << "  }\n";
@@ -2204,17 +2237,12 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       if (!dynCol && at.validColValue)
         llvm::report_fatal_error("pto.alloc_tile provides valid_col=... but tile v_col is static");
 
-      auto baseName = tileName.substr(1);
-      ss << "  new (&" << resolve(tileName) << ") " << baseName << "_Tile(";
-      if (dynRow && dynCol) {
-        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << "), static_cast<size_t>("
-           << resolve(*at.validColValue) << ")";
-      } else if (dynRow) {
-        ss << "static_cast<size_t>(" << resolve(*at.validRowValue) << ")";
-      } else if (dynCol) {
-        ss << "static_cast<size_t>(" << resolve(*at.validColValue) << ")";
-      }
-      ss << ");\n";
+      if (dynRow)
+        ss << "  " << resolve(tileName) << ".RowMaskInternal = static_cast<int>(" << resolve(*at.validRowValue)
+           << ");\n";
+      if (dynCol)
+        ss << "  " << resolve(tileName) << ".ColMaskInternal = static_cast<int>(" << resolve(*at.validColValue)
+           << ");\n";
     } else {
       if (at.validRowValue || at.validColValue)
         llvm::report_fatal_error("pto.alloc_tile provides valid_row/valid_col but tile valid is static");
@@ -2240,7 +2268,7 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       auto dst = trim(operands[0]);
       if (!dst.empty() && dst[0] == '%')
         dst = dst.substr(1);
-      return "  int64_t " + dst + " = 0;\n";
+      return "  int64_t " + dst + " = static_cast<int64_t>(get_block_idx());\n";
     }
     if (opcode == "get_block_num") {
       auto operands = readOperands(op);
@@ -2249,7 +2277,7 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       auto dst = trim(operands[0]);
       if (!dst.empty() && dst[0] == '%')
         dst = dst.substr(1);
-      return "  int64_t " + dst + " = 1;\n";
+      return "  int64_t " + dst + " = static_cast<int64_t>(get_block_num());\n";
     }
 
     if (opcode == "iadd") {
@@ -2261,6 +2289,17 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
         dst = dst.substr(1);
       return "  auto " + dst + " = (" + resolve(operands[1]) + ") + (" + resolve(operands[2]) + ");\n";
     }
+
+    if (opcode == "isub") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("isub expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      return "  auto " + dst + " = (" + resolve(operands[1]) + ") - (" + resolve(operands[2]) + ");\n";
+    }
+
     if (opcode == "imul") {
       auto operands = readOperands(op);
       if (operands.size() != 3)
@@ -2289,6 +2328,30 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       if (!dst.empty() && dst[0] == '%')
         dst = dst.substr(1);
       return "  auto " + dst + " = (" + resolve(operands[1]) + ") % (" + resolve(operands[2]) + ");\n";
+    }
+
+    if (opcode == "imin") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("imin expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      auto a = resolve(operands[1]);
+      auto b = resolve(operands[2]);
+      return "  auto " + dst + " = ((" + a + ") < (" + b + ")) ? (" + a + ") : (" + b + ");\n";
+    }
+
+    if (opcode == "imax") {
+      auto operands = readOperands(op);
+      if (operands.size() != 3)
+        llvm::report_fatal_error("imax expects 3 operands (dst, src0, src1)");
+      auto dst = trim(operands[0]);
+      if (!dst.empty() && dst[0] == '%')
+        dst = dst.substr(1);
+      auto a = resolve(operands[1]);
+      auto b = resolve(operands[2]);
+      return "  auto " + dst + " = ((" + a + ") > (" + b + ")) ? (" + a + ") : (" + b + ");\n";
     }
 
     auto emitIcmp = [&](const char *expect, const char *cxxOp) -> std::optional<std::string> {
@@ -2365,19 +2428,21 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       auto c0 = resolve(idx->second);
 
       auto ti = tensorInfoByResolvedName.find(src);
-      auto td = tileDimsByResolvedName.find(dst);
-      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+      const bool dstIsTile = tileDimsByResolvedName.find(dst) != tileDimsByResolvedName.end();
+      if (ti != tensorInfoByResolvedName.end() && dstIsTile) {
         std::ostringstream ss;
         ss << "  // NOTE: tload with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  //       Use the tile's *valid* shape so partial tiles (valid<rows/cols>) satisfy TLOAD's shape contract.\n";
         ss << "  {\n";
         ss << "    auto* " << src << "_ptr = " << src << ".data();\n";
         ss << "    auto " << src << "_off = (" << r0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << src
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TloadShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TloadShape = ::pto::Shape<1, 1, 1, ::pto::DYNAMIC, ::pto::DYNAMIC>;\n";
         ss << "    using TloadTensor = GlobalTensor<" << ti->second.elemCpp << ", TloadShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
-        ss << "    TloadTensor " << src << "_view(" << src << "_ptr);\n";
+        ss << "    TloadTensor " << src << "_view(" << src << "_ptr, TloadShape(" << dst << ".GetValidRow(), " << dst
+           << ".GetValidCol()));\n";
         ss << "    TASSIGN(" << src << "_view, " << src << "_ptr + " << src << "_off);\n";
         ss << "    TLOAD(" << dst << ", " << src << "_view);\n";
         ss << "  }\n";
@@ -2409,19 +2474,21 @@ std::string emitCpuCppFromModule(mlir::ModuleOp module, const std::string &repoR
       auto c0 = resolve(idx->second);
 
       auto ti = tensorInfoByResolvedName.find(dst);
-      auto td = tileDimsByResolvedName.find(src);
-      if (ti != tensorInfoByResolvedName.end() && td != tileDimsByResolvedName.end()) {
+      const bool srcIsTile = tileDimsByResolvedName.find(src) != tileDimsByResolvedName.end();
+      if (ti != tensorInfoByResolvedName.end() && srcIsTile) {
         std::ostringstream ss;
         ss << "  // NOTE: tstore with indices uses a tile-shaped GlobalTensor view for conversion correctness.\n";
+        ss << "  //       Use the tile's *valid* shape so partial tiles (valid<rows/cols>) satisfy TSTORE's shape contract.\n";
         ss << "  {\n";
         ss << "    auto* " << dst << "_ptr = " << dst << ".data();\n";
         ss << "    auto " << dst << "_off = (" << r0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_3) + (" << c0 << ") * " << dst
            << ".GetStride(GlobalTensorDim::DIM_4);\n";
-        ss << "    using TstoreShape = ::pto::Shape<1, 1, 1, " << td->second.rows << ", " << td->second.cols << ">;\n";
+        ss << "    using TstoreShape = ::pto::Shape<1, 1, 1, ::pto::DYNAMIC, ::pto::DYNAMIC>;\n";
         ss << "    using TstoreTensor = GlobalTensor<" << ti->second.elemCpp << ", TstoreShape, "
            << ti->second.strideTypeName << ", " << ti->second.layoutCpp << ">;\n";
-        ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr);\n";
+        ss << "    TstoreTensor " << dst << "_view(" << dst << "_ptr, TstoreShape(" << src << ".GetValidRow(), " << src
+           << ".GetValidCol()));\n";
         ss << "    TASSIGN(" << dst << "_view, " << dst << "_ptr + " << dst << "_off);\n";
         ss << "    TSTORE(" << dst << "_view, " << src << ");\n";
         ss << "  }\n";

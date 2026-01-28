@@ -54,6 +54,27 @@ def get_block_idx() -> int:
 def get_block_num() -> int:
     _noexec()
 
+def iadd(a: int, b: int) -> int:
+    _noexec()
+
+def isub(a: int, b: int) -> int:
+    _noexec()
+
+def imul(a: int, b: int) -> int:
+    _noexec()
+
+def idiv(a: int, b: int) -> int:
+    _noexec()
+
+def irem(a: int, b: int) -> int:
+    _noexec()
+
+def imin(a: int, b: int) -> int:
+    _noexec()
+
+def imax(a: int, b: int) -> int:
+    _noexec()
+
 
 @overload
 def tensor(
@@ -80,6 +101,8 @@ def tile(
     *,
     blayout: str = "RowMajor",
     valid: str | None = None,
+    valid_row: int | None = None,
+    valid_col: int | None = None,
     slayout: str = "NoneBox",
     fractal: int | None = None,
     pad: str = "Null",

@@ -1,4 +1,4 @@
-# PTOAS IR Spec (v0)
+# PTOAS IR Spec (v1)
 
 > 目标：在高性能计算/算子开发场景中，缩小“逻辑 Tensor（多维、动态）”与“物理指令（定长、分型）”之间的鸿沟。
 >
@@ -229,10 +229,41 @@ Layout InferLayout(const std::vector<int64_t>& shape,
   : !pto.tile_buf<..., rows=32, cols=32, v_row=dyn, v_col=dyn, ...>
 ```
 
+### 5.3 Tile valid masks (irregular shapes)
+
+`tile_buf` 的 `v_row/v_col` + `pto.alloc_tile valid_row/valid_col` 用于支持 **partial tile**（矩阵维度不是 tile 大小整数倍时的边界 tile）。
+
+语义要点：
+
+- `rows/cols`：tile 的 **容量**（编译期固定）。
+- `valid_row/valid_col`：tile 的 **本次有效窗口**（可运行期变化），用于约束 `TLOAD/TSTORE` 的读写范围，并对无效区域做 pad/忽略。
+
+示例：18x19 上以 16x16 tile 计算边界 valid（运行期按 block/tile 选择）：
+
+```text
+%bid  = pto.get_block_idx
+%tile_c = pto.irem %bid, 2 : index
+%tile_r = pto.idiv %bid, 2 : index
+%r0 = pto.imul %tile_r, 16 : index
+%c0 = pto.imul %tile_c, 16 : index
+
+%rem_r = pto.isub 18, %r0 : index
+%rem_c = pto.isub 19, %c0 : index
+%vr = pto.imin 16, %rem_r
+%vc = pto.imin 16, %rem_c
+
+%tx = pto.alloc_tile valid_row=%vr valid_col=%vc
+  : !pto.tile_buf<loc=Vec, dtype=f32, rows=16, cols=16, v_row=dyn, v_col=dyn,
+                  blayout=RowMajor, slayout=NoneBox, fractal=512, pad=Null>
+```
+
+> 实现说明：`ptoas` 在 lowering 旧式 indexed 形式（如 `pto.tload %x[%r0,%c0]` / `pto.tstore %y[%r0,%c0], %t`）
+> 时，会按 tile 的 `GetValidRow()/GetValidCol()` 构造一个 tile-shaped `GlobalTensor` view（shape 为动态），确保
+> `TLOAD/TSTORE` 的 “src/dst shape == valid_row/valid_col” 约束在 partial tile 场景下依然成立。
+
 ---
 
 ## 6. Notes on Compatibility
 
 - 现有 PTO-AS（基于 `pto.make_tensor_view` / `pto.subview` / `tload %x[r,c]`）仍被视为兼容输入；
   新 IR 推荐逐步迁移到 `partition_view + ins/outs` 的显式形式。
-

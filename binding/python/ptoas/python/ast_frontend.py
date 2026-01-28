@@ -465,6 +465,8 @@ class _Compiler:
 
         blayout: str = "RowMajor"
         valid: str | None = None
+        valid_row: str | None = None
+        valid_col: str | None = None
         slayout: str = "NoneBox"
         fractal: int | None = None
         pad: str = "Null"
@@ -494,6 +496,10 @@ class _Compiler:
                 blayout = self._eval_const(kw.value)
             elif kw.arg == "valid":
                 valid = self._eval_const(kw.value)
+            elif kw.arg == "valid_row":
+                valid_row = self._opnd(kw.value)
+            elif kw.arg == "valid_col":
+                valid_col = self._opnd(kw.value)
             elif kw.arg == "slayout":
                 slayout = self._eval_const(kw.value)
             elif kw.arg == "fractal":
@@ -509,6 +515,33 @@ class _Compiler:
             raise FrontendError("tile(...) requires loc, dtype, rows, cols")
 
         sym = self._sym_for(target)
+        if (valid_row is not None or valid_col is not None) and valid is not None:
+            raise FrontendError("tile(...): cannot combine valid=... with valid_row=.../valid_col=...")
+
+        if valid_row is not None or valid_col is not None:
+            ty = TileType(
+                loc=loc,
+                dtype=dtype,
+                rows=rows,
+                cols=cols,
+                blayout=blayout,
+                v_row="dyn" if valid_row is not None else rows,
+                v_col="dyn" if valid_col is not None else cols,
+                slayout=slayout,
+                fractal=fractal,
+                pad=pad,
+            )
+
+            opts: list[str] = []
+            if addr is not None:
+                opts.append(f"addr={addr}")
+            if valid_row is not None:
+                opts.append(f"valid_row={valid_row}")
+            if valid_col is not None:
+                opts.append(f"valid_col={valid_col}")
+            self._t.line(f"{sym.pto} = pto.alloc_tile {' '.join(opts)} : {ty}".rstrip())
+            return
+
         if valid is not None:
             if isinstance(valid, str) and "x" in valid:
                 vr, vc = valid.split("x", 1)
@@ -562,6 +595,8 @@ class _Compiler:
             slayout = "NoneBox"
 
         valid: str | None = None
+        valid_row: str | None = None
+        valid_col: str | None = None
         fractal: int | None = None
         pad: str = "Null"
         addr: int | None = None
@@ -578,6 +613,10 @@ class _Compiler:
                 blayout = self._eval_const(kw.value)
             elif kw.arg == "valid":
                 valid = self._eval_const(kw.value)
+            elif kw.arg == "valid_row":
+                valid_row = self._opnd(kw.value)
+            elif kw.arg == "valid_col":
+                valid_col = self._opnd(kw.value)
             elif kw.arg == "slayout":
                 slayout = self._eval_const(kw.value)
             elif kw.arg == "fractal":
@@ -601,6 +640,33 @@ class _Compiler:
         rows, cols = int(shape[0]), int(shape[1])
 
         sym = self._bind_sym(target, pto_name)
+        if (valid_row is not None or valid_col is not None) and valid is not None:
+            raise FrontendError(f"{call.func}(...): cannot combine valid=... with valid_row=.../valid_col=...")
+
+        if valid_row is not None or valid_col is not None:
+            ty = TileType(
+                loc=loc,
+                dtype=dtype,
+                rows=rows,
+                cols=cols,
+                blayout=blayout,
+                v_row="dyn" if valid_row is not None else rows,
+                v_col="dyn" if valid_col is not None else cols,
+                slayout=slayout,
+                fractal=fractal,
+                pad=pad,
+            )
+
+            opts: list[str] = []
+            if addr is not None:
+                opts.append(f"addr={addr}")
+            if valid_row is not None:
+                opts.append(f"valid_row={valid_row}")
+            if valid_col is not None:
+                opts.append(f"valid_col={valid_col}")
+            self._t.line(f"{sym.pto} = pto.alloc_tile {' '.join(opts)} : {ty}".rstrip())
+            return
+
         if valid is not None:
             if isinstance(valid, str) and "x" in valid:
                 vr, vc = valid.split("x", 1)
@@ -644,6 +710,9 @@ class _Compiler:
             rhs = self._opnd(value.right)
             if isinstance(value.op, ast.Add):
                 self._t.line(f"{dst_sym.pto} = pto.iadd {lhs}, {rhs} : index")
+                return
+            if isinstance(value.op, ast.Sub):
+                self._t.line(f"{dst_sym.pto} = pto.isub {lhs}, {rhs} : index")
                 return
             if isinstance(value.op, ast.Mult):
                 self._t.line(f"{dst_sym.pto} = pto.imul {lhs}, {rhs} : index")
