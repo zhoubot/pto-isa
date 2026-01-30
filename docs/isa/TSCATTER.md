@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 tscatter %dst, %src, %idx : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tscatter %src, %idx : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tscatter ins(%src, %idx : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

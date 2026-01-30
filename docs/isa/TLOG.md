@@ -19,6 +19,20 @@ Synchronous form:
 ```text
 tlog %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tlog %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tlog ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

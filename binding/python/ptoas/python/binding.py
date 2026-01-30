@@ -55,7 +55,8 @@ def default_host_spec(spec: KernelSpec) -> HostSpec:
         layout = str(a.ty.layout)
         stride = None if (a.ty.stride is None and layout == "ND") else (int(s0), int(s1))
         host_args.append(HostTensorArg(dtype=a.ty.dtype, shape=(h, w), role=roles[i], layout=layout, stride=stride))
-    return HostSpec(args=tuple(host_args), seed=0, block_dim=1, kernel_name="pto_kernel")
+    # Keep `kernel_name` aligned with the function emitted by the Python frontend / LLVM ptoas.
+    return HostSpec(args=tuple(host_args), seed=0, block_dim=1, kernel_name=str(spec.name))
 
 
 def write_pto(

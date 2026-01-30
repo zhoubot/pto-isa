@@ -1,5 +1,11 @@
 # 教程：工具链如何“变换”一个 Kernel（以 GEMM256 为例）
 
+> 更新说明（2026-01-29）：
+> - 本仓库已移除旧的 `ptoas/mlir`（自建 MLIR + passes + CLI）。
+> - 当前使用的 `ptoas` 来自 `~/llvm-project`（LLVM/MLIR PTO dialect），并打包为本仓库的 `bin/ptoas`。
+> - 因此，本文中涉及旧版 `ptoas` CLI 的段落（例如 `--target/--emit-bin/--arch/--repo-root` 等）仅作历史参考，
+>   不一定与当前 `bin/ptoas` 的参数完全一致；建议以 `docs/agent.md` 和 `kernels/python/run_regression.py` 的流程为准。
+
 本文用 `kernels/python/gemm256.py` 做示例，面向用户讲清楚整个工具链在每一步：
 
 - 输入是什么
@@ -10,7 +16,7 @@
 总体流程（概念上）：
 
 1) **Python 前端（用户代码）** → 结构化 PTO-AS 文本（`.pto`）
-2) **`ptoas`（编译器）** → C++ 源码（CPU 版本 `.cpu.cpp` / NPU 版本 `.cce.cpp`）+（可选）`.bin`
+2) **`ptoas`（编译器）** → C++ 源码（`.cpp`）
 3) **`bisheng`（Ascend 工具链）** → 可加载的 fatobj 动态库（`.so`）
 4) **运行器（ACL）** → 在 NPU（或模拟器）上 launch kernel
 
@@ -20,14 +26,14 @@
 
 - 从 repo 根目录执行命令。
 - Python `>= 3.8`，并安装 `numpy`。
-- 已构建 `ptoas` 二进制：`ptoas/mlir/build/bin/ptoas`（见 `ptoas/mlir/README.md`）。
+- 已构建 `ptoas` 二进制：`bin/ptoas`（来自 `~/llvm-project/build-mlir/bin/ptoas`）。
 - 若要跑 **NPU/模拟器**：安装 Ascend CANN/toolkit，设置 `ASCEND_HOME_PATH`；`bisheng` 可用；Python 能 `import acl`。
 
 建议先设置环境变量（本文后续命令默认用它们）：
 
 ```bash
 export ASCEND_HOME_PATH=/path/to/ascend-toolkit/latest
-export PTOAS=$PWD/ptoas/mlir/build/bin/ptoas
+export PTOAS=$PWD/bin/ptoas
 export OUT=/tmp/pto_gemm256
 ```
 

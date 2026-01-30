@@ -16,7 +16,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="Python frontend -> PTO-AS -> ptoas -> (CPU+NPU) run and compare (CPU as reference)."
     )
-    ap.add_argument("--ptoas", type=Path, default=repo / "ptoas/mlir/build/bin/ptoas")
+    ap.add_argument("--ptoas", type=Path, default=repo / "bin/ptoas")
     ap.add_argument("--ascend-home", type=Path, default=pipeline.default_ascend_home())
     ap.add_argument("--run-mode", choices=["npu", "sim"], default="npu")
     ap.add_argument("--soc", default="a3", help="Simulator SoC (a3|a5|Ascend910B1|...) when --run-mode=sim")
@@ -25,6 +25,7 @@ def main() -> int:
     ap.add_argument("--outdir", type=Path, default=Path("/tmp/ptoas_python_e2e"))
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ascend_home or not args.ascend_home.exists():
         print("error: set --ascend-home or ASCEND_HOME_PATH to your Ascend toolkit root", file=sys.stderr)
         return 2

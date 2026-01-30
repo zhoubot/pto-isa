@@ -14,6 +14,20 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 treshape %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.treshape %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.treshape ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

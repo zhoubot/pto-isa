@@ -60,8 +60,13 @@ class HostSpec:
         return [i for i, a in enumerate(self.args) if a.role in ("out", "inout")]
 
 
-_BEGIN = "; PTO_HOST_SPEC_BEGIN v1"
-_END = "; PTO_HOST_SPEC_END"
+# `.pto` files are now MLIR text, so comments must use `//` (MLIR does not accept `;`).
+_BEGIN = "// PTO_HOST_SPEC_BEGIN v1"
+_END = "// PTO_HOST_SPEC_END"
+
+# Backward-compatibility for older `.pto` files that used `;` comments.
+_BEGIN_LEGACY = "; PTO_HOST_SPEC_BEGIN v1"
+_END_LEGACY = "; PTO_HOST_SPEC_END"
 
 
 def encode_host_spec(spec: HostSpec) -> str:
@@ -82,7 +87,7 @@ def encode_host_spec(spec: HostSpec) -> str:
     }
     # Keep this readable in diffs by formatting with 2-space indents.
     body = json.dumps(payload, sort_keys=True, indent=2)
-    lines = [_BEGIN] + [f"; {ln}" for ln in body.splitlines()] + [_END, ""]
+    lines = [_BEGIN] + [f"// {ln}" for ln in body.splitlines()] + [_END, ""]
     return "\n".join(lines)
 
 
@@ -93,14 +98,18 @@ def prepend_host_spec_to_pto(*, pto: str, spec: HostSpec) -> str:
 def parse_host_spec_from_pto(pto: str) -> HostSpec | None:
     lines = pto.splitlines()
     try:
-        i0 = next(i for i, ln in enumerate(lines) if ln.strip() == _BEGIN)
-        i1 = next(i for i, ln in enumerate(lines) if i > i0 and ln.strip() == _END)
+        i0 = next(i for i, ln in enumerate(lines) if ln.strip() in (_BEGIN, _BEGIN_LEGACY))
+        i1 = next(i for i, ln in enumerate(lines) if i > i0 and ln.strip() in (_END, _END_LEGACY))
     except StopIteration:
         return None
 
     json_lines: list[str] = []
     for ln in lines[i0 + 1 : i1]:
         s = ln.strip()
+        if s.startswith("//"):
+            s = s[2:].lstrip()
+            json_lines.append(s)
+            continue
         if not s.startswith(";"):
             continue
         s = s[1:].lstrip()

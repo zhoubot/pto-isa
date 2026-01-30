@@ -1,24 +1,21 @@
-; Minimal PTO-AS demo (new format)
-;
-; This example is intended to be consumed by `ptoas/tools/ptoas_build.py`.
-
-%x = pto.make_tensor_view %arg0, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
-%y = pto.make_tensor_view %arg1, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
-%z = pto.make_tensor_view %arg2, dtype=f16, shape=[16,16] strides=[16,1], layout=ND
-
-%tx = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-%ty = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-%tz = pto.alloc_tile : !pto.tile<loc=Vec, dtype=f16, rows=16, cols=16, blayout=RowMajor, valid=16x16, slayout=NoneBox, fractal=512, pad=Null>
-
-scf.for %m0 = 0 to 16 step 16 {
-  scf.for %n0 = 0 to 16 step 16 {
-    %x_blk = pto.subview %x, offsets=[%m0, %n0]
-    %y_blk = pto.subview %y, offsets=[%m0, %n0]
-    %z_blk = pto.subview %z, offsets=[%m0, %n0]
-
-    %tx = pto.tload %x_blk[0, 0]
-    %ty = pto.tload %y_blk[0, 0]
-    %tz = pto.tadd %tx, %ty
-    pto.tstore %z_blk[0, 0], %tz
+module {
+  func.func @add16(%arg0: !pto.ptr<f16>, %arg1: !pto.ptr<f16>, %arg2: !pto.ptr<f16>) {
+    %c16 = arith.constant 16 : index
+    %c1 = arith.constant 1 : index
+    %x = pto.make_tensor_view %arg0, shape = [%c16, %c16] strides = [%c16, %c1] : !pto.tensor_view<2xf16>
+    %y = pto.make_tensor_view %arg1, shape = [%c16, %c16] strides = [%c16, %c1] : !pto.tensor_view<2xf16>
+    %z = pto.make_tensor_view %arg2, shape = [%c16, %c16] strides = [%c16, %c1] : !pto.tensor_view<2xf16>
+    %tx = pto.alloc_tile : !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>
+    %ty = pto.alloc_tile : !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>
+    %tz = pto.alloc_tile : !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>
+    %c0 = arith.constant 0 : index
+    %t1 = pto.subview %x, offsets = [%c0, %c0], sizes = [%c16, %c16] : !pto.tensor_view<2xf16> -> !pto.tile_view<16x16xf16>
+    pto.tload ins(%t1 : !pto.tile_view<16x16xf16>) outs(%tx : !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>)
+    %t2 = pto.subview %y, offsets = [%c0, %c0], sizes = [%c16, %c16] : !pto.tensor_view<2xf16> -> !pto.tile_view<16x16xf16>
+    pto.tload ins(%t2 : !pto.tile_view<16x16xf16>) outs(%ty : !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>)
+    "pto.tadd"(%tx, %ty, %tz) : (!pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>, !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>, !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>) -> ()
+    %t3 = pto.subview %z, offsets = [%c0, %c0], sizes = [%c16, %c16] : !pto.tensor_view<2xf16> -> !pto.tile_view<16x16xf16>
+    pto.tstore ins(%tz : !pto.tile_buf<loc=ub, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=none_box, fractal=512, pad=0>) outs(%t3 : !pto.tile_view<16x16xf16>)
+    func.return
   }
 }

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -95,6 +96,69 @@ def repo_root() -> Path:
             return p
     # Fallback: keep the old relative behavior (best-effort).
     return here.parents[4]
+
+
+def ensure_ptoas_binary(ptoas: Path) -> Path:
+    """
+    Ensure `ptoas` exists on disk.
+
+    This repo may vendor a compressed tarball `bin/ptoas.tar.xz` (or `.tar.gz`)
+    instead of a raw `bin/ptoas` binary to keep the checkout size manageable.
+
+    If `ptoas` does not exist but a sibling tarball exists, extract the binary
+    into place and mark it executable.
+    """
+    ptoas = Path(ptoas)
+    if ptoas.exists():
+        return ptoas
+
+    def _maybe_join_parts(archive: Path) -> bool:
+        parts = sorted(archive.parent.glob(archive.name + ".part*"))
+        if not parts:
+            return False
+        tmp_archive = archive.with_name(archive.name + ".tmp")
+        with tmp_archive.open("wb") as out:
+            for part in parts:
+                with part.open("rb") as pf:
+                    shutil.copyfileobj(pf, out)
+        tmp_archive.replace(archive)
+        return True
+
+    # Common vendoring pattern: keep the tarball next to the binary path.
+    candidates = [
+        Path(str(ptoas) + ".tar.xz"),
+        Path(str(ptoas) + ".tar.gz"),
+        Path(str(ptoas) + ".tgz"),
+        Path(str(ptoas) + ".tar"),
+    ]
+    archive = next((p for p in candidates if p.exists()), None)
+    if archive is None:
+        for p in candidates:
+            if _maybe_join_parts(p):
+                archive = p
+                break
+    if archive is None:
+        return ptoas
+
+    ptoas.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ptoas.with_name(ptoas.name + ".tmp")
+
+    with tarfile.open(archive, mode="r:*") as tf:
+        member = next((m for m in tf.getmembers() if m.isfile() and Path(m.name).name == ptoas.name), None)
+        if member is None:
+            raise RuntimeError(f"ptoas tarball missing '{ptoas.name}': {archive}")
+        f = tf.extractfile(member)
+        if f is None:
+            raise RuntimeError(f"failed to read '{member.name}' from {archive}")
+        with f, tmp.open("wb") as out:
+            shutil.copyfileobj(f, out)
+
+    try:
+        tmp.chmod(0o755)
+    except Exception:
+        pass
+    tmp.replace(ptoas)
+    return ptoas
 
 
 def ascend_include_dirs(ascend_home: Path) -> list[str]:
@@ -426,6 +490,162 @@ def _sanitize_kernel_name(name: str) -> str:
     return s
 
 
+_KERNEL_SIG_RE = re.compile(
+    r'(?:(?:^|\s)extern\s+"C"\s+)?__global__\s+(?:AICORE|__aicore__)(?:\s+__attribute__\(\([^)]*\)\))*\s+void\s+'
+    r'(?P<name>\w+)\s*\((?P<params>[^)]*)\)\s*\{',
+    re.MULTILINE,
+)
+
+
+def _split_cpp_params(params: str) -> list[str]:
+    out: list[str] = []
+    cur: list[str] = []
+    depth_angle = 0
+    depth_paren = 0
+    depth_brack = 0
+    for ch in params:
+        if ch == "<":
+            depth_angle += 1
+        elif ch == ">":
+            depth_angle = max(0, depth_angle - 1)
+        elif ch == "(":
+            depth_paren += 1
+        elif ch == ")":
+            depth_paren = max(0, depth_paren - 1)
+        elif ch == "[":
+            depth_brack += 1
+        elif ch == "]":
+            depth_brack = max(0, depth_brack - 1)
+
+        if ch == "," and depth_angle == 0 and depth_paren == 0 and depth_brack == 0:
+            s = "".join(cur).strip()
+            if s:
+                out.append(s)
+            cur = []
+            continue
+        cur.append(ch)
+    tail = "".join(cur).strip()
+    if tail:
+        out.append(tail)
+    return out
+
+
+def _extract_kernel_params(kernel_src: str) -> list[tuple[str, list[str]]]:
+    """
+    Return a list of (kernel_name, param_type_strings) extracted from C++ source.
+
+    Each param type string is suitable for a cast, e.g. "__gm__ float*" (without the param name).
+    """
+    out: list[tuple[str, list[str]]] = []
+    for m in _KERNEL_SIG_RE.finditer(kernel_src):
+        name = str(m.group("name"))
+        params = str(m.group("params"))
+        types: list[str] = []
+        for p in _split_cpp_params(params):
+            # Drop default initializers (best-effort).
+            p = p.split("=", 1)[0].strip()
+            if not p:
+                continue
+            m2 = re.match(r"^(?P<ty>.+?)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)$", p)
+            if m2 is None:
+                raise RuntimeError(f"failed to parse kernel param: {p!r}")
+            types.append(str(m2.group("ty")).strip())
+        out.append((name, types))
+    return out
+
+
+def _emit_cpu_wrapper(*, kernel_src: str) -> str:
+    infos = _extract_kernel_params(kernel_src)
+    if not infos:
+        raise RuntimeError("failed to infer kernel signature (no __global__ kernels found)")
+
+    # Prefer stable order: call kernels in source order.
+    arg_types0 = infos[0][1]
+    arg_count = len(arg_types0)
+    for kn, tys in infos[1:]:
+        if len(tys) != arg_count:
+            raise RuntimeError(f"kernel arg count mismatch: {infos[0][0]} has {arg_count} args but {kn} has {len(tys)}")
+
+    host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
+
+    def _call(kn: str, tys: list[str]) -> str:
+        args = ", ".join([f"({tys[i]})arg{i}" for i in range(arg_count)])
+        return f"  {kn}({args});\n"
+
+    body = "".join([_call(kn, tys) for kn, tys in infos])
+    return (
+        "\n"
+        "// ---- CPU wrapper (ctypes entrypoint) ---------------------------------\n"
+        "// Note: This wrapper is generated by ptoas.python.pipeline and is built\n"
+        "// with -D__CPU_SIM so the PTO CPU simulator stubs/implementations are used.\n"
+        f"extern \"C\" void pto_kernel_cpu({host_params}) {{\n"
+        f"{body}"
+        "}\n"
+    )
+
+
+def _find_matching_brace(s: str, *, open_brace_pos: int) -> int:
+    if open_brace_pos < 0 or open_brace_pos >= len(s) or s[open_brace_pos] != "{":
+        raise ValueError("open_brace_pos must point at '{'")
+    depth = 0
+    for i in range(open_brace_pos, len(s)):
+        ch = s[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    raise ValueError("unbalanced braces while scanning kernel body")
+
+
+def _extract_kernel_spans(kernel_src: str) -> list[tuple[str, list[str], int, int]]:
+    """
+    Return a list of (kernel_name, param_types, start, end) spans for each `__global__` kernel.
+    """
+    out: list[tuple[str, list[str], int, int]] = []
+    for m in _KERNEL_SIG_RE.finditer(kernel_src):
+        name = str(m.group("name"))
+        tys: list[str] = []
+        for p in _split_cpp_params(str(m.group("params"))):
+            p = p.split("=", 1)[0].strip()
+            if not p:
+                continue
+            m2 = re.match(r"^(?P<ty>.+?)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)$", p)
+            if m2 is None:
+                raise RuntimeError(f"failed to parse kernel param: {p!r}")
+            tys.append(str(m2.group("ty")).strip())
+
+        start = int(m.start())
+        open_brace_pos = int(m.end() - 1)
+        end_brace_pos = _find_matching_brace(kernel_src, open_brace_pos=open_brace_pos)
+        end = int(end_brace_pos + 1)
+        out.append((name, tys, start, end))
+    return out
+
+
+def _disable_other_kernels(*, kernel_src: str, keep_kernel: str) -> str:
+    spans = _extract_kernel_spans(kernel_src)
+    if not spans:
+        raise RuntimeError("no kernels found")
+    out: list[str] = []
+    pos = 0
+    for name, _tys, start, end in spans:
+        out.append(kernel_src[pos:start])
+        body = kernel_src[start:end]
+        if name == keep_kernel:
+            out.append(body)
+        else:
+            out.append("#if 0\n")
+            out.append(body)
+            if not body.endswith("\n"):
+                out.append("\n")
+            out.append("#endif\n")
+        pos = end
+    out.append(kernel_src[pos:])
+    return "".join(out)
+
+
 def compile_pto_to_cce_and_bin(
     *, pto_path: Path, outdir: Path, cfg: CompileConfig, out_cpp: Path | None = None, out_bin: Path | None = None
 ) -> tuple[Path, Path]:
@@ -434,54 +654,34 @@ def compile_pto_to_cce_and_bin(
     cce_path = out_cpp or (outdir / (pto_path.stem + ".cpp"))
     bin_path = out_bin or (outdir / (pto_path.stem + ".bin"))
 
-    args = [
-        str(cfg.ptoas),
-        str(pto_path),
-        "--target",
-        "npu",
-        "-o",
-        str(cce_path),
-        "--kernel-name",
-        _sanitize_kernel_name(f"pto_kernel_{pto_path.stem}"),
-        "--arch",
-        cfg.arch,
-        "--memory-model",
-        cfg.memory_model,
-        "--repo-root",
-        str(repo_root()),
-        "--ascend-home",
-        str(cfg.ascend_home),
-    ]
-    # NOTE: `--emit-bin` runs bisheng inside `ptoas`. For multi-kernel (split cube/vec)
-    # flows we build fatobj objects per-arch in Python, so skip `--emit-bin` here.
-    if not cfg.split_kernels:
-        args.append(f"--emit-bin={bin_path}")
-    if not cfg.insert_events:
-        args.append("--no-insert-events")
-    if cfg.split_kernels:
-        args.append("--split-kernels")
+    ptoas = ensure_ptoas_binary(cfg.ptoas)
+    args = [str(ptoas), str(pto_path), "-o", str(cce_path)]
+    if cfg.insert_events:
+        args.append("--enable-insert-sync")
     _run(args, cwd=repo_root())
+
+    # The LLVM `ptoas` does not emit a standalone `*.bin`. Keep the return value for
+    # compatibility with existing scripts, but only create a placeholder file.
+    try:
+        bin_path.write_bytes(b"")
+    except Exception:
+        pass
     return cce_path, bin_path
 
 
-def compile_pto_to_cpu_cpp(*, pto_path: Path, outdir: Path, ptoas: Path) -> Path:
+def compile_pto_to_cpu_cpp(*, pto_path: Path, outdir: Path, ptoas: Path, insert_events: bool = True) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
     cpp_path = outdir / (pto_path.stem + ".cpu.cpp")
-    _run(
-        [
-            str(ptoas),
-            str(pto_path),
-            "--target",
-            "cpu",
-            "-o",
-            str(cpp_path),
-            "--kernel-name",
-            _sanitize_kernel_name(f"pto_kernel_{pto_path.stem}"),
-            "--repo-root",
-            str(repo_root()),
-        ],
-        cwd=repo_root(),
-    )
+    tmp_kernel = outdir / (pto_path.stem + ".cpu.kernel.cpp")
+    ptoas = ensure_ptoas_binary(ptoas)
+    args = [str(ptoas), str(pto_path), "-o", str(tmp_kernel)]
+    if insert_events:
+        args.append("--enable-insert-sync")
+    _run(args, cwd=repo_root())
+
+    kernel_src = tmp_kernel.read_text(encoding="utf-8", errors="replace")
+    wrapper = _emit_cpu_wrapper(kernel_src=kernel_src)
+    cpp_path.write_text(kernel_src + wrapper, encoding="utf-8")
     return cpp_path
 
 
@@ -497,28 +697,11 @@ def compile_pto_to_device_cpp(
     split_kernels: bool = False,
 ) -> Path:
     out_cpp.parent.mkdir(parents=True, exist_ok=True)
-    args = [
-        str(ptoas),
-        str(pto_path),
-        "--target",
-        "npu",
-        "-o",
-        str(out_cpp),
-        "--kernel-name",
-        _sanitize_kernel_name(f"pto_kernel_{pto_path.stem}"),
-        "--arch",
-        arch,
-        "--memory-model",
-        memory_model,
-        "--repo-root",
-        str(repo_root()),
-    ]
-    if not insert_events:
-        args.append("--no-insert-events")
-    if assign_tile_addrs:
-        args.append("--assign-tile-addrs")
-    if split_kernels:
-        args.append("--split-kernels")
+    del arch, memory_model, assign_tile_addrs, split_kernels  # legacy options (not supported by LLVM `ptoas`)
+    ptoas = ensure_ptoas_binary(ptoas)
+    args = [str(ptoas), str(pto_path), "-o", str(out_cpp)]
+    if insert_events:
+        args.append("--enable-insert-sync")
     _run(args, cwd=repo_root())
     return out_cpp
 
@@ -543,6 +726,7 @@ def build_cpu_so_from_cpp(*, cpp_path: Path, out_so: Path) -> None:
             "-shared",
             "-fPIC",
             "-O2",
+            "-D__CPU_SIM",
             std,
             "-Wno-unknown-attributes",
             "-Wno-ignored-attributes",
@@ -561,6 +745,7 @@ def build_fatobj_so_from_cce(
     out_so: Path,
     arch: str,
     ascend_home: Path,
+    memory_model: str = "MEMORY_BASE",
     fixed_block_dim: int | None = None,
     runtime_lib: str = "runtime",
     soc: str | None = None,
@@ -570,19 +755,13 @@ def build_fatobj_so_from_cce(
 
     kernel_src = cce_path.read_text(encoding="utf-8")
 
-    # Keep the outer `#if defined(__CCE__) ... #endif` guard emitted by ptoas.
-    #
-    # `bisheng -xcce` builds fatobj objects by compiling host + device paths. CCE
-    # intrinsics (e.g. `set_flag`, `pipe_barrier`, `__cce_get_tile_ptr`) are only
-    # available in the device path. Stripping the guard would force host compilation
-    # to parse device-only code and fail.
+    if memory_model not in ("MEMORY_BASE", "REGISTER_BASE"):
+        raise ValueError(f"unsupported memory_model: {memory_model}")
 
-    sig_re = re.compile(
-        r'extern\s+"C"\s+__global__\s+(?:AICORE|__aicore__)(?:\s+__attribute__\(\([^)]*\)\))*\s+void\s+(\w+)\s*\(([^)]*)\)'
-    )
-    matches = list(sig_re.finditer(kernel_src))
-    if not matches:
+    infos = _extract_kernel_spans(kernel_src)
+    if not infos:
         raise RuntimeError(f"failed to infer kernel signature from: {cce_path}")
+
     def _is_vec_kernel(name: str, sig: str) -> bool:
         # Prefer explicit AIV annotation when present, but for split-kernel flows we primarily
         # infer vec/cube from the stage suffix in the kernel name (e.g. `..._softmax_vec`).
@@ -590,17 +769,14 @@ def build_fatobj_so_from_cce(
             return True
         return name.endswith("_vec") or ("_vec_" in name) or name.endswith("_aiv") or ("_aiv_" in name)
 
-    kernel_infos = [(m.group(1), _is_vec_kernel(m.group(1), m.group(0))) for m in matches]
+    kernel_infos = [(name, _is_vec_kernel(name, name)) for (name, _tys, _s, _e) in infos]
     kernel_names = [n for (n, _is_vec) in kernel_infos]
-    params0 = [p.strip() for p in matches[0].group(2).split(",") if p.strip()]
-    arg_count = len(params0)
-    for m in matches[1:]:
-        params = [p.strip() for p in m.group(2).split(",") if p.strip()]
-        if len(params) != arg_count:
-            raise RuntimeError(f"kernel signature mismatch in {cce_path}: {kernel_names[0]} has {arg_count} args but {m.group(1)} has {len(params)}")
+    arg_count = len(infos[0][1])
+    for kn, tys, _s, _e in infos[1:]:
+        if len(tys) != arg_count:
+            raise RuntimeError(f"kernel signature mismatch in {cce_path}: {kernel_names[0]} has {arg_count} args but {kn} has {len(tys)}")
 
     host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
-    kernel_args = ", ".join([f"(GM_ADDR)arg{i}" for i in range(arg_count)])
 
     if fixed_block_dim is not None:
         if fixed_block_dim <= 0:
@@ -687,17 +863,21 @@ def build_fatobj_so_from_cce(
                 stage_so = out_so.with_name(stage_leaf)
                 stage_arch = vec_arch if is_vec else cube_arch
 
-                stage_decl = f'extern "C" __global__ __aicore__ void {kn}({", ".join([f"GM_ADDR arg{i}" for i in range(arg_count)])});\n'
+                stage_kernel = td_path / f"kernel.stage{i}.cpp"
+                stage_kernel.write_text(_disable_other_kernels(kernel_src=kernel_src, keep_kernel=kn), encoding="utf-8")
+
+                tys = next(t for (n, t, _s, _e) in infos if n == kn)
+                call_args = ", ".join([f"({tys[j]})arg{j}" for j in range(arg_count)])
+
                 stage_src = (
-                    f"#define PTOAS_EMIT_ALL 0\n#define PTOAS_EMIT_KERNEL_{kn} 1\n"
+                    f"#define {memory_model}\n"
                     "#include \"kernel_operator.h\"\n"
-                    + stage_decl +
-                    "#include \"kernel.cpp\"\n"
                     "#include <cstdint>\n\n"
+                    f"#include \"{stage_kernel.name}\"\n\n"
                     f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
                     "{\n"
                     f"{block_unused}"
-                    f"    {kn}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n"
+                    f"    {kn}<<<{block_expr}, nullptr, stream>>>({call_args});\n"
                     "}\n"
                 )
                 stage_cpp = td_path / f"stage{i}.cpp"
@@ -781,19 +961,14 @@ def build_fatobj_so_from_cce(
             return
         else:
             # Single-kernel TU:
-            # - Provide host-side forward decls for kernels (device definitions live in `kernel.cpp` under `__CCE_AICORE__`).
-            # - Include `kernel.cpp` as-is (keep its outer guard).
-            decls = "\n".join(
-                [
-                    f'extern "C" __global__ __aicore__ void {kn}({", ".join([f"GM_ADDR arg{i}" for i in range(arg_count)])});'
-                    for kn in kernel_names
-                ]
-            )
-            launch_lines = "".join([f"    {kn}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n" for kn in kernel_names])
+            launch_lines = ""
+            for kn, tys, _s, _e in infos:
+                call_args = ", ".join([f"({tys[j]})arg{j}" for j in range(arg_count)])
+                launch_lines += f"    {kn}<<<{block_expr}, nullptr, stream>>>({call_args});\n"
             combined = (
+                f"#define {memory_model}\n"
                 "#include \"kernel_operator.h\"\n"
                 "#include <cstdint>\n\n"
-                f"{decls}\n\n"
                 "#include \"kernel.cpp\"\n\n"
                 f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
                 "{\n"
@@ -850,6 +1025,7 @@ def build_fatobj_exe_from_cce(
     arch: str,
     ascend_home: Path,
     host_specs: list["TensorSpec"],
+    memory_model: str = "MEMORY_BASE",
     fixed_block_dim: int | None = None,
     runtime_lib: str = "runtime",
     soc: str | None = None,
@@ -873,25 +1049,18 @@ def build_fatobj_exe_from_cce(
 
     kernel_src = cce_path.read_text(encoding="utf-8")
 
-    # Keep the outer `#if defined(__CCE__) ... #endif` guard emitted by ptoas.
-    # See `build_fatobj_so_from_cce()` for rationale.
+    if memory_model not in ("MEMORY_BASE", "REGISTER_BASE"):
+        raise ValueError(f"unsupported memory_model: {memory_model}")
 
-    sig_re = re.compile(
-        r'extern\s+"C"\s+__global__\s+(?:AICORE|__aicore__)(?:\s+__attribute__\(\([^)]*\)\))*\s+void\s+(\w+)\s*\(([^)]*)\)'
-    )
-    matches = list(sig_re.finditer(kernel_src))
-    if not matches:
+    infos = _extract_kernel_spans(kernel_src)
+    if not infos:
         raise RuntimeError(f"failed to infer kernel signature from: {cce_path}")
-    kernel_names = [m.group(1) for m in matches]
-    params0 = [p.strip() for p in matches[0].group(2).split(",") if p.strip()]
-    arg_count = len(params0)
-    for m in matches[1:]:
-        params = [p.strip() for p in m.group(2).split(",") if p.strip()]
-        if len(params) != arg_count:
-            raise RuntimeError(f"kernel signature mismatch in {cce_path}: {kernel_names[0]} has {arg_count} args but {m.group(1)} has {len(params)}")
+    arg_count = len(infos[0][1])
+    for kn, tys, _s, _e in infos[1:]:
+        if len(tys) != arg_count:
+            raise RuntimeError(f"kernel signature mismatch in {cce_path}: {infos[0][0]} has {arg_count} args but {kn} has {len(tys)}")
 
     host_params = ", ".join([f"void *arg{i}" for i in range(arg_count)])
-    kernel_args = ", ".join([f"(GM_ADDR)arg{i}" for i in range(arg_count)])
 
     if fixed_block_dim is not None:
         if fixed_block_dim <= 0:
@@ -904,17 +1073,14 @@ def build_fatobj_exe_from_cce(
         block_param = "uint32_t blockDim"
         block_unused = ""
 
-    decls = "\n".join(
-        [
-            f'extern "C" __global__ __aicore__ void {kn}({", ".join([f"GM_ADDR arg{i}" for i in range(arg_count)])});'
-            for kn in kernel_names
-        ]
-    )
-    launch_lines = "".join([f"    {kn}<<<{block_expr}, nullptr, stream>>>({kernel_args});\n" for kn in kernel_names])
+    launch_lines = ""
+    for kn, tys, _s, _e in infos:
+        call_args = ", ".join([f"({tys[j]})arg{j}" for j in range(arg_count)])
+        launch_lines += f"    {kn}<<<{block_expr}, nullptr, stream>>>({call_args});\n"
     combined = (
+        f"#define {memory_model}\n"
         "#include \"kernel_operator.h\"\n"
         "#include <cstdint>\n\n"
-        f"{decls}\n\n"
         "#include \"kernel.cpp\"\n\n"
         f"extern \"C\" void ptoas_launch(void *stream, {block_param}{', ' if arg_count else ''}{host_params})\n"
         "{\n"

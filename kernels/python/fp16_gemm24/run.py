@@ -19,13 +19,10 @@ from kernels.python.fp16_gemm24.kernel import Fp16Gemm24Config, make_fp16_gemm24
 
 
 def _default_ptoas() -> Path:
-    for p in (
-        _REPO_ROOT / "ptoas/mlir/build/bin/ptoas",
-        _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return _REPO_ROOT / "ptoas/mlir/build/bin/ptoas"
+    p = _REPO_ROOT / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def main() -> int:
@@ -62,6 +59,7 @@ def main() -> int:
     ap.add_argument("--check-atol", type=float, default=5e-2)
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -122,6 +120,7 @@ def main() -> int:
             out_so=npu_so,
             arch=cfg_npu.arch,
             ascend_home=cfg_npu.ascend_home,
+            memory_model=cfg_npu.memory_model,
             runtime_lib=runtime_lib,
             soc=soc_full,
         )

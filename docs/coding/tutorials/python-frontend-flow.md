@@ -6,14 +6,14 @@ This repo supports writing kernels in a small Python DSL, compiling them into PT
 
 - Run commands from the repo root.
 - `python3` and `numpy`.
-- Built `ptoas` at `ptoas/mlir/build/bin/ptoas`.
+- Built `ptoas` at `bin/ptoas` (from `~/llvm-project/build-mlir/bin/ptoas`).
 - Ascend toolkit installed and `ASCEND_HOME_PATH` set (and Python can `import acl`).
 
 Recommended env vars:
 
 ```bash
 export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
-export PTOAS=$PWD/ptoas/mlir/build/bin/ptoas
+export PTOAS=$PWD/bin/ptoas
 export PYTHONPATH="$PWD/binding/python:${PYTHONPATH:-}"
 ```
 
@@ -49,35 +49,35 @@ python3 ptoas/tools/python_to_pto.py kernels/python/add16.py --kernel add16 --ou
 
 The header is a comment block:
 
-- `; PTO_HOST_SPEC_BEGIN v1`
+- `// PTO_HOST_SPEC_BEGIN v1`
 - JSON payload (arg shapes/dtypes/roles + seed + blockDim)
-- `; PTO_HOST_SPEC_END`
+- `// PTO_HOST_SPEC_END`
 
-## Stage 2: PTO-AS → CCE (`.cpp`) and optional `.bin`
+## Stage 2: PTO-AS → CCE (`.cpp`)
 
-Compile to NPU CCE source and extract an `__aicore_rel_binary`:
+Compile to NPU CCE source:
 
 ```bash
-$PTOAS /tmp/add16.pto --target npu -o /tmp/add16.cpp --arch dav-c220-vec --emit-bin=/tmp/add16.bin
+$PTOAS /tmp/add16.pto -o /tmp/add16.cpp
 ```
 
 Notes:
 
-- `ptoas` drives the Ascend toolchain under the hood for `.bin` emission.
-- The typical run path uses a fatobj `.so` (Stage 3) instead of directly loading `.bin`.
+- The typical run path uses a fatobj `.so` (Stage 3) built via `bisheng`, instead of directly loading `.bin`.
+- If you want the compiler to insert synchronization heuristically, add `--enable-insert-sync`.
 
-## Stage 2.1: Multi-kernel split (cube + vec)
+## Stage 2.1: Multi-stage kernels (cube + vec)
 
 Some kernels want to mix **cube** and **vec** code paths (e.g. `matmul` + `softmax`) in one logical Python program.
 In that case, compile with:
 
-- `ptoas --split-kernels`
+- stage markers in the Python program
 
 How it works (high level):
 
 - Python emits marker ops like `pto.stage_qk_cube()` / `pto.stage_softmax_vec()`.
-- `ptoas --split-kernels` turns a single `.pto` into multiple kernels by stage and emits multiple CCE kernels:
-  - `pto_kernel_<name>_<stage0>`
+- The Python frontend splits the program into multiple MLIR functions, and `ptoas` emits multiple CCE kernels:
+  - `<name>_stage_<stage0>`
   - `pto_kernel_<name>_<stage1>`
   - ...
 - `build_fatobj_so_from_cce(...)` builds one stage fatobj `.so` per kernel and a small host wrapper `.so` that
@@ -157,12 +157,12 @@ python3 kernels/python/run_regression.py --run-mode npu --timeout-sec 180 --retr
 
 ### Note: multi-tile kernels and tile reuse
 
-`ptoas --insert-events` is a conservative prototype. If a kernel processes multiple tiles back-to-back, avoid reusing
+`ptoas --enable-insert-sync` is a conservative prototype. If a kernel processes multiple tiles back-to-back, avoid reusing
 the *same* GM→tile load buffers (`tload` dst) and tile→GM store buffers (`tstore` src) across tiles.
 
 For **looped** multi-tile kernels, you may hit WAR/WAW hazards when reusing the same on-chip tiles across iterations
 (e.g. a later `tload` overwriting a buffer while an earlier `tstore` is still reading it). Prefer relying on
-`ptoas --insert-events` to insert the required synchronization.
+`ptoas --enable-insert-sync` to insert the required synchronization.
 
 For example, prefer:
 

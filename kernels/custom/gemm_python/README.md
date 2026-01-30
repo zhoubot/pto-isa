@@ -2,17 +2,18 @@
 
 This is a minimal GEMM example written in Python that generates PTO-AS text, then uses the `ptoas` toolchain to build and run on:
 
-- **CPU simulator** (`ptoas --target cpu` → C++ → `clang++` → `.so`)
-- **Real NPU** (`ptoas --target npu` → CCE → `bisheng` → fatobj `.so`)
+- **CPU simulator** (`bin/ptoas` → C++ → `clang++ -D__CPU_SIM` → `.so`)
+- **Real NPU** (`bin/ptoas` → CCE C++ → `bisheng` → fatobj `.so`)
 
 It is intentionally small (16×16) and focuses on the end-to-end flow.
 
 ## Prereqs
 
-- Build `ptoas` first:
+- Ensure you have a working `bin/ptoas` (built from `~/llvm-project`):
 
 ```bash
-ninja -C ptoas/mlir/build
+ninja -C ~/llvm-project/build-mlir ptoas
+cp ~/llvm-project/build-mlir/bin/ptoas ./bin/ptoas
 ```
 
 - For NPU: source Ascend env and ensure `ASCEND_HOME_PATH` is set:

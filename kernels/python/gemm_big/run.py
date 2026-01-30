@@ -20,13 +20,10 @@ from kernels.python.gemm_big.kernel import GemmConfig, make_gemm_f16f16f32_kerne
 
 
 def _default_ptoas() -> Path:
-    for p in (
-        _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas",
-        _REPO_ROOT / "ptoas/mlir/build/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return _REPO_ROOT / "ptoas/mlir/build/bin/ptoas"
+    p = _REPO_ROOT / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def _soc_from_alias(alias: str) -> str:
@@ -193,6 +190,7 @@ def main() -> int:
     ap.add_argument("--no-d2h", dest="d2h", action="store_false", default=True, help="Skip copying C back to host")
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         raise SystemExit(f"error: ptoas not found: {args.ptoas}")
     if args.run_mode == "sim":
@@ -231,6 +229,7 @@ def main() -> int:
         out_so=so_path,
         arch=cfg_compile.arch,
         ascend_home=args.ascend_home,
+        memory_model=cfg_compile.memory_model,
         fixed_block_dim=int(block_dim),
         runtime_lib=runtime_lib,
         soc=soc_full,

@@ -32,6 +32,20 @@ tmov.m2s %scale, %mat : (!pto.tile<...>, !pto.tile<...>)
 tmov.a2v %vec, %acc : (!pto.tile<...>, !pto.tile<...>)
 tmov.v2v %v1, %v0 : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tmov.s2d %src  : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tmov.s2d ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/constants.hpp`:

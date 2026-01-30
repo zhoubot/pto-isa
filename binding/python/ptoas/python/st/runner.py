@@ -76,7 +76,7 @@ def _compile_and_run_case(*, case: Case, target: Target, args: argparse.Namespac
         )
         base = pipeline.make_host_arrays(host_spec)
 
-        cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=outdir, ptoas=ptoas_bin)
+        cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=outdir, ptoas=ptoas_bin, insert_events=args.insert_events)
         cpu_so = outdir / f"lib{case.name}_cpu.so"
         pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
         cpu_out = pipeline.run_cpu_kernel_from_so(
@@ -106,6 +106,7 @@ def _compile_and_run_case(*, case: Case, target: Target, args: argparse.Namespac
             out_so=npu_so,
             arch=cfg.arch,
             ascend_home=cfg.ascend_home,
+            memory_model=cfg.memory_model,
             runtime_lib=runtime_lib,
             soc=soc_full,
         )
@@ -125,7 +126,7 @@ def main() -> int:
     ap.add_argument("--list-instr", action="store_true", help="List PTO instruction mnemonics and coverage")
     ap.add_argument("--case", default="add16", help=f"Case name ({', '.join(sorted(CASES))})")
     ap.add_argument("--target", choices=["cpu", "npu", "both"], default="cpu")
-    ap.add_argument("--ptoas", type=Path, default=repo / "ptoas/mlir/build/bin/ptoas")
+    ap.add_argument("--ptoas", type=Path, default=repo / "bin/ptoas")
     ap.add_argument("--outdir", type=Path, default=Path("/tmp/ptoas_py_st"))
 
     # NPU options
@@ -169,6 +170,7 @@ def main() -> int:
     if args.case not in CASES:
         print(f"error: unknown --case {args.case}", file=sys.stderr)
         return 2
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2

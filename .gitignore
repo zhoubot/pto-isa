@@ -20,3 +20,8 @@ tests/npu/a5/src/st/build
 kernels/manual/a2a3/gemm_performance/build*/
 kernels/manual/a2a3/gemm_performance/input/
 kernels/manual/a2a3/gemm_performance/output/
+
+# Vendored LLVM ptoas binary is generated from tarball parts (do not commit the raw binary or full tarball).
+bin/ptoas
+bin/ptoas.tar.xz
+bin/ptoas.tar.gz

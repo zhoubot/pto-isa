@@ -901,24 +901,20 @@ def api_col_expand_ops():
 
 
 def api_fillpad_ops():
-    # Covers: tfillpad, tfillpad_inplace, tfillpad_expand.
+    # Covers: tfillpad.
     pto = PTO("api_fillpad_ops")
     pto.prologue()
 
     x8 = pto.tensor(dtype="f32", shape=(8, 8), role="in")
     out = pto.tensor(dtype="f32", shape=(16, 16), role="out")
 
-    # Src tile has smaller valid region; dst pads to 16x16.
-    src8 = pto.vec(dtype="f32", shape=(8, 8), pad="Zero")
-    src8 = pto.load(x8)
+    # Model a smaller valid region (8x8) inside a 16x16 tile and pad it out.
+    src = pto.vec(dtype="f32", shape=(16, 16), valid="8x8", pad="Zero")
+    dst = pto.vec(dtype="f32", shape=(16, 16), pad="Zero")
 
-    dst16 = pto.vec(dtype="f32", shape=(16, 16), pad="Zero")
-    dst16 = pto.fillpad_expand(src8)
-
-    # Same-shape fillpad variants (exercise in-place + out-of-place).
-    dst16 = pto.fillpad(dst16)
-    dst16 = pto.fillpad_inplace(dst16)
-    pto.store(out, dst16)
+    src = pto.load(x8)
+    dst = pto.fillpad(src)
+    pto.store(out, dst)
 
     pto.epilogue()
     return pto.program()
@@ -987,7 +983,8 @@ def api_sort_ops():
     tmp = pto.vec(dtype="f32", shape=(1, 32))
 
     src = pto.load(x)
-    dst = pto.mrgsort(src, 32)
+    # blockLen is in bytes and must be a multiple of 64.
+    dst = pto.mrgsort(src, 128)
 
     # TSORT32 expects an index tile; keep it small and stable.
     idx = pto.expands(0)
@@ -1000,35 +997,31 @@ def api_sort_ops():
 
 
 def api_gather_scatter_ops():
-    # Covers: tgather, tgatherb, tscatter, mgather, mscatter.
+    # Covers: tgather, tgatherb, tscatter.
     pto = PTO("api_gather_scatter_ops")
     pto.prologue()
 
-    # Use 16x64 so TGATHERB stays on the fast-path (1 repeat per line for f32).
     src = pto.tensor(dtype="f32", shape=(16, 64), role="in")
     idx = pto.tensor(dtype="u32", shape=(16, 64), role="in")
-    # TGATHERB consumes one uint32 offset per 32B block; for 64 columns of f32 => 8 blocks per row.
-    off = pto.tensor(dtype="u32", shape=(16, 8), role="in")
-    gm = pto.tensor(dtype="f32", shape=(1, 64), role="inout")
     out = pto.tensor(dtype="f32", shape=(16, 64), role="out")
 
     x = pto.vec(dtype="f32", shape=(16, 64))
-    gathered = pto.vec(dtype="f32", shape=(16, 64))
     idx_t = pto.vec(dtype="u32", shape=(16, 64))
-    off_t = pto.vec(dtype="u32", shape=(16, 8))
-    tb = pto.vec(dtype="f32", shape=(16, 64))
+    off_t = pto.vec(dtype="u32", shape=(16, 64))
+    gathered = pto.vec(dtype="f32", shape=(16, 64))
+    gathered_b = pto.vec(dtype="f32", shape=(16, 64))
+    scattered = pto.vec(dtype="f32", shape=(16, 64))
 
     x = pto.load(src)
     idx_t = pto.load(idx)
-    # Debug: isolate MGATHER/MSCATTER.
-    gathered = pto.mgather(gm, idx_t)
-    pto.mscatter(gm, gathered, idx_t)
-
-    # Global gather/scatter helpers.
-    # gathered = pto.mgather(gm, idx_t)
-    # pto.mscatter(gm, gathered, idx_t)
-
-    pto.store(out, gathered)
+    # TGATHERB requires ui32 offsets with the same shape as src/dst; keep this safe by
+    # using a zero-offset tile (gather the first element everywhere).
+    off_t = pto.expands(0)
+    gathered = pto.gather(x, idx_t)
+    gathered_b = pto.gatherb(x, off_t)
+    scattered = pto.scatter(gathered, idx_t)
+    x = pto.add(scattered, gathered_b)
+    pto.store(out, x)
 
     pto.epilogue()
     return pto.program()

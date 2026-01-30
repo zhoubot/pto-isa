@@ -19,6 +19,21 @@ Synchronous form:
 ```text
 mgather %dst, %mem, %idx : (!pto.tile<...>, !pto.tensor<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.mgather %mem, %idx : (!pto.partition_tensor_view<MxNxdtype>, pto.tile<...>) 
+-> !pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.mgather ins(%mem, %idx : !pto.partition_tensor_view<MxNxdtype>, !pto.tile_buf<MxNxdtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

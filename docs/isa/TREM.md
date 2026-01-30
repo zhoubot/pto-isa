@@ -25,6 +25,20 @@ Synchronous form:
 ```text
 trem %dst, %src0, %src1 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.trem %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.trem ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

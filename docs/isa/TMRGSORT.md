@@ -20,6 +20,21 @@ Synchronous form (conceptual):
 tmrgsort %dst, %executed, %tmp, %src0, %src1 {exhausted = false}
     : (!pto.tile<...>, vector<4xi16>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst, %executed = pto.tmrgsort %src0, %src1, %src2, %src3 {exhausted = false}
+ : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> (!pto.tile<...>, vector<4xi16>)
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.mrgsort ins(%src0, %src1, %src2, %src3 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst, %executed : !pto.tile_buf<...>, vector<4xi16>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

@@ -19,6 +19,20 @@ Synchronous form:
 ```text
 tlrelu %dst, %src, %slope : (!pto.tile<...>, !pto.tile<...>, f32)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tlrelu %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tlrelu ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

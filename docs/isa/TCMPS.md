@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 tcmps %dst, %src, %scalar {cmpMode = #pto.cmp<EQ>} : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tcmps %src, %scalar {cmpMode = #pto.cmp<xx>} : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tcmps ins(%src, %scalar {cmpMode = #pto.cmp<xx>} : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/type.hpp`:

@@ -19,6 +19,20 @@ Synchronous form:
 ```text
 txors %dst, %src, %scalar : (!pto.tile<...>, !pto.tile<...>, i32)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.txors %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.txors ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

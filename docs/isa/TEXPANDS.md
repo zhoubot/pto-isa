@@ -19,6 +19,20 @@ Synchronous form:
 ```text
 texpands %dst, %scalar : (f32, f32, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.texpands %scalar : dtype -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.texpands ins(%scalar : dtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

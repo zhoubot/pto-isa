@@ -4,6 +4,16 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 
+def _mlir_scalar_type(dtype: str) -> str:
+    dt = str(dtype).strip()
+    if dt in ("f16", "f32", "f64", "i1", "i8", "i16", "i32", "i64", "index"):
+        return dt
+    if dt in ("u8", "u16", "u32", "u64"):
+        # MLIR's `arith` dialect uses signless integers; keep the bitwidth.
+        return "i" + dt[1:]
+    raise ValueError(f"unsupported dtype: {dtype}")
+
+
 @dataclass(frozen=True)
 class TensorType:
     dtype: str
@@ -27,10 +37,10 @@ class TensorType:
         return int(stride[0]), int(stride[1])
 
     def __str__(self) -> str:
-        # Preserve the canonical spelling used by the MLIR `ptoas` emitter.
-        h, w = self.shape2()
-        s0, s1 = self.stride2()
-        return f"!pto.tensor<dtype={self.dtype}, shape=[{h},{w}], stride=[{s0},{s1}], layout={self.layout}>"
+        # MLIR PTO dialect uses `!pto.tensor_view<rankxelem>`; shape/strides are
+        # operands to `pto.make_tensor_view` rather than part of the type.
+        elem = _mlir_scalar_type(self.dtype)
+        return f"!pto.tensor_view<2x{elem}>"
 
 
 @dataclass(frozen=True)
@@ -54,21 +64,41 @@ class TileType:
         fractal = self.fractal
         if fractal is None:
             fractal = 1024 if self.loc == "Acc" else 512
-        if self.v_row is not None or self.v_col is not None:
-            v_row = self.rows if self.v_row is None else self.v_row
-            v_col = self.cols if self.v_col is None else self.v_col
-            return (
-                f"!pto.tile_buf<loc={self.loc}, dtype={self.dtype}, rows={self.rows}, cols={self.cols}, "
-                f"v_row={v_row}, v_col={v_col}, blayout={self.blayout}, slayout={self.slayout}, "
-                f"fractal={fractal}, pad={self.pad}>"
-            )
+        loc_map = {
+            "Vec": "ub",
+            "Mat": "mat",
+            "Left": "left",
+            "Right": "right",
+            "Acc": "acc",
+            "Bias": "bias",
+            # Kernel authors use these names for mx scaling tiles; LLVM PTO uses
+            # the regular LEFT/RIGHT memory spaces.
+            "ScaleLeft": "left",
+            "ScaleRight": "right",
+        }
+        loc = loc_map.get(self.loc, str(self.loc))
 
-        valid_rows = self.rows if self.valid_rows is None else self.valid_rows
-        valid_cols = self.cols if self.valid_cols is None else self.valid_cols
+        bl_map = {"RowMajor": "row_major", "ColMajor": "col_major"}
+        sl_map = {"NoneBox": "none_box", "RowMajor": "row_major", "ColMajor": "col_major"}
+        pad_map = {"Null": 0, "Zero": 1, "Max": 2, "Min": 3}
+
+        blayout = bl_map.get(self.blayout, str(self.blayout))
+        slayout = sl_map.get(self.slayout, str(self.slayout))
+        pad = pad_map.get(self.pad, self.pad)
+
+        v_row = self.rows if self.valid_rows is None else int(self.valid_rows)
+        v_col = self.cols if self.valid_cols is None else int(self.valid_cols)
+
+        if self.v_row is not None:
+            v_row = "?" if str(self.v_row) == "dyn" else int(self.v_row)
+        if self.v_col is not None:
+            v_col = "?" if str(self.v_col) == "dyn" else int(self.v_col)
+
+        elem = _mlir_scalar_type(self.dtype)
         return (
-            f"!pto.tile<loc={self.loc}, dtype={self.dtype}, rows={self.rows}, cols={self.cols}, "
-            f"blayout={self.blayout}, valid={valid_rows}x{valid_cols}, slayout={self.slayout}, "
-            f"fractal={fractal}, pad={self.pad}>"
+            f"!pto.tile_buf<loc={loc}, dtype={elem}, rows={self.rows}, cols={self.cols}, "
+            f"v_row={v_row}, v_col={v_col}, blayout={blayout}, slayout={slayout}, "
+            f"fractal={int(fractal)}, pad={pad}>"
         )
 
 

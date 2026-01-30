@@ -12,10 +12,11 @@ from ptoas.python import pipeline
 def main() -> int:
     repo = pipeline.repo_root()
     ap = argparse.ArgumentParser(description="PTO-AS -> ptoas --target cpu -> .cpp -> .so -> run on CPU (numpy check).")
-    ap.add_argument("--ptoas", type=Path, default=repo / "ptoas/mlir/build/bin/ptoas")
+    ap.add_argument("--ptoas", type=Path, default=repo / "bin/ptoas")
     ap.add_argument("--outdir", type=Path, default=Path("/tmp/ptoas_cpu_e2e"))
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2

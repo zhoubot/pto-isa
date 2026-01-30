@@ -20,6 +20,20 @@ Synchronous form:
 tassign %tile, %addr : !pto.tile<...>, index
 ```
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+pto.tassign %tile, %addr : !pto.tile<...>, dtype
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tassign ins(%src : !pto.tile_buf<...>, dtype)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

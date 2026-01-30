@@ -29,6 +29,23 @@ Single-op barrier form:
 tsync.op #pto.op<TADD>
 ```
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+// IR-level1: synchronization is inserted by the compiler (no user-facing op)
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.barrier <PIPE_ALL>
+// or event-based
+pto.set_flag[<PIPE_SRC>, <PIPE_DST>, <EVENT_IDn>]
+pto.wait_flag[<PIPE_SRC>, <PIPE_DST>, <EVENT_IDn>]
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 tgatherb %dst, %src, %offsets : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tgatherb %src, %offsets : (dtype, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tgatherb ins(%src, %offsets : dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

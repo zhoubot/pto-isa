@@ -217,35 +217,52 @@ Notes:
 
 ### MLIR-based `ptoas` (Buildable/Distributable Binary)
 
-There is also an MLIR-linked `ptoas` prototype under `ptoas/mlir/`:
+The in-repo MLIR `ptoas` prototype (`ptoas/mlir/`) has been removed.
 
-- Source + build: `ptoas/mlir/CMakeLists.txt`, `ptoas/mlir/tools/ptoas_main.cpp`
-- Frontend: parses PTO-AS into an MLIR module with **unregistered** `pto.*` ops:
-  - `ptoas/mlir/lib/PTOASFrontend.cpp`
-- Pass prototype: inserts `pto.record_event` + `pto.tsync` between memory/vector op boundaries (heuristic):
-  - `ptoas/mlir/lib/InsertEventsPass.cpp`
-- Emitter: emits Ascend CCE source from the module:
-  - `ptoas/mlir/lib/CCEmitter.cpp`
-- Bisheng driver: compiles CCE source and extracts `__aicore_rel_binary` into `.bin`:
-  - `ptoas/mlir/lib/BishengDriver.cpp`
+The supported `ptoas` implementation now lives in `~/llvm-project` (MLIR PTO dialect),
+and this repo vendors a known-good binary at `bin/ptoas`.
 
-`ptoas` supports two emission targets:
-
-- `--target npu`: emit Ascend CCE (source `*.cpp`) and optionally `--emit-bin=...` via `bisheng`.
-- `--target cpu`: emit CPU-simulator C++ (`*.cpp`); disables `--insert-events` automatically.
-
-#### Build MLIR + `ptoas`
-
-`mlir-opt` is not assumed to exist system-wide; build it from `~/llvm-project`:
+To keep the repo checkout size manageable, `ptoas` may also be provided as a tarball
+(`bin/ptoas.tar.xz` or `bin/ptoas.tar.gz`). If `bin/ptoas` is missing, unpack it with:
 
 ```bash
-bash ptoas/mlir/scripts/build_all.sh
+bash scripts/ptoas_bin.sh unpack
 ```
 
-Outputs:
+If your repo hosting limits file sizes, the tarball can be split into <10MB chunks:
 
-- `~/llvm-project/build-mlir/bin/mlir-opt`
-- `ptoas/mlir/build/bin/ptoas`
+```bash
+bash scripts/ptoas_bin.sh split
+```
+
+In that layout, the repo contains files like `bin/ptoas.tar.xz.part000`, and `unpack`
+will automatically `join` them before extracting.
+
+To (re)create the tarball from an existing `bin/ptoas`:
+
+```bash
+bash scripts/ptoas_bin.sh pack
+```
+
+Build/update the packaged binary:
+
+```bash
+ninja -C ~/llvm-project/build-mlir ptoas
+cp ~/llvm-project/build-mlir/bin/ptoas ./bin/ptoas
+```
+
+CLI (LLVM `ptoas`):
+
+```bash
+./bin/ptoas input.mlir -o out.cpp [--enable-insert-sync]
+```
+
+Notes:
+
+- Legacy flags like `--target`, `--arch`, `--emit-bin`, `--repo-root`, `--ascend-home`, `--assign-tile-addrs`,
+  and `--insert-events` are not used by the packaged LLVM `ptoas` flow.
+- CPU simulation compiles the same generated kernel C++ with `-D__CPU_SIM` (CPU stubs) instead of generating a
+  separate “cpu target” C++ file.
 
 #### Event Insertion + `set_flag / wait_flag` (A2/A3 contract)
 
@@ -258,19 +275,19 @@ The important compiler-facing rules (simplified) are:
 - Buffer reuse hazards require an explicit reverse dependency `(dst→src)`; otherwise you can get WAR/WAW bugs.
 - The 8 `eventId` slots (0..7) are a bounded resource; avoid reusing an id before the previous token is consumed.
 
-Recent `InsertEventsPass` behavior to keep `--insert-events` usable in loops:
+Recent LLVM PTO sync insertion behavior (enabled via `--enable-insert-sync`) to keep event insertion usable in loops:
 
 - Avoids emitting multiple `wait_flag` against the same producer token (prevents deadlocks on token-consuming hardware).
 - Adds loop-carried reverse-dependency “handshakes” around matmul pipelines to protect reuse:
   - `TMATMUL (PIPE_M) -> TMOV_M2L (PIPE_MTE1)` (L0A/L0B reuse)
   - `TMOV_M2L (PIPE_MTE1) -> TLOAD (PIPE_MTE2)` (L1/global reuse)
-  - See `ptoas/mlir/lib/InsertEventsPass.cpp`.
+  - Implementation: `~/llvm-project/mlir/lib/Dialect/PTO/Transforms/PTOInsertSync.cpp`.
 
 #### Recent emitter note: indexed `tload/tstore` tile views
 
 If PTO-AS uses indexed tile accesses like `pto.tload %x[%r, %c]`, the MLIR CCE/CPU emitters must materialize a
 tile-shaped `GlobalTensor` view (rows/cols) to keep A2/A3 layout conversions (e.g., ND2NZ / DN2ZN) correct.
-This is handled in `ptoas/mlir/lib/CCEmitter.cpp`.
+This is handled in the LLVM PTO lowering in `~/llvm-project` (PTO → EmitC / C++ emission).
 
 #### PTO ISA coverage note (prototype)
 
@@ -278,7 +295,7 @@ This is handled in `ptoas/mlir/lib/CCEmitter.cpp`.
 For most remaining `pto.t*` ops, the emitter falls back to emitting the corresponding uppercase PTO macro
 (e.g. `trowmax -> TROWMAX`, `tmuls -> TMULS`) so Python-authored kernels can still compile end-to-end.
 
-#### End-to-end Test (Emit `.cpp` + `.bin`)
+#### End-to-end Test (Emit `.cpp`)
 
 Use the minimal test program:
 
@@ -287,29 +304,19 @@ Use the minimal test program:
 Run:
 
 ```bash
-export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
-export PTO_REPO_ROOT=$(pwd)
-
-./ptoas/mlir/build/bin/ptoas ptoas/examples/add16_min.pto \
+./bin/ptoas ptoas/examples/add16_min.pto \
   -o /tmp/add16_min.cpp \
-  --insert-events \
-  --emit-bin=/tmp/add16_min.bin \
-  --arch dav-c220-vec \
-  --memory-model MEMORY_BASE \
-  --repo-root "$PTO_REPO_ROOT" \
-  --ascend-home "$ASCEND_HOME_PATH"
+  --enable-insert-sync
 ```
 
 This produces:
 
 - `/tmp/add16_min.cpp` (generated kernel source)
-- `/tmp/add16_min.bin` (extracted `__aicore_rel_binary`)
 
 ### Run On Real NPU (CPU Reference + `acl`)
 
-The extracted `*.bin` is a useful build artifact, but `acl.rt.binary_load_from_file(..., [])` may fail with error `107000`
-on some setups. A reliable way to validate kernels on real hardware is to build a **fatobj shared library** with `bisheng`
-and launch the kernel via `<<<>>>` (same pattern as `tests/npu/*/src/st`).
+LLVM `ptoas` emits kernel C++ only. A reliable way to validate kernels on real hardware is to build a **fatobj shared
+library** with `bisheng` and launch the kernel via `<<<>>>` (same pattern as `tests/npu/*/src/st`).
 
 End-to-end script (compiles the same `*.pto` to **CPU** and **NPU**, runs both, and compares outputs):
 
@@ -396,15 +403,15 @@ Example: `ptoas/examples/pypto_flash_attention.py`
 
 The metadata block looks like:
 
-- `; PTO_HOST_SPEC_BEGIN v1`
+- `// PTO_HOST_SPEC_BEGIN v1`
 - JSON payload (arg dtypes/shapes/roles, seed, blockDim)
-- `; PTO_HOST_SPEC_END`
+- `// PTO_HOST_SPEC_END`
 
 There is also a file-driven flow that takes a Python kernel file and emits:
 
 - `foo.pto`
 - `foo.cpu.cpp` (CPU kernel source)
-- `foo.npu.cpp` + `foo.npu.bin` (NPU kernel source + extracted binary)
+- `foo.npu.cpp` (NPU kernel source)
 - `host.cpp` (optional ACL launcher template)
 
 Example (uses `ptoas/examples/python_kernels.py`):
@@ -429,7 +436,8 @@ If you see `LLVM ERROR: make_tensor_view expects 1 operand (dest)`, your `ptoas`
 Rebuild it with:
 
 ```bash
-bash ptoas/mlir/scripts/build_all.sh
+ninja -C ~/llvm-project/build-mlir ptoas
+cp ~/llvm-project/build-mlir/bin/ptoas ./bin/ptoas
 ```
 
 Prereqs:
@@ -464,13 +472,13 @@ Outputs go to `/tmp/ptoas_py_kernel_sim` by default and include:
 - `*.pto` (PTO-AS)
 - `*.cpu.cpp` (CPU source)
 - `*.cpp` (NPU CCE source)
-- `*.bin` (extracted `__aicore_rel_binary`)
+- `*.bin` (legacy artifact; LLVM `ptoas` does not emit a real `.bin`)
 - `lib*_sim.so` (fatobj .so used for launch)
 - `host.cpp` (standalone C++ launcher template)
 
 ### Kernels: `kernels/python/gemm_big` (sim validated)
 
-`kernels/python/gemm_big` is a larger Python-authored GEMM that relies on `--insert-events` (no manual event ops).
+`kernels/python/gemm_big` is a larger Python-authored GEMM that relies on `--enable-insert-sync` (no manual event ops).
 
 Important layout note:
 

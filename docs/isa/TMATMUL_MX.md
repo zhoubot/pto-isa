@@ -32,6 +32,21 @@ tmatmul.mx.acc %c_out, %c_in, %a, %a_scale, %b, %b_scale : (!pto.tile<...>, !pto
 tmatmul.mx.bias %c, %a, %a_scale, %b, %b_scale, %bias : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%acc = pto.tmatmul.mx %a, %a_scale, %b, %b_scale : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>) 
+-> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tmatmul.mx ins(%a, %a_scale, %b, %b_scale : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%acc1 : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

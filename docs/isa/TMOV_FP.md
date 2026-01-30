@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 tmov.fp %dst, %src, %fp : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tmov.fp %src, %fp : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tmov.fp ins(%src, %fp : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/constants.hpp`:

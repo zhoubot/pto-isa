@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 textract %dst, %src[%r0, %r1] : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.textract %src, %idxrow, %idxcol : (!pto.tile<...>, <int32>) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.textract ins(%src, %idxrow, %idxcol : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

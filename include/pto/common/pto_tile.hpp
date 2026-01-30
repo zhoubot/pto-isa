@@ -124,6 +124,16 @@ public:
     int shape[GlobalTensorDim::TOTAL_DIM] = {1};
 };
 
+// 2D shorthand: `Shape<H, W>` means `[1, 1, 1, H, W]`.
+//
+// This matches the IR contract documented in `ptoas/IR_SPEC.md` and keeps PTO-AS
+// authoring ergonomic while preserving the 5D storage model internally.
+template <int H, int W>
+struct Shape<H, W, DYNAMIC, DYNAMIC, DYNAMIC> : public Shape<1, 1, 1, H, W> {
+    using Parent = Shape<1, 1, 1, H, W>;
+    using Parent::Parent;
+};
+
 template <int SN1 = DYNAMIC, int SN2 = DYNAMIC, int SN3 = DYNAMIC, int SN4 = DYNAMIC, int SN5 = DYNAMIC>
 struct Stride {
     static constexpr int staticStride[GlobalTensorDim::TOTAL_DIM] = {SN1, SN2, SN3, SN4, SN5};
@@ -197,6 +207,13 @@ struct Stride {
 
 public:
     int stride[GlobalTensorDim::TOTAL_DIM] = {1};
+};
+
+// 2D shorthand: `Stride<S0, S1>` means `[1, 1, 1, S0, S1]`.
+template <int S0, int S1>
+struct Stride<S0, S1, DYNAMIC, DYNAMIC, DYNAMIC> : public Stride<1, 1, 1, S0, S1> {
+    using Parent = Stride<1, 1, 1, S0, S1>;
+    using Parent::Parent;
 };
 
 template <typename Element_, typename Shape_, typename Stride_, Layout Layout_ = Layout::ND>

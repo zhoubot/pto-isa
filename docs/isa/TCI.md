@@ -27,6 +27,20 @@ Synchronous form:
 ```text
 tci %dst, %S {descending = false} : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tci %scalar {descending = false} : dtype -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tci ins(%scalar : dtype) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

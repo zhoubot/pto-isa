@@ -18,13 +18,10 @@ from kernel import make_fa16_kernel  # noqa: E402
 
 
 def _default_ptoas() -> Path:
-    for p in (
-        _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas",
-        _REPO_ROOT / "ptoas/mlir/build/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas"
+    p = _REPO_ROOT / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def main() -> int:
@@ -42,6 +39,7 @@ def main() -> int:
     ap.add_argument("--memory-model", default="MEMORY_BASE")
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -91,6 +89,7 @@ def main() -> int:
             out_so=npu_so,
             arch=cfg.arch,
             ascend_home=cfg.ascend_home,
+            memory_model=cfg.memory_model,
             runtime_lib=runtime_lib,
             soc=soc_full,
         )

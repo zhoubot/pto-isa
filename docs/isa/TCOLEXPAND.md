@@ -19,6 +19,20 @@ Synchronous form:
 ```text
 tcolexpand %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tcolexpand %src : !pto.tile<1xNxdtype> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tcolexpand ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

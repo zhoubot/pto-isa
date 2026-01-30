@@ -21,11 +21,13 @@ namespace pto {
     __tf__  PTO_INLINE void StorePlainMatrix(typename GlobalData::DType __out__ *dst, typename TileData::TileDType __in__ src,
         int gShape3, int gShape4, int gStride3, int gStride4, int validRow, int validCol, size_t idx3) {
         size_t offsetSrcBase =  idx3*gShape3*TileData::Cols;
-        cpu::parallel_for_1d(0, static_cast<std::size_t>(gShape3), static_cast<std::size_t>(gShape3) * gShape4, [&](std::size_t r) {
+        const std::size_t rows = static_cast<std::size_t>(std::min(validRow, gShape3));
+        const std::size_t cols = static_cast<std::size_t>(std::min(validCol, gShape4));
+        cpu::parallel_for_1d(0, rows, rows * cols, [&](std::size_t r) {
             const std::size_t srcBase = offsetSrcBase + r * TileData::Cols;
             const std::size_t dstBase = r * static_cast<std::size_t>(gStride3);
             PTO_CPU_VECTORIZE_LOOP
-            for (std::size_t c = 0; c < static_cast<std::size_t>(gShape4); c++) {
+            for (std::size_t c = 0; c < cols; c++) {
                 dst[dstBase + c * static_cast<std::size_t>(gStride4)] = src[srcBase + c];
             }
         });
@@ -34,11 +36,13 @@ namespace pto {
     __tf__  PTO_INLINE void StorePlainMatrix(typename GlobalData::DType __out__ *dst, typename TileData::TileDType __in__ src,
         int gShape3, int gShape4, int gStride3, int gStride4, int validRow, int validCol, size_t idx3) {
         size_t offsetSrcBase =  idx3*gShape4*TileData::Rows;
-        cpu::parallel_for_1d(0, static_cast<std::size_t>(gShape4), static_cast<std::size_t>(gShape3) * gShape4, [&](std::size_t c) {
+        const std::size_t rows = static_cast<std::size_t>(std::min(validRow, gShape3));
+        const std::size_t cols = static_cast<std::size_t>(std::min(validCol, gShape4));
+        cpu::parallel_for_1d(0, cols, rows * cols, [&](std::size_t c) {
             const std::size_t srcBase = offsetSrcBase + c * TileData::Rows;
             const std::size_t dstStride4 = static_cast<std::size_t>(gStride4);
             PTO_CPU_VECTORIZE_LOOP
-            for (std::size_t r = 0; r < static_cast<std::size_t>(gShape3); r++) {
+            for (std::size_t r = 0; r < rows; r++) {
                 dst[r * static_cast<std::size_t>(gStride3) + c * dstStride4] = src[srcBase + r];
             }
         });
@@ -110,8 +114,13 @@ namespace pto {
         int gShape0, int gShape1, int gShape2, int gShape3, int gShape4, int gStride0, int gStride1, int gStride2,
         int gStride3, int gStride4, int validRow, int validCol)
     {
-        assert((gShape0*gShape1*gShape2*gShape3 == validRow && gShape4==validCol && TileData::isRowMajor) ||
-            (gShape0*gShape1*gShape2*gShape4 == validCol && gShape3==validRow && !TileData::isRowMajor));
+        const int outer = gShape0 * gShape1 * gShape2;
+        if (outer == 1) {
+            assert(validRow <= gShape3 && validCol <= gShape4);
+        } else {
+            assert((gShape0*gShape1*gShape2*gShape3 == validRow && gShape4==validCol && TileData::isRowMajor) ||
+                (gShape0*gShape1*gShape2*gShape4 == validCol && gShape3==validRow && !TileData::isRowMajor));
+        }
         if(TileData::SFractal == SLayout::NoneBox) {
             StorePlain<GlobalData, TileData>(dst, src, gShape0, gShape1, gShape2, gShape3, gShape4, gStride0, gStride1, gStride2,
                 gStride3, gStride4, validRow, validCol);

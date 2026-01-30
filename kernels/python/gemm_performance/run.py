@@ -23,13 +23,10 @@ from kernels.python.gemm_performance.kernel import make_gemm_performance_kernel 
 
 
 def _default_ptoas() -> Path:
-    for p in (
-        _REPO_ROOT / "ptoas/mlir/build/bin/ptoas",
-        _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return _REPO_ROOT / "ptoas/mlir/build/bin/ptoas"
+    p = _REPO_ROOT / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def _soc_from_alias(alias: str) -> str:
@@ -332,6 +329,7 @@ def main() -> int:
     ap.add_argument("--check-atol", type=float, default=5e-2)
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -429,6 +427,7 @@ def main() -> int:
             out_so=so_path,
             arch=cfg.arch,
             ascend_home=cfg.ascend_home,
+            memory_model=cfg.memory_model,
             fixed_block_dim=int(block_dim),
             runtime_lib=runtime_lib,
             soc=soc_full,
@@ -455,6 +454,7 @@ def main() -> int:
                 arch=cfg.arch,
                 ascend_home=cfg.ascend_home,
                 host_specs=host_specs,
+                memory_model=cfg.memory_model,
                 fixed_block_dim=int(block_dim),
                 runtime_lib=runtime_lib,
                 soc=soc_full,

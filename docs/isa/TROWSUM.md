@@ -21,6 +21,20 @@ trowsum %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 Lowering may introduce internal scratch tiles; the C++ intrinsic requires an explicit `tmp` operand.
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.trowsum %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.trowsum ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

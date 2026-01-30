@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 tcvt %dst, %src {rmode = #pto.round_mode<CAST_RINT>} : (!pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tcvt %src {rmode = #pto.round_mode<CAST_RINT>} : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tcvt ins(%src {rmode = #pto.round_mode<CAST_RINT>} : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/constants.hpp`:

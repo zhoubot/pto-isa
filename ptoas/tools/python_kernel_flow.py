@@ -17,13 +17,10 @@ from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 
 def _default_ptoas(repo: Path) -> Path:
-    for p in (
-        repo / "ptoas/mlir/build-macos/bin/ptoas",
-        repo / "ptoas/mlir/build/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return repo / "ptoas/mlir/build/bin/ptoas"
+    p = repo / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def _select_kernel(source: str, requested: str | None) -> str:
@@ -61,6 +58,7 @@ def main() -> int:
     if not args.py.exists():
         print(f"error: kernel file not found: {args.py}", file=sys.stderr)
         return 2
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -122,7 +120,11 @@ def main() -> int:
             return 2
         so_path = args.outdir / so_basename
         pipeline.build_fatobj_so_from_cce(
-            cce_path=npu_cpp, out_so=so_path, arch=args.arch, ascend_home=args.ascend_home
+            cce_path=npu_cpp,
+            out_so=so_path,
+            arch=args.arch,
+            ascend_home=args.ascend_home,
+            memory_model=args.memory_model,
         )
         print(f"built: {so_path}")
 

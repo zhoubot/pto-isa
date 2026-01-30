@@ -25,6 +25,20 @@ Synchronous form:
 ```text
 tmatmul.acc %acc1, %acc0, %a, %b : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%acc1 = pto.tmatmul.acc %a, %b, %acc0 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tmatmul.acc ins(%a, %b, %acc0 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%acc1 : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

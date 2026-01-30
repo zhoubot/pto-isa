@@ -19,13 +19,10 @@ from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 
 def _default_ptoas(repo: Path) -> Path:
-    for p in (
-        repo / "ptoas/mlir/build-macos/bin/ptoas",
-        repo / "ptoas/mlir/build/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return repo / "ptoas/mlir/build/bin/ptoas"
+    p = repo / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def _soc_from_alias(alias: str) -> str:
@@ -66,6 +63,7 @@ def main() -> int:
     if not args.py.exists():
         print(f"error: kernel file not found: {args.py}", file=sys.stderr)
         return 2
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -118,6 +116,7 @@ def main() -> int:
         out_so=so_path,
         arch=cfg.arch,
         ascend_home=cfg.ascend_home,
+        memory_model=cfg.memory_model,
         runtime_lib="runtime_camodel",
         soc=soc,
     )
@@ -131,7 +130,7 @@ def main() -> int:
     cpu_arrays = [a.copy() for a in base]
     npu_arrays = [a.copy() for a in base]
 
-    cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas)
+    cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas, insert_events=args.insert_events)
     cpu_so = args.outdir / f"lib{kernel.name}_cpu.so"
     pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
     cpu_out = pipeline.run_cpu_kernel_from_so(so_path=cpu_so, host_spec=host_spec, host_arrays=cpu_arrays)

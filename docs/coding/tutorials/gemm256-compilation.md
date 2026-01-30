@@ -6,7 +6,7 @@ We use `kernels/python/gemm256.py` as a concrete example, but the same pipeline 
 Pipeline (conceptually):
 
 1) **Python frontend** (user code) → structured PTO-AS text (`.pto`)
-2) **`ptoas`** (compiler) → Ascend CCE kernel source (`.cpp`) and optionally a compiled artifact (`.bin`)
+2) **`ptoas`** (compiler) → Ascend CCE kernel source (`.cpp`)
 3) **`bisheng`** (Ascend toolchain) → loadable fatobj library (`.so`)
 4) **Runner** (ACL) → launch kernel on NPU (or simulator)
 
@@ -16,14 +16,14 @@ Pipeline (conceptually):
 
 - Run commands from the repo root.
 - Python `>= 3.8`, and `numpy`.
-- A built `ptoas` binary at `ptoas/mlir/build/bin/ptoas` (see `ptoas/mlir/README.md`).
+- A working `ptoas` binary at `bin/ptoas` (built from `~/llvm-project/build-mlir/bin/ptoas`).
 - For NPU (or simulator): Ascend toolkit installed and `ASCEND_HOME_PATH` set; `bisheng` on `PATH`; Python can `import acl`.
 
 Recommended env vars:
 
 ```bash
 export ASCEND_HOME_PATH=/path/to/ascend-toolkit/latest
-export PTOAS=$PWD/ptoas/mlir/build/bin/ptoas
+export PTOAS=$PWD/bin/ptoas
 export OUT=/tmp/pto_gemm256
 ```
 
@@ -81,28 +81,23 @@ print("wrote:", pto_path)
 PY
 ```
 
-The `.pto` is structured PTO-AS. It contains:
+The `.pto` is MLIR text. It contains:
 
 1) A small **host spec** header (shapes/dtypes/seed) used by runners.
-2) A `prologue` + tile allocations.
-3) Lowered control flow (`scf.for`, `scf.if`) and tile ops (`pto.tload`, `pto.tmov`, `pto.tmatmul_acc`, `pto.tstore`).
+2) An MLIR `module { func.func @gemm256(...) { ... } }`.
+3) Lowered control flow (`scf.for`, `scf.if`) and tile ops (e.g. `pto.tload`, `pto.tmov`, `pto.tmatmul_acc`, `pto.tstore`).
 
 Excerpt (what you should expect to see near the top of the generated `.pto`):
 
 ```text
-; PTO_HOST_SPEC_BEGIN v1
-; { "args": [ ... ], "block_dim": 1, "kernel_name": "pto_kernel", "seed": 0 }
-; PTO_HOST_SPEC_END
-prologue
-%a = pto.make_tensor_view %arg0, dtype=f16, shape=[256,256] strides=[256,1], layout=ND
-...
-scf.for %mi = 0 to 256 step 16 {
-  scf.for %nj = 0 to 256 step 16 {
-    scf.for %kk = 0 to 256 step 16 {
-      %a_mat = pto.tload %a[%mi, %kk]
-      %b_mat = pto.tload %b[%kk, %nj]
-      ...
-      %c_acc = pto.tmatmul_acc %c_acc, %a_left_0, %b_right_0
+// PTO_HOST_SPEC_BEGIN v1
+// { "args": [ ... ], "block_dim": 1, "kernel_name": "gemm256", "seed": 0 }
+// PTO_HOST_SPEC_END
+module {
+  func.func @gemm256(...) {
+    ...
+  }
+}
 ```
 
 For this tutorial, the `.pto` is “**without sync**” (no events / `tsync` inserted):
@@ -120,24 +115,16 @@ Key idea:
 - The **PTO-AS program** is the “compiler IR” that still talks about tiles and PTO intrinsics.
 - `ptoas` lowers that IR into compilable **CCE C++** for your target architecture (here: cube core).
 
-Command (still “without sync” because we do *not* pass `--insert-events`):
+Command (still “without sync” because we do *not* pass `--enable-insert-sync`):
 
 ```bash
 $PTOAS $OUT/gemm256.pto \
-  --target npu \
-  -o $OUT/gemm256.cce.cpp \
-  --kernel-name pto_kernel_gemm256 \
-  --arch dav-c220-cube \
-  --memory-model MEMORY_BASE \
-  --repo-root $PWD \
-  --ascend-home $ASCEND_HOME_PATH \
-  --emit-bin=$OUT/gemm256.bin
+  -o $OUT/gemm256.cce.cpp
 ```
 
 Outputs:
 
 - `$OUT/gemm256.cce.cpp`: Ascend CCE kernel source
-- `$OUT/gemm256.bin`: an additional artifact emitted by `ptoas` (uses the toolkit under `$ASCEND_HOME_PATH`)
 
 Excerpt (you should see an exported kernel entrypoint similar to this pattern):
 
@@ -150,7 +137,7 @@ extern "C" __global__ AICORE void pto_kernel_gemm256(/* GM_ADDR args... */) {
 Optional: if you want the compiler to *heuristically* insert synchronization/events during lowering, add:
 
 ```bash
-  --insert-events
+  --enable-insert-sync
 ```
 
 ## Stage D: CCE C++ → loadable `.so` (fatobj)
@@ -248,10 +235,10 @@ PY
 
 - Python frontend → PTO-AS: `binding/python/ptoas/python/binding.py` (calls AST frontend)
 - End-to-end compilation helpers: `binding/python/ptoas/python/pipeline.py`
-- `ptoas` tool build/run: `ptoas/mlir/README.md`
+- `ptoas` tool (LLVM PTO dialect): `~/llvm-project` (binary vendored at `bin/ptoas`)
 
 ## Troubleshooting
 
 - If `ptoas` fails to find toolkit components, double-check `ASCEND_HOME_PATH`.
 - If you want to see underlying compiler commands, use `--verbose-build` (runner) and/or set `PTOAS_QUIET=0`.
-- If a kernel needs explicit ordering between memory and compute (more complex pipelines), try `--insert-events`.
+- If a kernel needs explicit ordering between memory and compute (more complex pipelines), try `--enable-insert-sync`.

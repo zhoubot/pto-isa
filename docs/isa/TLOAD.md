@@ -19,6 +19,21 @@ Synchronous form:
 ```text
 tload %t0, %sv[%c0, %c0] : (!pto.tile<...>, !pto.tensor<...>, index, index)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tload %mem : !pto.partition_tensor_view<MxNxdtype> -> 
+!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tload ins(%mem : !pto.partition_tensor_view<MxNxdtype>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

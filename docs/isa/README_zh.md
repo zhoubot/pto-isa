@@ -8,6 +8,7 @@
 
 - 权威来源：[`docs/reference/pto-intrinsics-header.md`](../reference/pto-intrinsics-header.md)（C++ intrinsics，声明于 `include/pto/common/pto_instr.hpp`）
 - 通用约定（操作数、事件、修饰符）：[`docs/isa/conventions.md`](conventions.md)
+- IR 形式化语法（IR-level1 / IR-level2）：[`docs/grammar/PTO-ASM.def`](../grammar/PTO-ASM.def)
 
 ## 逐元素（Tile × Tile）
 - [`TADD`](TADD.md) — 两个 tile 的逐元素相加。

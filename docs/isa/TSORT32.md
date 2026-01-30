@@ -21,6 +21,20 @@ Synchronous form:
 ```text
 tsort32 %dst, %src, %idx : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst, %idx = pto.tsort32 %src : !pto.tile<...> -> (!pto.tile<...>, !pto.tile<...>)
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tsort32 ins(%src : !pto.tile_buf<...>) outs(%dst, idx : !pto.tile_buf<...>, !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

@@ -19,13 +19,10 @@ from kernels.python.hc_split_sinkhorn4.kernel import HcSplitSinkhorn4Config, mak
 
 
 def _default_ptoas() -> Path:
-    for p in (
-        _REPO_ROOT / "ptoas/mlir/build/bin/ptoas",
-        _REPO_ROOT / "ptoas/mlir/build-macos/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return _REPO_ROOT / "ptoas/mlir/build/bin/ptoas"
+    p = _REPO_ROOT / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 def _sigmoid(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
@@ -79,6 +76,7 @@ def main() -> int:
     ap.set_defaults(check=True)
     args = ap.parse_args()
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -137,6 +135,7 @@ def main() -> int:
             out_so=npu_so,
             arch=cfg_npu.arch,
             ascend_home=cfg_npu.ascend_home,
+            memory_model=cfg_npu.memory_model,
             runtime_lib=runtime_lib,
             soc=soc_full,
         )

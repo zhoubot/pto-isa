@@ -99,7 +99,7 @@ Regression runner supports per-case `block_dim` overrides (see `kernels/python/r
 
 Python kernels should **not** manually insert `record_event` / `wait_event`.
 
-Use `ptoas --insert-events` (enabled by default in `kernels/python/run_regression.py` and `ptoas/tools/python_kernel_e2e.py`).
+Use `ptoas --enable-insert-sync` (enabled by default in `kernels/python/run_regression.py` and `ptoas/tools/python_kernel_e2e.py`).
 If a case deadlocks on NPU, rerun it in simulator mode and inspect:
 
 - `event_summary.txt` / `event_summary.json`
@@ -125,7 +125,7 @@ python3 kernels/python/run_regression.py --run-mode sim --soc a3 --timeout-sec 6
 ## 6.1 Split kernels (CUBE + VEC stages)
 
 Some real workloads (e.g. FlashAttention) want **cube** stages (`matmul`) and **vec** stages (`softmax`) in one logical program.
-For this, `ptoas` supports splitting one `.pto` into **multiple device kernels**.
+For this, the Python frontend can split one program into **multiple MLIR functions** (one per stage), and `ptoas` emits multiple device kernels.
 
 Authoring pattern:
 
@@ -136,7 +136,6 @@ Authoring pattern:
 
 Build/run:
 
-- Enable `--split-kernels` (wired via `pipeline.CompileConfig(split_kernels=True)`).
 - `build_fatobj_so_from_cce(...)` builds:
   - one stage fatobj `.so` per kernel (`*.stage0.so`, `*.stage1.so`, ...)
   - a tiny host wrapper `.so` that chains them in order

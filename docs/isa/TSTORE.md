@@ -19,6 +19,21 @@ Synchronous form:
 ```text
 tstore %sv_out[%c0, %c0], %t1 : (!pto.tensor<...>, index, index, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+pto.tstore %src, %mem : (!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>, 
+!pto.partition_tensor_view<MxNxdtype>) -> ()
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tstore ins(%src : !pto.tile_buf<...>) outs(%mem : !pto.partition_tensor_view<MxNxdtype>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/constants.hpp`:

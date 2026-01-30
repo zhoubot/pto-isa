@@ -19,13 +19,10 @@ from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 
 def _default_ptoas(repo: Path) -> Path:
-    for p in (
-        repo / "ptoas/mlir/build-macos/bin/ptoas",
-        repo / "ptoas/mlir/build/bin/ptoas",
-    ):
-        if p.exists():
-            return p
-    return repo / "ptoas/mlir/build/bin/ptoas"
+    p = repo / "bin" / "ptoas"
+    if p.exists():
+        return p
+    return p
 
 
 def _soc_from_alias(alias: str) -> str:
@@ -55,6 +52,7 @@ def main() -> int:
     if not args.verbose_build and args.run_mode != "sim":
         os.environ.setdefault("PTOAS_QUIET", "1")
 
+    args.ptoas = pipeline.ensure_ptoas_binary(args.ptoas)
     if not args.ptoas.exists():
         print(f"error: ptoas not found: {args.ptoas}", file=sys.stderr)
         return 2
@@ -91,7 +89,7 @@ def main() -> int:
 
     # CPU reference.
     print("Stage CPU: compile + run reference...", flush=True)
-    cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas)
+    cpu_cpp = pipeline.compile_pto_to_cpu_cpp(pto_path=pto_path, outdir=args.outdir, ptoas=args.ptoas, insert_events=args.insert_events)
     cpu_so = args.outdir / f"lib{spec.name}_cpu.so"
     pipeline.build_cpu_so_from_cpp(cpp_path=cpu_cpp, out_so=cpu_so)
     cpu_arrays = [a.copy() for a in base_arrays]
@@ -127,6 +125,7 @@ def main() -> int:
         out_so=npu_so,
         arch=cfg.arch,
         ascend_home=cfg.ascend_home,
+        memory_model=cfg.memory_model,
         runtime_lib=runtime_lib,
         soc=(soc if args.run_mode == "sim" else None),
     )

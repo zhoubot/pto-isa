@@ -20,6 +20,20 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 tprint %src : !pto.tile<...> | !pto.global<...>
 ```
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+// Not supported in IR-level1 (frontend lowers to a comment)
+```
+
+### IR-level2 (DPS)
+
+```mlir
+// Not supported in IR-level2 (frontend lowers to a comment)
+```
+
 ## C++ Intrinsic
 Declared in `include/pto/common/pto_instr.hpp`:
 ```cpp

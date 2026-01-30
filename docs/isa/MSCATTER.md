@@ -21,6 +21,21 @@ Synchronous form:
 ```text
 mscatter %mem, %src, %idx : (!pto.tensor<...>, !pto.tile<...>, !pto.tile<...>)
 ```
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+pto.mscatter %src, %idx, %mem : (!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>, !pto.tile<...>, 
+!pto.partition_tensor_view<MxNxdtype>) -> ()
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.mscatter ins(%src, %idx : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%mem : !pto.partition_tensor_view<MxNxdtype>)
+```
+
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:

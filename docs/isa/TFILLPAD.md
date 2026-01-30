@@ -33,6 +33,20 @@ Synchronous form (conceptual):
 tfillpad %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tfillpad %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tfillpad ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+
 ## C++ Intrinsic
 
 Implemented in the backend headers pulled in by `include/pto/common/pto_instr_impl.hpp`:
