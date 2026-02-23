@@ -168,6 +168,56 @@ Common options:
   export LD_LIBRARY_PATH=/path_to_compiler/lib64:$LD_LIBRARY_PATH
   ```
 
+## End-to-end: PTODSL → PTOAS → CPU simulator (optional)
+
+This repository includes two toolchain submodules:
+
+- `PTODSL/`: Python builder DSL to generate PTO MLIR (`.pto`)
+- `PTOAS/`: PTO compiler / lowering tool that can emit C++ from `.pto`
+
+An end-to-end **CPU-only** example is provided at:
+
+- `examples/ptodsl_ptoas_cpu/add_static/`
+
+### 1) Initialize submodules
+
+```bash
+git submodule update --init --recursive
+```
+
+### 2) Make `ptoas` available
+
+- Recommended: build the `PTOAS` submodule and use the local binary:
+
+```bash
+export PTOAS_BIN=$PWD/PTOAS/build/tools/ptoas/ptoas
+```
+
+### 3) Set `PYTHONPATH` for PTODSL
+
+PTODSL uses MLIR python bindings and the PTO dialect python package. Make sure your environment can import:
+
+- `mlir.ir`
+- `mlir.dialects.pto`
+
+Typically this means you built LLVM/MLIR with python bindings and built PTOAS python packages, then:
+
+```bash
+export PYTHONPATH="$LLVM_BUILD_DIR/tools/mlir/python_packages/mlir_core:$PWD/PTOAS/install:$PYTHONPATH"
+```
+
+### 4) Run the example
+
+```bash
+bash examples/ptodsl_ptoas_cpu/add_static/run.sh
+```
+
+Expected output:
+
+```text
+PASS: CPU-sim vec_add_kernel_2d_dynamic
+```
+
 ## Run NPU Tests
 
 Set environment variables according to [Environment_Variables](./getting-started.md#environment-variables) first;
