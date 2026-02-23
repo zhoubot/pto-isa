@@ -3,6 +3,8 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 
 // CPU-sim builtins live here when compiled with -D__CPU_SIM.
 #include "pto/common/cpu_stub.hpp"
@@ -37,11 +39,27 @@ int main() {
   }
 
   // Emulate Ascend block/subblock launch topology on CPU.
-  for (int b = 0; b < blocks; ++b) {
-    for (int sb = 0; sb < subblocks; ++sb) {
-      pto::cpu_sim::set_launch_context(b, sb, subblocks);
-      vec_add_kernel_2d_dynamic(x.data(), y.data(), z.data(), tile, tile);
-    }
+  //
+  // Default: parallel launch using all available CPU threads.
+  // Override for determinism:
+  //   PTO_CPU_LAUNCH=sequential
+  // Control threads:
+  //   PTO_CPU_MAX_THREADS=8
+  const char* launch_mode = std::getenv("PTO_CPU_LAUNCH");
+  const char* max_threads_env = std::getenv("PTO_CPU_MAX_THREADS");
+  int max_threads = 0;
+  if (max_threads_env && *max_threads_env) {
+    max_threads = std::atoi(max_threads_env);
+  }
+
+  auto kernel = +[](float* a, float* b, float* c, int32_t vr, int32_t vc) {
+    vec_add_kernel_2d_dynamic(a, b, c, vr, vc);
+  };
+
+  if (launch_mode && std::string(launch_mode) == "sequential") {
+    pto::cpu_sim::launch_sequential(blocks, subblocks, kernel, x.data(), y.data(), z.data(), tile, tile);
+  } else {
+    pto::cpu_sim::launch_parallel(blocks, subblocks, kernel, max_threads, x.data(), y.data(), z.data(), tile, tile);
   }
 
   // Verify.

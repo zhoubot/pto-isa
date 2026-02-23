@@ -34,6 +34,22 @@ Expected output:
 PASS: CPU-sim vec_add_kernel_2d_dynamic
 ```
 
+## Multicore / determinism
+
+By default, the CPU runner launches the kernel in **parallel** across blocks/subblocks.
+
+- Force deterministic (single-thread) execution:
+
+```bash
+PTO_CPU_LAUNCH=sequential bash examples/ptodsl_ptoas_cpu/add_static/run.sh
+```
+
+- Limit CPU threads:
+
+```bash
+PTO_CPU_MAX_THREADS=8 bash examples/ptodsl_ptoas_cpu/add_static/run.sh
+```
+
 ## What this validates
 
 - PTODSL can build a PTO MLIR program for a simple kernel
