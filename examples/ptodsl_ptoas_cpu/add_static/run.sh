@@ -19,6 +19,12 @@ fi
 
 cd "$HERE"
 
+echo "[0/4] Ensure ptodsl is importable"
+if ! "$PY" -c "import ptodsl" >/dev/null 2>&1; then
+  echo "[INFO] Installing PTODSL (editable) into current Python: $PY" >&2
+  "$PY" -m pip install -e "$ROOT/PTODSL/ptodsl" >/dev/null
+fi
+
 echo "[1/4] Generate PTO IR (.pto) from PTODSL"
 # PTODSL requires MLIR python bindings + PTO dialect python package on PYTHONPATH.
 # We don't guess those paths here. Instead, we fail with a clear message.

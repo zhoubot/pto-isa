@@ -206,7 +206,13 @@ Typically this means you built LLVM/MLIR with python bindings and built PTOAS py
 export PYTHONPATH="$LLVM_BUILD_DIR/tools/mlir/python_packages/mlir_core:$PWD/PTOAS/install:$PYTHONPATH"
 ```
 
-### 4) Run the example
+### 4) Install PTODSL (Python)
+
+```bash
+python3 -m pip install -e PTODSL/ptodsl
+```
+
+### 5) Run the example
 
 ```bash
 bash examples/ptodsl_ptoas_cpu/add_static/run.sh
