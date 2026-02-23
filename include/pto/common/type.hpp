@@ -25,6 +25,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define OP_NAME(Name) __attribute__((vf_name(#Name)))
 #define OP_TYPE(TypeName) __attribute__((vf_kind(#TypeName)))
 
+#include <cstdint>
+
 // -----------------------------------------------------------------------------
 // PTO assertion helpers
 //
