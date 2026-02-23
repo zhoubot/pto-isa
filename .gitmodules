@@ -1,3 +1,8 @@
 [submodule "PTOAS"]
 	path = PTOAS
 	url = https://github.com/zhangstevenunity/PTOAS.git
+	branch = main
+[submodule "PTODSL"]
+	path = PTODSL
+	url = https://github.com/huawei-csl/pto-dsl.git
+	branch = main
