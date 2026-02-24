@@ -175,9 +175,17 @@ This repository includes two toolchain submodules:
 - `PTODSL/`: Python builder DSL to generate PTO MLIR (`.pto`)
 - `PTOAS/`: PTO compiler / lowering tool that can emit C++ from `.pto`
 
-An end-to-end **CPU-only** example is provided at:
+End-to-end **CPU-only** examples are provided under:
 
 - `examples/ptodsl_ptoas_cpu/add_static/`
+- `examples/ptodsl_ptoas_cpu/add_dynamic_multicore/`
+- `examples/ptodsl_ptoas_cpu/relu_dynamic_multicore/`
+- `examples/ptodsl_ptoas_cpu/matmul_static_singlecore/`
+- `examples/ptodsl_ptoas_cpu/matmul_dynbatch_multicore/`
+
+To run all CPU-only examples:
+
+- `bash examples/ptodsl_ptoas_cpu/run_all.sh`
 
 ### 1) Initialize submodules
 
