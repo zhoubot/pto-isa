@@ -44,13 +44,16 @@ __tf__ PTO_INLINE void LoadPlainMatrix(typename GlobalData::DType __out__ *dst, 
                                        int gShape3, int gShape4, int gStride3, int gStride4, int validRow, int validCol,
                                        size_t idx3)
 {
-    size_t offsetDstBase = idx3 * gShape3 * TileData::Cols;
-    cpu::parallel_for_1d(0, static_cast<std::size_t>(gShape3), static_cast<std::size_t>(gShape3) * gShape4,
+    const std::size_t rows = std::min<std::size_t>(static_cast<std::size_t>(validRow), static_cast<std::size_t>(gShape3));
+    const std::size_t cols = std::min<std::size_t>(static_cast<std::size_t>(validCol), static_cast<std::size_t>(gShape4));
+
+    size_t offsetDstBase = idx3 * static_cast<std::size_t>(gShape3) * TileData::Cols;
+    cpu::parallel_for_1d(0, rows, rows * cols,
                          [&](std::size_t r) {
                              const std::size_t dstBase = offsetDstBase + r * TileData::Cols;
                              const std::size_t srcBase = r * static_cast<std::size_t>(gStride3);
                              PTO_CPU_VECTORIZE_LOOP
-                             for (std::size_t c = 0; c < static_cast<std::size_t>(gShape4); c++) {
+                             for (std::size_t c = 0; c < cols; c++) {
                                  dst[dstBase + c] = src[srcBase + c * static_cast<std::size_t>(gStride4)];
                              }
                          });
@@ -60,12 +63,15 @@ __tf__ PTO_INLINE void LoadPlainMatrix(typename GlobalData::DType __out__ *dst, 
                                        int gShape3, int gShape4, int gStride3, int gStride4, int validRow, int validCol,
                                        size_t idx3)
 {
-    size_t offsetDstBase = idx3 * gShape4 * TileData::Rows;
-    cpu::parallel_for_1d(0, static_cast<std::size_t>(gShape4), static_cast<std::size_t>(gShape3) * gShape4,
+    const std::size_t rows = std::min<std::size_t>(static_cast<std::size_t>(validRow), static_cast<std::size_t>(gShape3));
+    const std::size_t cols = std::min<std::size_t>(static_cast<std::size_t>(validCol), static_cast<std::size_t>(gShape4));
+
+    size_t offsetDstBase = idx3 * static_cast<std::size_t>(gShape4) * TileData::Rows;
+    cpu::parallel_for_1d(0, cols, rows * cols,
                          [&](std::size_t c) {
                              const std::size_t dstBase = offsetDstBase + c * TileData::Rows;
                              const std::size_t srcStride4 = static_cast<std::size_t>(gStride4);
-                             for (std::size_t r = 0; r < static_cast<std::size_t>(gShape3); r++) {
+                             for (std::size_t r = 0; r < rows; r++) {
                                  dst[dstBase + r] = src[r * static_cast<std::size_t>(gStride3) + c * srcStride4];
                              }
                          });
@@ -145,8 +151,11 @@ __tf__ AICORE void TLoad(typename TileData::TileDType __out__ dst, typename Glob
                          int gShape1, int gShape2, int gShape3, int gShape4, int gStride0, int gStride1, int gStride2,
                          int gStride3, int gStride4, int validRow, int validCol)
 {
-    assert((gShape0 * gShape1 * gShape2 * gShape3 == validRow && gShape4 == validCol && TileData::isRowMajor) ||
-           (gShape0 * gShape1 * gShape2 * gShape4 == validCol && gShape3 == validRow && !TileData::isRowMajor));
+    // CPU simulator: allow partial (masked) loads.
+    // In PTO IR, `bind_tile` may set (validRow/validCol) smaller than the memref.subview extent.
+    // Hardware uses the valid mask to guard OOB lanes; we emulate by reading only valid elements.
+    assert((gShape0 * gShape1 * gShape2 * gShape3 >= validRow && gShape4 >= validCol && TileData::isRowMajor) ||
+           (gShape0 * gShape1 * gShape2 * gShape4 >= validCol && gShape3 >= validRow && !TileData::isRowMajor));
 
     // Filling padding
     std::fill(dst, dst + (TileData::Cols * TileData::Rows), getPadValue<TileData>());

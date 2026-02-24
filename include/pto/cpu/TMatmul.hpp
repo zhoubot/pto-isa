@@ -52,12 +52,12 @@ PTO_INTERNAL void CheckMadValid()
     static_assert(
         (TileLeft::Rows == TileAcc::Rows) && (TileLeft::Cols == TileRight::Rows) && (TileRight::Cols == TileAcc::Cols),
         "Inconsistent number of m, k, n");
-    static_assert(
-        ((TileLeft::Loc == TileType::Left) && (!TileLeft::isRowMajor) && (TileLeft::SFractal == SLayout::RowMajor)) &&
-            ((TileRight::Loc == TileType::Right) && (TileRight::isRowMajor) &&
-             (TileRight::SFractal == SLayout::ColMajor)) &&
-            ((TileAcc::Loc == TileType::Acc) && (!TileAcc::isRowMajor) && (TileAcc::SFractal == SLayout::RowMajor)),
-        "Non-conforming matrix fractal");
+    // CPU simulator: be permissive on BLayout (row/col major) as long as the tile offsets are well-defined.
+    // The actual element addressing is handled by `GetTileElementOffset<...>`.
+    static_assert((TileLeft::Loc == TileType::Left) && (TileLeft::SFractal == SLayout::RowMajor) &&
+                      (TileRight::Loc == TileType::Right) && (TileRight::SFractal == SLayout::ColMajor) &&
+                      (TileAcc::Loc == TileType::Acc) && (TileAcc::SFractal == SLayout::RowMajor),
+                  "Non-conforming matrix fractal");
 }
 
 template <typename TileAcc, typename TileBias>

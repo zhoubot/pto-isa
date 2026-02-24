@@ -94,6 +94,16 @@ typedef int event_t;
 #define EVENT_ID0 0
 
 // -----------------------------------------------------------------------------
+// CPU simulator stubs for control register helpers used by some tile ops.
+// -----------------------------------------------------------------------------
+namespace pto {
+inline uint64_t get_ctrl() { return 0; }
+inline void set_ctrl(uint64_t) {}
+inline uint64_t sbitset1(uint64_t v, int bit) { return v | (1ULL << static_cast<uint64_t>(bit)); }
+inline uint64_t sbitset0(uint64_t v, int bit) { return v & ~(1ULL << static_cast<uint64_t>(bit)); }
+} // namespace pto
+
+// -----------------------------------------------------------------------------
 // CPU simulator launch context
 // -----------------------------------------------------------------------------
 // PTOAS-emitted kernels may reference these builtins via `using namespace pto;`.
@@ -103,6 +113,7 @@ namespace pto {
 namespace cpu_sim {
 // Thread-local so a host-side launcher can iterate blocks/subblocks deterministically.
 inline thread_local int64_t g_block_idx = 0;
+inline thread_local int64_t g_block_num = 1;
 inline thread_local int64_t g_subblock_id = 0;
 inline thread_local int64_t g_subblock_dim = 1;
 
@@ -113,10 +124,19 @@ inline void set_launch_context(int64_t block_idx, int64_t subblock_id, int64_t s
     g_subblock_dim = subblock_dim;
 }
 
+inline void set_grid_dim(int64_t block_num, int64_t subblock_dim)
+{
+    // Treat "block num" as the total number of execution lanes.
+    // When subblocks are used, total lanes = blocks * subblocks.
+    g_block_num = block_num * (subblock_dim > 0 ? subblock_dim : 1);
+    g_subblock_dim = subblock_dim;
+}
+
 // Deterministic CPU launch (single-threaded).
 template <typename KernelFn, typename... Args>
 inline void launch_sequential(int64_t block_dim, int64_t subblock_dim, KernelFn fn, Args... args)
 {
+    set_grid_dim(block_dim, subblock_dim);
     for (int64_t b = 0; b < block_dim; ++b) {
         for (int64_t sb = 0; sb < subblock_dim; ++sb) {
             set_launch_context(b, sb, subblock_dim);
@@ -154,6 +174,7 @@ inline void launch_parallel(int64_t block_dim, int64_t subblock_dim, KernelFn fn
 
     for (int t = 0; t < threads; ++t) {
         pool.emplace_back([&]() {
+            set_grid_dim(block_dim, subblock_dim);
             while (true) {
                 const int64_t i = next.fetch_add(1, std::memory_order_relaxed);
                 if (i >= tasks) {
@@ -176,6 +197,10 @@ inline void launch_parallel(int64_t block_dim, int64_t subblock_dim, KernelFn fn
 
 // Match PTOAS-emitted naming.
 inline int64_t get_block_idx() { return cpu_sim::g_block_idx; }
+inline int64_t get_block_num() { return cpu_sim::g_block_num; }
+// Alias often used by toolchains.
+inline int64_t get_blockdim() { return cpu_sim::g_block_num; }
+
 inline int64_t get_subblockid() { return cpu_sim::g_subblock_id; }
 inline int64_t get_subblockdim() { return cpu_sim::g_subblock_dim; }
 } // namespace pto
