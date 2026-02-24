@@ -203,6 +203,8 @@ inline int64_t get_blockdim() { return cpu_sim::g_block_num; }
 
 inline int64_t get_subblockid() { return cpu_sim::g_subblock_id; }
 inline int64_t get_subblockdim() { return cpu_sim::g_subblock_dim; }
+// Alias to match MLIR naming.
+inline int64_t get_subblock_num() { return cpu_sim::g_subblock_dim; }
 } // namespace pto
 
 #endif
