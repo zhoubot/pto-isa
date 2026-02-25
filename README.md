@@ -4,7 +4,7 @@
 
 # PTO Tile Library
 
-> High-performance **tile-level** operations for Ascend platforms, implemented against the **PTO (Parallel Tile Operation) virtual ISA**.
+High-performance **tile-level** operations for Ascend platforms, implemented against the **PTO (Parallel Tile Operation) virtual ISA**.
 
 [![License](https://img.shields.io/badge/License-CANN%20Open%20Software%20License%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Ascend%20A2%20%7C%20A3%20%7C%20A5%20%7C%20CPU-green.svg)](#platform-support)
@@ -17,9 +17,8 @@
 
 ## News
 
-- **2026-02**: Added PTO-BC bytecode specification and encoder/decoder tool
-- **2026-02**: Integrated PTOAS and PTODSL as Git submodules for better maintainability
-- **2026-02**: Added professional SVG toolchain architecture diagram
+- **2026-02**: Added PTO-BC bytecode
+- **2026-02**: Integrated PTOAS and PTODSL
 - **2025-12-27**: PTO Tile Library becomes publicly available.
 
 ## What is PTO?
@@ -37,6 +36,27 @@ This repository implements a growing subset of PTO operations with performance-o
 This is the central repository for the PTO ecosystem. It connects multiple components:
 
 <img src="docs/figures/pto_toolchain.svg" alt="PTO Toolchain Architecture" width="100%" />
+
+### Compilation Flow (PTODSL -> PTOAS -> CPU sim)
+
+The SVG above now matches the validated demo pipeline in
+[`demos/ptodsl_ptoas_cpu/add_static/run.sh`](demos/ptodsl_ptoas_cpu/add_static/run.sh):
+
+1. Ensure `ptodsl` is importable in the selected Python environment.
+2. Generate PTO text IR: `add_builder.py -> add.pto`.
+3. Compile PTO IR with PTOAS: `ptoas --enable-insert-sync add.pto -o add.cpp`.
+4. Compile host+kernel for CPU simulation:
+   `g++ -std=c++20 -O2 -D__CPU_SIM -D__DAV_VEC__ runner.cpp add.cpp -o run_cpu`.
+5. Run `./run_cpu` and verify `PASS`.
+
+Example invocation:
+
+```bash
+export PTOAS_BIN=/path/to/ptoas
+export PYTHON=/path/to/python
+export PYTHONPATH=/path/to/mlir_core:$PYTHONPATH
+bash demos/ptodsl_ptoas_cpu/add_static/run.sh
+```
 
 ### Related Projects
 
