@@ -3,17 +3,23 @@
 
 #include "ptobc/leb128.h"
 
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/Parser/Parser.h>
 #include <mlir/Support/FileUtilities.h>
 #include <mlir/Support/LogicalResult.h>
 
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/SourceMgr.h>
 
 #include <llvm/ADT/DenseMap.h>
+
+#include <cstdlib>
+#include <unordered_map>
 
 namespace ptobc {
 
@@ -39,9 +45,32 @@ static uint64_t internAttr(PTOBCFile& f, mlir::DictionaryAttr dict) {
   return f.attrAsm.size();
 }
 
+static std::string hexFloatLiteral(mlir::FloatAttr a) {
+  llvm::SmallVector<char, 32> digits;
+  llvm::APInt bits = a.getValue().bitcastToAPInt();
+  bits.toString(digits, /*Radix=*/16, /*Signed=*/false, /*formatAsCLiteral=*/true);
+  return std::string(digits.data(), digits.size());
+}
+
+static std::string apIntToSignedDecimal(const llvm::APInt &v) {
+  llvm::SmallVector<char, 32> digits;
+  v.toString(digits, /*Radix=*/10, /*Signed=*/true, /*formatAsCLiteral=*/false);
+  return std::string(digits.data(), digits.size());
+}
+
 struct Encoder {
   PTOBCFile file;
+
+  bool emitDebugInfo = false;
+
+  // Per-function numbering state.
+  uint64_t funcId = 0;
+  uint64_t nextOpId = 0;
   llvm::DenseMap<mlir::Value, uint64_t> valueId;
+  std::vector<mlir::Value> valueById;
+
+  // Module-wide debug file table state.
+  std::unordered_map<std::string, uint64_t> dbgFileIdByPath;
 
   uint64_t getValueId(mlir::Value v) {
     auto it = valueId.find(v);
@@ -55,7 +84,86 @@ struct Encoder {
     uint64_t id = valueId.size();
     auto [it, inserted] = valueId.try_emplace(v, id);
     if (!inserted) throw std::runtime_error("value already has an id");
+    valueById.push_back(v);
     return it->second;
+  }
+
+  uint64_t internDbgFile(llvm::StringRef path) {
+    auto p = path.str();
+    auto it = dbgFileIdByPath.find(p);
+    if (it != dbgFileIdByPath.end()) return it->second;
+
+    uint64_t sid = file.strings.intern(p);
+    uint64_t fileId = file.dbgFiles.size();
+    file.dbgFiles.push_back(DebugFileEntry{sid, /*hashKind=*/0, {}});
+    dbgFileIdByPath.emplace(std::move(p), fileId);
+    return fileId;
+  }
+
+  void recordOpLocation(uint64_t opId, mlir::Operation &op) {
+    if (!emitDebugInfo) return;
+    auto loc = op.getLoc();
+    auto flc = llvm::dyn_cast<mlir::FileLineColLoc>(loc);
+    if (!flc) return;
+
+    uint64_t fileId = internDbgFile(flc.getFilename().getValue());
+    uint64_t sl = flc.getLine();
+    uint64_t sc = flc.getColumn();
+    uint64_t el = sl;
+    uint64_t ec = sc + 1; // point-range
+
+    file.dbgLocations.push_back(DebugLocationEntry{funcId, opId, fileId, sl, sc, el, ec});
+  }
+
+  void finalizeValueNamesForFunction() {
+    if (!emitDebugInfo) return;
+    // Deterministic value names for DebugInfo.
+    std::unordered_map<std::string, int> constCounts;
+
+    for (uint64_t vid = 0; vid < valueById.size(); ++vid) {
+      mlir::Value v = valueById[vid];
+      std::string name;
+
+      if (auto *def = v.getDefiningOp()) {
+        if (auto cst = llvm::dyn_cast<mlir::arith::ConstantOp>(def)) {
+          mlir::Attribute a = cst.getValue();
+          std::string ty = printType(v.getType());
+
+          // Only generate special names for scalar ints/floats.
+          if (auto fa = llvm::dyn_cast<mlir::FloatAttr>(a)) {
+            std::string imm = hexFloatLiteral(fa);
+            std::string base = "c" + imm + "_" + ty;
+            int &n = constCounts[base];
+            name = base;
+            if (n > 0) name += "_" + std::to_string(n);
+            ++n;
+          } else if (auto ia = llvm::dyn_cast<mlir::IntegerAttr>(a)) {
+            std::string imm = apIntToSignedDecimal(ia.getValue());
+            std::string base = "c" + imm;
+            if (ty != "index") base += "_" + ty;
+            int &n = constCounts[base];
+            name = base;
+            if (n > 0) name += "_" + std::to_string(n);
+            ++n;
+          }
+        }
+      }
+
+      if (name.empty()) {
+        // Non-constant (or non-scalar-constant) value.
+        name = std::to_string(vid);
+      }
+
+      uint64_t nameSid = file.strings.intern(name);
+      file.dbgValueNames.push_back(DebugValueNameEntry{funcId, vid, nameSid});
+    }
+  }
+
+  void resetForFunction(uint64_t fid) {
+    funcId = fid;
+    nextOpId = 0;
+    valueId.clear();
+    valueById.clear();
   }
 
   void encodeRegion(mlir::Region& region, Buffer& out);
@@ -89,6 +197,12 @@ void Encoder::encodeBlock(mlir::Block& block, Buffer& out) {
 }
 
 void Encoder::encodeOp(mlir::Operation& op, Buffer& out) {
+  if (emitDebugInfo) {
+    // op_id (preorder DFS, per-function)
+    uint64_t opId = nextOpId++;
+    recordOpLocation(opId, op);
+  }
+
   // opcode (generic)
   out.appendU16LE(kOpcodeGeneric);
 
@@ -124,6 +238,7 @@ void Encoder::encodeOp(mlir::Operation& op, Buffer& out) {
 
 PTOBCFile encodeFromMLIRModule(mlir::ModuleOp module) {
   Encoder enc;
+  enc.emitDebugInfo = (std::getenv("PTOBC_EMIT_DEBUGINFO") != nullptr);
 
   // Pre-intern a few common strings to stabilize ids.
   enc.file.strings.intern("func.func");
@@ -142,9 +257,11 @@ PTOBCFile encodeFromMLIRModule(mlir::ModuleOp module) {
   // globals count
   writeULEB128(0, m.bytes);
 
-  // function decls
+  // function decls (top-level order)
   llvm::SmallVector<mlir::func::FuncOp, 8> funcs;
-  module.walk([&](mlir::func::FuncOp f) { funcs.push_back(f); });
+  for (auto f : module.getOps<mlir::func::FuncOp>()) {
+    funcs.push_back(f);
+  }
 
   writeULEB128(funcs.size(), m.bytes);
 
@@ -164,10 +281,15 @@ PTOBCFile encodeFromMLIRModule(mlir::ModuleOp module) {
   }
 
   // bodies: for each function, encode its body region
-  for (auto f : funcs) {
-    enc.valueId.clear();
+  for (size_t i = 0; i < funcs.size(); ++i) {
+    auto f = funcs[i];
+    enc.resetForFunction(i);
+
     // function body is region #0
     enc.encodeRegion(f.getBody(), m);
+
+    // DebugInfo: deterministic value names for this function.
+    enc.finalizeValueNamesForFunction();
   }
 
   enc.file.moduleBytes = std::move(m.bytes);

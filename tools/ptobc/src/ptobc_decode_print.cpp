@@ -9,6 +9,7 @@
 
 #include <PTO/IR/PTO.h>
 #include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/Location.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/OpImplementation.h>
 #include <mlir/IR/Value.h>
@@ -19,6 +20,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 
 namespace ptobc {
@@ -78,6 +80,75 @@ static void parseStringsSection(const std::vector<uint8_t>& data, std::vector<st
 struct TypeEntry { uint8_t tag; std::string asmStr; };
 struct AttrEntry { uint8_t tag; std::string asmStr; };
 
+struct DbgFileEntry { uint64_t pathSid; uint8_t hashKind; std::vector<uint8_t> hashBytes; };
+struct DbgValueNameEntry { uint64_t funcId; uint64_t valueId; uint64_t nameSid; };
+struct DbgLocationEntry { uint64_t funcId; uint64_t opId; uint64_t fileId; uint64_t sl; uint64_t sc; uint64_t el; uint64_t ec; };
+struct DbgSnippetEntry { uint64_t funcId; uint64_t opId; uint64_t snippetSid; };
+
+struct DebugInfo {
+  std::vector<DbgFileEntry> files;
+  std::vector<DbgValueNameEntry> valueNames;
+  std::vector<DbgLocationEntry> locations;
+  std::vector<DbgSnippetEntry> snippets;
+};
+
+static DebugInfo parseDebugInfoSection(const std::vector<uint8_t>& data) {
+  Reader r{data.data(), data.data() + data.size()};
+  DebugInfo di;
+
+  // FileTable
+  uint64_t fcnt = r.readULEB();
+  di.files.reserve(fcnt);
+  for (uint64_t i = 0; i < fcnt; ++i) {
+    uint64_t psid = r.readULEB();
+    uint8_t hk = r.readU8();
+    std::vector<uint8_t> hb;
+    if (hk != 0) {
+      uint64_t hlen = r.readULEB();
+      hb = r.readBytes(hlen);
+    }
+    di.files.push_back({psid, hk, std::move(hb)});
+  }
+
+  // ValueNames
+  uint64_t vcnt = r.readULEB();
+  di.valueNames.reserve(vcnt);
+  for (uint64_t i = 0; i < vcnt; ++i) {
+    uint64_t fid = r.readULEB();
+    uint64_t vid = r.readULEB();
+    uint64_t nsid = r.readULEB();
+    di.valueNames.push_back({fid, vid, nsid});
+  }
+
+  // OpLocations
+  uint64_t lcnt = r.readULEB();
+  di.locations.reserve(lcnt);
+  for (uint64_t i = 0; i < lcnt; ++i) {
+    uint64_t fid = r.readULEB();
+    uint64_t opid = r.readULEB();
+    uint64_t fileid = r.readULEB();
+    uint64_t sl = r.readULEB();
+    uint64_t sc = r.readULEB();
+    uint64_t el = r.readULEB();
+    uint64_t ec = r.readULEB();
+    di.locations.push_back({fid, opid, fileid, sl, sc, el, ec});
+  }
+
+  // OpSnippets
+  uint64_t scnt = r.readULEB();
+  di.snippets.reserve(scnt);
+  for (uint64_t i = 0; i < scnt; ++i) {
+    uint64_t fid = r.readULEB();
+    uint64_t opid = r.readULEB();
+    uint64_t ssid = r.readULEB();
+    di.snippets.push_back({fid, opid, ssid});
+  }
+
+  if (r.p != r.end) throw std::runtime_error("trailing bytes in DEBUGINFO");
+  return di;
+}
+
+
 static void parseTypesSection(const std::vector<uint8_t>& data,
                              const std::vector<std::string>& strings,
                              std::vector<TypeEntry>& types) {
@@ -122,7 +193,12 @@ struct BuildCtx {
   const std::vector<TypeEntry>* types;
   const std::vector<AttrEntry>* attrs;
 
+  // Function-global value_id table.
   std::vector<mlir::Value> values;
+
+  // Function-global op_id table (preorder DFS).
+  uint64_t* nextOpId = nullptr;
+  std::vector<mlir::Operation*>* opsById = nullptr;
 };
 
 static mlir::Type getType(BuildCtx& bc, uint64_t tid) {
@@ -144,6 +220,8 @@ static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
   if (dbg) llvm::errs() << "[ptobc]   ops=" << opcnt << "\n";
   for (uint64_t oi = 0; oi < opcnt; ++oi) {
     if (dbg) llvm::errs() << "[ptobc]    op[" << oi << "]...\n";
+    const uint64_t opId = bc.nextOpId ? (*bc.nextOpId)++ : 0;
+
     uint16_t opcode = r.readU16LE();
     uint64_t attrId = r.readULEB();
 
@@ -195,6 +273,11 @@ static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
     mlir::Operation* op = mlir::Operation::create(st);
     block.getOperations().push_back(op);
 
+    if (bc.opsById) {
+      if (opId >= bc.opsById->size()) bc.opsById->resize(opId + 1, nullptr);
+      (*bc.opsById)[opId] = op;
+    }
+
     // Fill result value ids *before* decoding regions. This allows nested regions
     // (for ops that are not IsolatedFromAbove) to reference parent op results.
     for (uint64_t i = 0; i < nres; ++i) {
@@ -235,7 +318,8 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
                                     const std::vector<std::string>& strings,
                                     const std::vector<TypeEntry>& types,
                                     const std::vector<AttrEntry>& attrs,
-                                    const std::vector<uint8_t>& moduleBytes) {
+                                    const std::vector<uint8_t>& moduleBytes,
+                                    std::vector<std::vector<mlir::Operation*>>* opsByFuncOut) {
   const bool dbg = debugEnabled();
 
   Reader r{moduleBytes.data(), moduleBytes.data() + moduleBytes.size()};
@@ -257,7 +341,7 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
   std::vector<FuncDecl> decls;
   decls.reserve(fcnt);
 
-  BuildCtx bc{&ctx, &strings, &types, &attrs, {}};
+  BuildCtx bc{&ctx, &strings, &types, &attrs, {}, nullptr, nullptr};
 
   for (uint64_t i = 0; i < fcnt; ++i) {
     uint64_t nameSid = r.readULEB();
@@ -296,8 +380,18 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
     if ((decls[i].flags & 0x1) == 0) {
       // decode body region
       bc.values.clear();
+
+      uint64_t nextOpId = 0;
+      std::vector<mlir::Operation*> opsById;
+      bc.nextOpId = &nextOpId;
+      bc.opsById = &opsById;
+
       buildRegionInto(bc, r, fn.getBody());
-      if (dbg) llvm::errs() << "[ptobc] func body built ok: values=" << bc.values.size() << "\n";
+      if (dbg) llvm::errs() << "[ptobc] func body built ok: values=" << bc.values.size() << " ops=" << opsById.size() << "\n";
+
+      if (opsByFuncOut) opsByFuncOut->push_back(std::move(opsById));
+    } else {
+      if (opsByFuncOut) opsByFuncOut->push_back({});
     }
 
     module.push_back(fn);
@@ -337,6 +431,20 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
   auto [s4, d4] = readSection();
   auto [s6, d6] = readSection();
 
+  std::optional<DebugInfo> dbgInfo;
+  // Optional trailing sections: DEBUGINFO, EXTRA.
+  while (r.p != r.end) {
+    auto [sid, sec] = readSection();
+    if (sid == kSectionDebugInfo) {
+      if (dbgInfo) throw std::runtime_error("duplicate DEBUGINFO section");
+      dbgInfo = parseDebugInfoSection(sec);
+    } else if (sid == kSectionExtra) {
+      // Ignore EXTRA payload for now.
+    } else {
+      throw std::runtime_error("unexpected trailing section id");
+    }
+  }
+
   if (s1 != kSectionStrings || s2 != kSectionTypes || s3 != kSectionAttrs || s4 != kSectionConstPool || s6 != kSectionModule) {
     throw std::runtime_error("unexpected section order");
   }
@@ -369,12 +477,37 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
   (void)ctx.getOrLoadDialect<mlir::pto::PTODialect>();
 
   if (dbg) llvm::errs() << "[ptobc] decoding module...\n";
-  auto module = decodeToModule(ctx, strings, types, attrs, d6);
+
+  std::vector<std::vector<mlir::Operation*>> opsByFunc;
+  auto module = decodeToModule(ctx, strings, types, attrs, d6, dbgInfo ? &opsByFunc : nullptr);
+
+  // Apply op locations from DEBUGINFO (best-effort).
+  if (dbgInfo) {
+    for (const auto &l : dbgInfo->locations) {
+      if (l.funcId >= opsByFunc.size()) continue;
+      auto &ops = opsByFunc[l.funcId];
+      if (l.opId >= ops.size()) continue;
+      mlir::Operation *op = ops[l.opId];
+      if (!op) continue;
+      if (l.fileId >= dbgInfo->files.size()) continue;
+      const auto &f = dbgInfo->files[l.fileId];
+      if (f.pathSid >= strings.size()) continue;
+
+      auto path = strings[f.pathSid];
+      auto loc = mlir::FileLineColLoc::get(&ctx, path, (unsigned)l.sl, (unsigned)l.sc);
+      op->setLoc(loc);
+    }
+  }
+
   if (dbg) llvm::errs() << "[ptobc] decoded module ok; printing...\n";
 
   CanonicalPrintOptions opt;
   opt.generic = (std::getenv("PTOBC_PRINT_GENERIC") != nullptr);
   opt.keepMLIRFloatPrinting = (std::getenv("PTOBC_PRINT_PRETTY") != nullptr);
+  // Default: do not print locations (would spam loc(unknown) on ops without debug).
+  // Opt-in:
+  //   PTOBC_PRINT_LOC=1
+  opt.printDebugInfo = (std::getenv("PTOBC_PRINT_LOC") != nullptr);
 
   // Default: canonical pretty printing.
   // Env toggles:

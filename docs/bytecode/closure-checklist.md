@@ -139,12 +139,12 @@ Acceptance:
 
 ## Stage 8 — DebugInfo + canonical `.pto` printer
 
-- [ ] DebugInfo tables: ValueNames / Locations / Snippets + FileTable.
-- [ ] Location conventions: 1-based, half-open.
-- [ ] Canonical printer:
-  - [ ] `%c...` deterministic constant aliases
-  - [ ] bitpattern printing `0x...`
-  - [ ] attrs sorted by key
+- [x] DebugInfo tables: ValueNames / Locations / Snippets + FileTable.
+- [x] Location conventions: 1-based, half-open.
+- [x] Canonical printer:
+  - [x] `%c...` deterministic constant aliases
+  - [x] bitpattern printing `0x...`
+  - [x] attrs sorted by key
 
 Acceptance:
 - bytecode → `.pto` print → parse produces stable IR (re-parse stable).

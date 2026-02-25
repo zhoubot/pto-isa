@@ -87,6 +87,51 @@ std::vector<uint8_t> PTOBCFile::buildConstPoolSection() const {
   return b.bytes;
 }
 
+std::vector<uint8_t> PTOBCFile::buildDebugInfoSection() const {
+  Buffer b;
+
+  // FileTable
+  writeULEB128(dbgFiles.size(), b.bytes);
+  for (const auto &f : dbgFiles) {
+    writeULEB128(f.pathSid, b.bytes);
+    b.appendU8(f.hashKind);
+    if (f.hashKind != 0) {
+      writeULEB128(f.hashBytes.size(), b.bytes);
+      if (!f.hashBytes.empty()) b.append(f.hashBytes.data(), f.hashBytes.size());
+    }
+  }
+
+  // ValueNames
+  writeULEB128(dbgValueNames.size(), b.bytes);
+  for (const auto &vn : dbgValueNames) {
+    writeULEB128(vn.funcId, b.bytes);
+    writeULEB128(vn.valueId, b.bytes);
+    writeULEB128(vn.nameSid, b.bytes);
+  }
+
+  // OpLocations
+  writeULEB128(dbgLocations.size(), b.bytes);
+  for (const auto &l : dbgLocations) {
+    writeULEB128(l.funcId, b.bytes);
+    writeULEB128(l.opId, b.bytes);
+    writeULEB128(l.fileId, b.bytes);
+    writeULEB128(l.sl, b.bytes);
+    writeULEB128(l.sc, b.bytes);
+    writeULEB128(l.el, b.bytes);
+    writeULEB128(l.ec, b.bytes);
+  }
+
+  // OpSnippets
+  writeULEB128(dbgSnippets.size(), b.bytes);
+  for (const auto &s : dbgSnippets) {
+    writeULEB128(s.funcId, b.bytes);
+    writeULEB128(s.opId, b.bytes);
+    writeULEB128(s.snippetSid, b.bytes);
+  }
+
+  return b.bytes;
+}
+
 std::vector<uint8_t> PTOBCFile::serialize() const {
   // Build payload sections in fixed order.
   auto sStrings = buildStringsSection();
@@ -106,6 +151,13 @@ std::vector<uint8_t> PTOBCFile::serialize() const {
   payload.insert(payload.end(), secAttrs.begin(), secAttrs.end());
   payload.insert(payload.end(), secConst.begin(), secConst.end());
   payload.insert(payload.end(), secModule.begin(), secModule.end());
+
+  // Optional DEBUGINFO section.
+  const bool hasDebug = !dbgFiles.empty() || !dbgValueNames.empty() || !dbgLocations.empty() || !dbgSnippets.empty();
+  if (hasDebug) {
+    auto secDbg = buildSection(kSectionDebugInfo, buildDebugInfoSection());
+    payload.insert(payload.end(), secDbg.begin(), secDbg.end());
+  }
 
   Buffer out;
   const char magic[6] = {'P','T','O','B','C','\0'};

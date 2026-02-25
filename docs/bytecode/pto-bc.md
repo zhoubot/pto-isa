@@ -705,6 +705,7 @@ FileTable {
 ValueNames {
   uLEB128 entry_count;
   repeat entry_count times:
+    uLEB128 func_id;
     uLEB128 value_id;
     uLEB128 name_string_id;
 }
@@ -716,6 +717,7 @@ ValueNames {
 OpLocations {
   uLEB128 entry_count;
   repeat entry_count times:
+    uLEB128 func_id;
     uLEB128 op_id;
     uLEB128 file_id;
 
@@ -732,6 +734,7 @@ OpLocations {
 OpSnippets {
   uLEB128 entry_count;
   repeat entry_count times:
+    uLEB128 func_id;
     uLEB128 op_id;
     uLEB128 snippet_string_id;
 }

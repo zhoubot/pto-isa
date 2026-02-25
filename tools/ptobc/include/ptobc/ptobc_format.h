@@ -36,11 +36,45 @@ struct StringTable {
   uint64_t intern(const std::string& s);
 };
 
+struct DebugFileEntry {
+  uint64_t pathSid;
+  uint8_t hashKind;                 // 0=none, 1=sha256
+  std::vector<uint8_t> hashBytes;   // only if hashKind!=0
+};
+
+struct DebugValueNameEntry {
+  uint64_t funcId;
+  uint64_t valueId;
+  uint64_t nameSid;
+};
+
+struct DebugLocationEntry {
+  uint64_t funcId;
+  uint64_t opId;
+  uint64_t fileId;
+  uint64_t sl;
+  uint64_t sc;
+  uint64_t el;
+  uint64_t ec;
+};
+
+struct DebugSnippetEntry {
+  uint64_t funcId;
+  uint64_t opId;
+  uint64_t snippetSid;
+};
+
 struct PTOBCFile {
   // Tables
   StringTable strings;
   std::vector<std::string> typeAsm; // 1-based IDs; 0 means none
   std::vector<std::string> attrAsm; // 1-based IDs; 0 means none
+
+  // DebugInfo tables (optional section)
+  std::vector<DebugFileEntry> dbgFiles;
+  std::vector<DebugValueNameEntry> dbgValueNames;
+  std::vector<DebugLocationEntry> dbgLocations;
+  std::vector<DebugSnippetEntry> dbgSnippets;
 
   // Sections payloads
   std::vector<uint8_t> moduleBytes;
@@ -49,6 +83,7 @@ struct PTOBCFile {
   std::vector<uint8_t> buildTypesSection() const;
   std::vector<uint8_t> buildAttrsSection() const;
   std::vector<uint8_t> buildConstPoolSection() const;
+  std::vector<uint8_t> buildDebugInfoSection() const;
 
   std::vector<uint8_t> serialize() const;
 };

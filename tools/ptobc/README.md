@@ -44,3 +44,23 @@ Decode:
 ```bash
 build/ptobc/ptobc decode out.ptobc -o out.pto
 ```
+
+## DebugInfo
+
+`DEBUGINFO` is optional in PTO-BC v0.
+
+- Emit DebugInfo during **encode** (ValueNames + OpLocations when source IR has `FileLineColLoc`):
+
+```bash
+PTOBC_EMIT_DEBUGINFO=1 build/ptobc/ptobc encode input.pto -o out.ptobc
+```
+
+- Print `loc(...)` during **decode** (parseable form):
+
+```bash
+PTOBC_PRINT_LOC=1 build/ptobc/ptobc decode out.ptobc -o out.pto
+```
+
+Notes:
+- The canonical printer strips `loc(unknown)` to avoid noise.
+- Float constants are printed in hex bitpattern form (`0x... : f32/f16/f64`) to guarantee lossless round-trip.
