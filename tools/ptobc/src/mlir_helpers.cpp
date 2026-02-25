@@ -1,6 +1,6 @@
 #include "ptobc/mlir_helpers.h"
 
-#include <mlir/Parser/Parser.h>
+#include <mlir/AsmParser/AsmParser.h>
 #include <mlir/IR/AsmState.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
@@ -32,15 +32,15 @@ std::string printAttrDict(mlir::DictionaryAttr a) {
 }
 
 mlir::Type parseType(mlir::MLIRContext& ctx, const std::string& s) {
-  auto t = mlir::parseType(s, &ctx);
+  mlir::Type t = mlir::parseType(s, &ctx);
   if (!t) throw std::runtime_error("failed to parse type: " + s);
-  return *t;
+  return t;
 }
 
 mlir::Attribute parseAttr(mlir::MLIRContext& ctx, const std::string& s) {
-  auto a = mlir::parseAttribute(s, &ctx);
+  mlir::Attribute a = mlir::parseAttribute(s, &ctx);
   if (!a) throw std::runtime_error("failed to parse attr: " + s);
-  return *a;
+  return a;
 }
 
 mlir::DictionaryAttr parseAttrDict(mlir::MLIRContext& ctx, const std::string& s) {

@@ -13,7 +13,7 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SourceMgr.h>
 
-#include <unordered_map>
+#include <llvm/ADT/DenseMap.h>
 
 namespace ptobc {
 
@@ -41,7 +41,7 @@ static uint64_t internAttr(PTOBCFile& f, mlir::DictionaryAttr dict) {
 
 struct Encoder {
   PTOBCFile file;
-  std::unordered_map<mlir::Value, uint64_t> valueId;
+  llvm::DenseMap<mlir::Value, uint64_t> valueId;
 
   uint64_t getValueId(mlir::Value v) {
     auto it = valueId.find(v);
@@ -53,8 +53,9 @@ struct Encoder {
 
   uint64_t allocValueId(mlir::Value v) {
     uint64_t id = valueId.size();
-    valueId.emplace(v, id);
-    return id;
+    auto [it, inserted] = valueId.try_emplace(v, id);
+    if (!inserted) throw std::runtime_error("value already has an id");
+    return it->second;
   }
 
   void encodeRegion(mlir::Region& region, Buffer& out);
@@ -175,11 +176,12 @@ PTOBCFile encodeFromMLIRModule(mlir::ModuleOp module) {
 
 mlir::OwningOpRef<mlir::ModuleOp> parsePTOFile(mlir::MLIRContext& ctx, const std::string& path) {
   llvm::SourceMgr sm;
-  auto fileOrErr = mlir::openInputFile(path);
-  if (!fileOrErr) {
-    throw std::runtime_error("failed to open input: " + path);
+  std::string err;
+  auto file = mlir::openInputFile(path, &err);
+  if (!file) {
+    throw std::runtime_error("failed to open input: " + path + (err.empty() ? "" : (": " + err)));
   }
-  sm.AddNewSourceBuffer(std::move(*fileOrErr), llvm::SMLoc());
+  sm.AddNewSourceBuffer(std::move(file), llvm::SMLoc());
   auto module = mlir::parseSourceFile<mlir::ModuleOp>(sm, &ctx);
   if (!module) {
     throw std::runtime_error("failed to parse MLIR file: " + path);

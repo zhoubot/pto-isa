@@ -2,7 +2,9 @@
 #include "ptobc/ptobc_format.h"
 #include "ptobc/leb128.h"
 
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/SCF/IR/SCF.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/OpImplementation.h>
@@ -11,8 +13,9 @@
 
 #include <llvm/Support/raw_ostream.h>
 
+#include <cstring>
+#include <fstream>
 #include <stdexcept>
-#include <unordered_map>
 
 namespace ptobc {
 
@@ -125,7 +128,7 @@ static mlir::DictionaryAttr getAttrDict(BuildCtx& bc, uint64_t aid) {
   return parseAttrDict(*bc.ctx, (*bc.attrs)[aid].asmStr);
 }
 
-static mlir::Region buildRegion(BuildCtx& bc, Reader& r, mlir::Operation* parent);
+static void buildRegionInto(BuildCtx& bc, Reader& r, mlir::Region& region);
 
 static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
   uint64_t opcnt = r.readULEB();
@@ -173,15 +176,17 @@ static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
       st.addAttribute(na.getName(), na.getValue());
     }
 
-    st.addRegions(nreg);
-
-    mlir::Operation* op = mlir::Operation::create(st);
-
-    // Build regions (preorder)
+    // Decode regions into the OperationState (will be transferred to the op on create).
+    llvm::SmallVector<mlir::Region*, 4> regions;
+    regions.reserve(nreg);
     for (uint64_t ri = 0; ri < nreg; ++ri) {
-      op->getRegion(ri).takeBody(buildRegion(bc, r, op));
+      regions.push_back(st.addRegion());
+    }
+    for (uint64_t ri = 0; ri < nreg; ++ri) {
+      buildRegionInto(bc, r, *regions[ri]);
     }
 
+    mlir::Operation* op = mlir::Operation::create(st);
     block.getOperations().push_back(op);
 
     // Fill result value ids (stable even if regions added new values)
@@ -191,13 +196,13 @@ static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
   }
 }
 
-static mlir::Region buildRegion(BuildCtx& bc, Reader& r, mlir::Operation* parent) {
-  mlir::Region region;
-  region.push_back(new mlir::Block());
+static void buildRegionInto(BuildCtx& bc, Reader& r, mlir::Region& region) {
   uint64_t bcnt = r.readULEB();
   region.getBlocks().clear();
+
   for (uint64_t bi = 0; bi < bcnt; ++bi) {
     auto* block = new mlir::Block();
+
     uint64_t nargs = r.readULEB();
     for (uint64_t ai = 0; ai < nargs; ++ai) {
       uint64_t tid = r.readULEB();
@@ -205,10 +210,10 @@ static mlir::Region buildRegion(BuildCtx& bc, Reader& r, mlir::Operation* parent
       auto arg = block->addArgument(ty, mlir::UnknownLoc::get(bc.ctx));
       bc.values.push_back(arg);
     }
+
     buildOpList(bc, r, *block);
     region.push_back(block);
   }
-  return region;
 }
 
 static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
@@ -267,8 +272,7 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
     if ((decls[i].flags & 0x1) == 0) {
       // decode body region
       bc.values.clear();
-      mlir::Region body = buildRegion(bc, r, fn);
-      fn.getBody().takeBody(body);
+      buildRegionInto(bc, r, fn.getBody());
     }
 
     module.push_back(fn);

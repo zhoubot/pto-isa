@@ -3,6 +3,7 @@
 #include <string>
 
 #include <mlir/IR/Attributes.h>
+#include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/Types.h>
 
