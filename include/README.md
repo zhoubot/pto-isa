@@ -33,8 +33,12 @@ Include the unified entry header:
 | [ISA Guide](../docs/README.md) | Complete ISA documentation |
 | [Getting Started](../docs/getting-started.md) | Setup and usage guide |
 | [Programming Model](../docs/coding/ProgrammingModel.md) | Programming guide |
-| [pyPTO Python Frontend](../docs/pyPTO/README.md) | Python API |
-| [PTO-AS Specification](../docs/grammar/PTO-AS.md) | Assembly language |
+| [PTO-AS Specification](../docs/grammar/PTO-AS.md) | Assembly language specification |
+| [PTO-BC Bytecode](../docs/bytecode/pto-bc.md) | Binary bytecode specification |
+| [PTOAS submodule](../PTOAS/) | MLIR-based assembler |
+| [PTODSL submodule](../PTODSL/) | Python DSL for kernel authoring |
+| [pyPTO](https://gitcode.com/cann/pypto/) | Python-first frontend (External) |
+| [TileLang Ascend](https://github.com/tile-ai/tilelang-ascend/) | High-level framework (External) |
 
 ## PTO Instruction Implementation Status (CPU / A2 / A3 / A5)
 

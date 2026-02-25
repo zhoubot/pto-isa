@@ -4,7 +4,11 @@
 
 # PTO Tile Library
 
-High-performance **tile-level** operations for Ascend platforms, implemented against the **PTO (Parallel Tile Operation) virtual ISA**.
+> High-performance **tile-level** operations for Ascend platforms, implemented against the **PTO (Parallel Tile Operation) virtual ISA**.
+
+[![License](https://img.shields.io/badge/License-CANN%20Open%20Software%20License%202.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Ascend%20A2%20%7C%20A3%20%7C%20A5%20%7C%20CPU-green.svg)](#platform-support)
+[![Docs](https://img.shields.io/badge/Docs-MkDocs%20Site-blue.svg)](https://your-docs-url.github.io)
 
 - **Docs**: `docs/` (start at [`docs/README.md`](docs/README.md))
 - **Getting started** (Windows/Linux/macOS): [`docs/getting-started.md`](docs/getting-started.md)
@@ -25,6 +29,91 @@ Ascend hardware evolves significantly across generations, and the underlying ins
 
 This repository implements a growing subset of PTO operations with performance-oriented kernels, CPU simulation, and tests.
 
+## PTO Ecosystem & Toolchain
+
+This is the central repository for the PTO ecosystem. It connects multiple components:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              User Applications                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              Frontends (PTO-Lang)                                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐  │
+│  │      pyPTO      │  │     PTODSL      │  │  TileLang Ascend │  │  (More...)   │  │
+│  │   (External)    │  │   (External)    │  │   (External)     │  │              │  │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘  └──────┬───────┘  │
+└───────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────┘
+            │                     │                     │                     │
+            │                     │                     │                     │
+            ▼                     ▼                     ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        PTO Text Format (.pto files)                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐   │
+│  │  Textual representation: tadd, tload, tmatmul, tstore, ...                  │   │
+│  │  See: [`docs/grammar/PTO-AS.md`](docs/grammar/PTO-AS.md)                    │   │
+│  └───────────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼ (ptoas tool)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        PTO-C++ (Generated C++ Code)                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐   │
+│  │  ptoas compiles .pto files to AscendC C++ kernel code                       │   │
+│  │  Usage: `ptoas input.pto -o output.cpp`                                    │   │
+│  │  Tool: [`PTOAS/`](PTOAS/) (submodule)                                        │   │
+│  └───────────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼ (optional: ptobc tool)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        PTO-BC (PTO Bytecode - Binary)                              │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐   │
+│  │  Binary encoding for PTO programs                                            │   │
+│  │  Usage: `ptobc encode input.pto -o out.ptobc`                                │   │
+│  │  Spec: [`docs/bytecode/pto-bc.md`](docs/bytecode/pto-bc.md)                │   │
+│  │  Tool: [`tools/ptobc/`](tools/ptobc/)                                        │   │
+│  └───────────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼ (via MLIR lowering)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        PTO ISA (Instruction Set Architecture)                       │
+│  ┌───────────────────────────────────────────────────────────────────────────────┐   │
+│  │  90+ tile operations: TADD, TMATMUL, TLOAD, TSTORE, ...                     │   │
+│  │  Headers: [`include/pto/`](include/pto/)                                    │   │
+│  │  Spec: [`docs/isa/`](docs/isa/)                                             │   │
+│  └───────────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           Backend Implementations                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐    │
+│  │  Ascend A2   │  │  Ascend A3   │  │  Ascend A5   │  │        CPU          │    │
+│  │   (910B)    │  │   (910C)    │  │   (950)     │  │   (x86_64/AArch64) │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └─────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Related Projects
+
+| Project | Description | Location |
+|---------|-------------|----------|
+| **PTOAS** | PTO Assembler - MLIR-based compiler for PTO | [`PTOAS/`](PTOAS/) (submodule) |
+| **PTODSL** | Python DSL for PTO kernel authoring | [`PTODSL/`](PTODSL/) (submodule) |
+| **pyPTO** | Python-first frontend for PTO kernels | [External](https://gitcode.com/cann/pypto/) |
+| **TileLang Ascend** | High-level framework integration | [External](https://github.com/tile-ai/tilelang-ascend/) |
+
+### Tools
+
+| Tool | Description | Usage |
+|------|-------------|-------|
+| `ptoas` | PTO Assembler - compiles PTO text to C++ | `ptoas input.pto -o output.cpp` |
+| `ptobc` | PTO Bytecode encoder/decoder | `ptobc encode input.pto -o out.ptobc` |
+
 ## Intended Audience
 
 PTO Tile Lib is not aimed at beginner-level users. It is intended for:
@@ -32,14 +121,6 @@ PTO Tile Lib is not aimed at beginner-level users. It is intended for:
 - Framework backends interfacing directly with Ascend hardware
 - Cross-platform application developers targeting multiple Ascend generations
 - High-performance operator/kernel developers (manual implementations)
-
-## Integrations
-
-PTO instructions are integrated into:
-
-- [PyPTO](https://gitcode.com/cann/pypto/)
-- [TileLang Ascend](https://github.com/tile-ai/tilelang-ascend/)
-- More languages/frontends coming
 
 ## Platform Support
 
@@ -160,6 +241,17 @@ cmake -S docs -B build/docs -DPython3_EXECUTABLE=$PWD/.venv-mkdocs/bin/python
 cmake --build build/docs --target pto_docs
 ```
 
+## Documentation Overview
+
+| Section | Description | Path |
+|---------|-------------|------|
+| **ISA Reference** | Complete instruction reference | [`docs/isa/`](docs/isa/) |
+| **PTO-AS Grammar** | Assembly language specification | [`docs/grammar/PTO-AS.md`](docs/grammar/PTO-AS.md) |
+| **PTO-BC Bytecode** | Binary encoding specification | [`docs/bytecode/pto-bc.md`](docs/bytecode/pto-bc.md) |
+| **PTO-IR** | Non-ISA operations (L1/L2) | [`docs/ir/`](docs/ir/) |
+| **Programming Guide** | Developer guides and tutorials | [`docs/coding/`](docs/coding/) |
+| **Machine Model** | Abstract machine architecture | [`docs/machine/`](docs/machine/) |
+
 ## Performance References
 
 This repository includes performance-oriented kernels with reference measurements and reproducible setups.
@@ -175,8 +267,8 @@ Measured on Ascend A3 (24 cores) with fp16 inputs → fp32 output:
 | --- | --- | --- | --- | --- | --- |
 | `m=1536` `k=1536` `n=1536` | 54.5% | 42.2% | 72.2% | 7.7% | 0.0388 |
 | `m=3072` `k=3072` `n=3072` | 79.0% | 62.0% | 90.9% | 5.8% | 0.2067 |
-| `m=6144` `k=6144` `n=6144` | 86.7% | 68.1% | 95.2% |  3.1% | 1.5060 |
-| `m=7680` `k=7680` `n=7680` | 80.6% | 63.0% | 98.4% |  2.4% | 3.1680 |
+| `m=6144` `k=6144` `n=6144` | 86.7% | 68.1% | 95.2% | 3.1% | 1.5060 |
+| `m=7680` `k=7680` `n=7680` | 80.6% | 63.0% | 98.4% | 2.4% | 3.1680 |
 
 ![GEMM performance reference (Ascend A3, 24 cores)](docs/figures/performance/gemm_performance_a3.svg)
 
@@ -201,8 +293,13 @@ Measured on Ascend A3 (24 cores) with fp16 inputs → fp32 output:
 ## Repository Structure
 
 - `include/`: PTO C++ header files (see [include/README.md](include/README.md))
+- `PTOAS/`: PTO Assembler and MLIR dialect (submodule)
+- `PTODSL/`: Python DSL for kernel authoring (submodule)
 - `kernels/`: Custom operators and kernel implementations (see [kernels/README.md](kernels/README.md))
 - `docs/`: ISA instructions, API guidelines, and examples (see [docs/README.md](docs/README.md))
+- `docs/grammar/`: PTO-AS assembly language specification
+- `docs/bytecode/`: PTO-BC bytecode specification
+- `tools/ptobc/`: PTO-BC encoder/decoder tool
 - `tests/`: ST/CPU test scripts and use cases (see [tests/README.md](tests/README.md))
 - `scripts/`: Packaging and release scripts (see [scripts/README.md](scripts/README.md))
 - `build.sh`, `tests/run_st.sh`: Build, package, and run entry points
@@ -218,3 +315,9 @@ See: [SECURITY.md](SECURITY.md)
 ## License
 
 This project is licensed under the CANN Open Software License Agreement Version 2.0. See the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  <strong>PTO Tile Library</strong> — Enabling high-performance tile operations across Ascend platforms
+</p>

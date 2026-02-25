@@ -1,24 +1,105 @@
-# PTO Bytecode (PTO-BC)
+<p align="center">
+  <img src="../../figures/pto_logo.svg" alt="PTO Tile Lib" width="180" />
+</p>
 
-This directory tracks the design of a **binary encoding** for PTO programs.
+# PTO-BC (PTO Bytecode)
 
-## What is being encoded?
+PTO-BC is the **binary bytecode encoding** for PTO (Parallel Tile Operation) programs.
 
-Today, `PTOAS` consumes textual `.pto` files that are MLIR modules using:
+## Overview
 
-- `pto` dialect (tile-level ops, tensor views, events)
-- `arith` dialect (constants, integer/index arithmetic)
-- `scf` dialect (structured control flow: `for`, `if`)
+PTO-BC provides:
 
-Examples are generated from `PTODSL` and stored in [`samples/`](samples/).
+- **Compact binary representation** - Efficient storage and transmission
+- **Forward compatibility** - Version-aware encoding/decoding
+- **MLIR-independent decoding** - Can be decoded without MLIR dependencies
+- **Fast loading** - Optimized for quick program loading
 
-## Goal
+## Quick Start
 
-Design a compact, forward-compatible **bytecode format** for `.pto` programs that:
+### Encoding PTO to Bytecode
 
-- is independent of MLIR's internal serialization
-- can be decoded without linking full MLIR (optional goal)
-- preserves enough typing/structure to reconstitute the same program
-- leaves clear extension space for new PTO ops / attrs / types
+```bash
+# Encode PTO text to bytecode
+ptobc encode input.pto -o output.ptobc
 
-See: [`pto-bc.md`](pto-bc.md)
+# Decode bytecode back to text
+ptobc decode input.ptobc -o output.pto
+```
+
+### Programmatic Usage
+
+```python
+from ptobc import encode, decode
+
+# Encode
+with open("input.pto", "r") as f:
+    pto_text = f.read()
+    
+bytecode = encode(pto_text)
+
+with open("output.ptobc", "wb") as f:
+    f.write(bytecode)
+
+# Decode
+with open("input.ptobc", "rb") as f:
+    bytecode = f.read()
+    
+pto_text = decode(bytecode)
+```
+
+## Specification
+
+For the complete bytecode specification, see: [pto-bc.md](pto-bc.md)
+
+## Related Components
+
+| Component | Description | Location |
+|-----------|-------------|----------|
+| **PTO-ISA** | Virtual instruction set for tile operations | [`include/pto/`](include/pto/) |
+| **PTO-AS** | Textual assembly format | [`docs/grammar/`](docs/grammar/) |
+| **PTOAS** | MLIR-based assembler (submodule) | [`PTOAS/`](PTOAS/) |
+| **pyPTO** | Python frontend for PTO | [External](https://gitcode.com/cann/pypto/) |
+| **PTODSL** | Python DSL for kernel authoring | [`PTODSL/`](PTODSL/) |
+| **TileLang Ascend** | High-level framework | [External](https://github.com/tile-ai/tilelang-ascend/) |
+
+## Toolchain Flow
+
+```
+User Kernels (pyPTO / PTODSL / TileLang)
+         │
+         ▼
+   PTO Text (.pto files)
+         │
+    ┌────┴────┐
+    │         │
+  ptoas    ptobc
+    │         │
+    ▼         ▼
+  C++     PTO-BC
+    │         │
+    └────┬────┘
+         │
+         ▼
+    PTO ISA
+```
+
+## Tool: ptobc
+
+The `ptobc` tool is located at [`tools/ptobc/`](tools/ptobc/) and provides:
+
+- `ptobc encode` - Convert PTO text to bytecode
+- `ptobc decode` - Convert bytecode back to PTO text
+- `ptobc info` - Display bytecode metadata
+- `ptobc verify` - Verify bytecode integrity
+
+## See Also
+
+- [PTO Bytecode Specification](pto-bc.md)
+- [PTO-AS Specification](../grammar/PTO-AS.md)
+- [PTO ISA Reference](../isa/README.md)
+- [PTO Toolchain Overview](../mkdocs/src/manual/10-bytecode-and-toolchain.md)
+
+---
+
+For the main documentation index, see: [docs/README.md](../README.md)
