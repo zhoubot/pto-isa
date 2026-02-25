@@ -17,10 +17,9 @@
 
 ## News
 
-- **2026-02-25**: Added PTO-BC bytecode specification and toolchain documentation
-- **2026-02-25**: Merged master branch into main, removed duplicate folders
-- **2026-02-25**: Added PTO toolchain architecture diagram (SVG)
-- **2026-02-25**: Integrated PTOAS and PTODSL as submodules
+- **2026-02**: Added PTO-BC bytecode specification and encoder/decoder tool
+- **2026-02**: Integrated PTOAS and PTODSL as Git submodules for better maintainability
+- **2026-02**: Added professional SVG toolchain architecture diagram
 - **2025-12-27**: PTO Tile Library becomes publicly available.
 
 ## What is PTO?
@@ -240,9 +239,10 @@ Measured on Ascend A3 (24 cores) with fp16 inputs → fp32 output:
 - `docs/`: ISA instructions, API guidelines, and examples (see [docs/README.md](docs/README.md))
 - `docs/grammar/`: PTO-AS assembly language specification
 - `docs/bytecode/`: PTO-BC bytecode specification
-- `tools/ptobc/`: PTO-BC encoder/decoder tool
+- `tools/ptobc/`: PTO-BC encoder/decoder tool (includes sail runtime)
+- `tools/scripts/`: Packaging and release scripts
+- `demos/`: Example kernels and demonstrations
 - `tests/`: ST/CPU test scripts and use cases (see [tests/README.md](tests/README.md))
-- `scripts/`: Packaging and release scripts (see [scripts/README.md](scripts/README.md))
 - `build.sh`, `tests/run_st.sh`: Build, package, and run entry points
 
 ## Contributing

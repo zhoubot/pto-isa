@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 850" width="1200" height="850">
   <defs>
     <!-- Gradients -->
     <linearGradient id="gradHeader" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -10,29 +10,29 @@
       <stop offset="0%" style="stop-color:#38a169;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#2f855a;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="gradPTO" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="gradPTOFile" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#3182ce;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#2b6cb0;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="gradAS" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="gradPTOAS" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#805ad5;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#6b46c1;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="gradBC" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="gradPTOBC" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#d69e2e;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#b7791f;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="gradISA" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="gradCPP" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#e53e3e;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#c53030;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="gradISA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9f7aea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#805ad5;stop-opacity:1" />
     </linearGradient>
     <linearGradient id="gradBackend" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#718096;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#4a5568;stop-opacity:1" />
-    </linearGradient>
-    <linearGradient id="gradTool" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ed8936;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#dd6b20;stop-opacity:1" />
     </linearGradient>
     
     <!-- Drop shadow filter -->
@@ -40,197 +40,181 @@
       <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
     </filter>
     
-    <!-- Arrow marker -->
-    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
-    </marker>
-    
-    <!-- Arrow for main flow -->
+    <!-- Arrow markers -->
     <marker id="arrowMain" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#3182ce"/>
     </marker>
     
-    <!-- Arrow for optional path -->
     <marker id="arrowOpt" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#d69e2e"/>
+    </marker>
+    
+    <marker id="arrowGen" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#e53e3e"/>
     </marker>
   </defs>
   
   <!-- Background -->
-  <rect width="1200" height="900" fill="#f7fafc"/>
+  <rect width="1200" height="850" fill="#f7fafc"/>
   
   <!-- Title -->
-  <rect x="0" y="0" width="1200" height="60" fill="url(#gradHeader)"/>
-  <text x="600" y="38" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">PTO (Parallel Tile Operation) Toolchain Architecture</text>
+  <rect x="0" y="0" width="1200" height="55" fill="url(#gradHeader)"/>
+  <text x="600" y="35" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">PTO (Parallel Tile Operation) Software Stack</text>
   
   <!-- Level Labels -->
-  <text x="30" y="100" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1a365d">User Level</text>
-  <line x1="30" y1="110" x2="30" y2="130" stroke="#1a365d" stroke-width="2"/>
-  <line x1="30" y1="130" x2="1170" y2="130" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="30" y="90" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">Frontend</text>
+  <line x1="30" y1="100" x2="30" y2="120" stroke="#1a365d" stroke-width="2"/>
+  <line x1="30" y1="120" x2="1170" y2="120" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
   
-  <text x="30" y="200" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1a365d">Frontend Level</text>
-  <line x1="30" y1="210" x2="30" y2="230" stroke="#1a365d" stroke-width="2"/>
-  <line x1="30" y1="230" x2="1170" y2="230" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="30" y="210" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">PTO Files</text>
+  <line x1="30" y1="220" x2="30" y2="240" stroke="#1a365d" stroke-width="2"/>
+  <line x1="30" y1="240" x2="1170" y2="240" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
   
-  <text x="30" y="380" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1a365d">IR Level</text>
-  <line x1="30" y1="390" x2="30" y2="410" stroke="#1a365d" stroke-width="2"/>
-  <line x1="30" y1="410" x2="1170" y2="410" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="30" y="330" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">Assembler</text>
+  <line x1="30" y1="340" x2="30" y2="360" stroke="#1a365d" stroke-width="2"/>
+  <line x1="30" y1="360" x2="1170" y2="360" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
   
-  <text x="30" y="580" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1a365d">ISA Level</text>
-  <line x1="30" y1="590" x2="30" y2="610" stroke="#1a365d" stroke-width="2"/>
-  <line x1="30" y1="610" x2="1170" y2="610" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="30" y="450" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">Bytecode (Optional)</text>
+  <line x1="30" y1="460" x2="30" y2="480" stroke="#1a365d" stroke-width="2"/>
+  <line x1="30" y1="480" x2="1170" y2="480" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
   
-  <text x="30" y="780" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1a365d">Backend Level</text>
-  <line x1="30" y1="790" x2="30" y2="810" stroke="#1a365d" stroke-width="2"/>
+  <text x="30" y="570" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">Generated Code</text>
+  <line x1="30" y1="580" x2="30" y2="600" stroke="#1a365d" stroke-width="2"/>
+  <line x1="30" y1="600" x2="1170" y2="600" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
+  
+  <text x="30" y="690" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">PTO ISA</text>
+  <line x1="30" y1="700" x2="30" y2="720" stroke="#1a365d" stroke-width="2"/>
+  <line x1="30" y1="720" x2="1170" y2="720" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="5,5"/>
+  
+  <text x="30" y="800" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d">Backend</text>
+  <line x1="30" y1="810" x2="30" y2="830" stroke="#1a365d" stroke-width="2"/>
   
   <!-- Frontend Boxes -->
   <g filter="url(#shadow)">
-    <rect x="50" y="250" width="180" height="70" rx="8" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
-    <text x="140" y="285" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">pyPTO</text>
-    <text x="140" y="302" font-family="Arial, sans-serif" font-size="10" fill="#e6fffa" text-anchor="middle">Python-first frontend</text>
+    <rect x="80" y="135" width="140" height="55" rx="6" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
+    <text x="150" y="160" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">pyPTO</text>
+    <text x="150" y="175" font-family="Arial, sans-serif" font-size="9" fill="#e6fffa" text-anchor="middle">Python DSL</text>
   </g>
   
   <g filter="url(#shadow)">
-    <rect x="260" y="250" width="180" height="70" rx="8" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
-    <text x="350" y="285" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTODSL</text>
-    <text x="350" y="302" font-family="Arial, sans-serif" font-size="10" fill="#e6fffa" text-anchor="middle">Python DSL</text>
+    <rect x="240" y="135" width="140" height="55" rx="6" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
+    <text x="310" y="160" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">PTODSL</text>
+    <text x="310" y="175" font-family="Arial, sans-serif" font-size="9" fill="#e6fffa" text-anchor="middle">Python DSL</text>
   </g>
   
   <g filter="url(#shadow)">
-    <rect x="470" y="250" width="180" height="70" rx="8" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
-    <text x="560" y="285" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">TileLang</text>
-    <text x="560" y="302" font-family="Arial, sans-serif" font-size="10" fill="#e6fffa" text-anchor="middle">High-level framework</text>
+    <rect x="400" y="135" width="140" height="55" rx="6" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
+    <text x="470" y="160" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">TileLang</text>
+    <text x="470" y="175" font-family="Arial, sans-serif" font-size="9" fill="#e6fffa" text-anchor="middle">High-level</text>
   </g>
   
   <g filter="url(#shadow)">
-    <rect x="680" y="250" width="180" height="70" rx="8" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
-    <text x="770" y="285" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTO-Lang</text>
-    <text x="770" y="302" font-family="Arial, sans-serif" font-size="10" fill="#e6fffa" text-anchor="middle">Generic frontend</text>
+    <rect x="560" y="135" width="140" height="55" rx="6" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
+    <text x="630" y="160" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">PTO-Lang</text>
+    <text x="630" y="175" font-family="Arial, sans-serif" font-size="9" fill="#e6fffa" text-anchor="middle">Generic</text>
+  </g>
+  
+  <!-- PTO Files Box -->
+  <g filter="url(#shadow)">
+    <rect x="400" y="255" width="400" height="55" rx="6" fill="url(#gradPTOFile)" stroke="#2c5282" stroke-width="2"/>
+    <text x="600" y="282" font-family="Courier New, monospace" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTO Text Format (.pto files)</text>
+  </g>
+  
+  <!-- Assembler Box -->
+  <g filter="url(#shadow)">
+    <rect x="525" y="365" width="150" height="55" rx="6" fill="url(#gradPTOAS)" stroke="#553c9a" stroke-width="2"/>
+    <text x="600" y="390" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">ptoas</text>
+    <text x="600" y="405" font-family="Arial, sans-serif" font-size="9" fill="#e9d8fd" text-anchor="middle">Assembler</text>
+  </g>
+  
+  <!-- Bytecode Box -->
+  <g filter="url(#shadow)">
+    <rect x="525" y="485" width="150" height="55" rx="6" fill="url(#gradPTOBC)" stroke="#b7791f" stroke-width="2"/>
+    <text x="600" y="510" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">ptobc</text>
+    <text x="600" y="525" font-family="Arial, sans-serif" font-size="9" fill="#fefcbf" text-anchor="middle">Bytecode Encoder</text>
+  </g>
+  
+  <!-- Generated Code Boxes -->
+  <g filter="url(#shadow)">
+    <rect x="250" y="605" width="300" height="55" rx="6" fill="url(#gradCPP)" stroke="#9b2c2c" stroke-width="2"/>
+    <text x="400" y="630" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">PTO-C++ (AscendC Kernel)</text>
+    <text x="400" y="645" font-family="Courier New, monospace" font-size="9" fill="#fed7d7" text-anchor="middle">Generated C++ code</text>
   </g>
   
   <g filter="url(#shadow)">
-    <rect x="890" y="250" width="180" height="70" rx="8" fill="url(#gradFrontend)" stroke="#276749" stroke-width="2"/>
-    <text x="980" y="285" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">+ More</text>
-    <text x="980" y="302" font-family="Arial, sans-serif" font-size="10" fill="#e6fffa" text-anchor="middle">Extensible</text>
+    <rect x="600" y="605" width="300" height="55" rx="6" fill="url(#gradPTOBC)" stroke="#b7791f" stroke-width="2"/>
+    <text x="750" y="630" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">PTO-BC (Binary)</text>
+    <text x="750" y="645" font-family="Courier New, monospace" font-size="9" fill="#fefcbf" text-anchor="middle">Binary bytecode</text>
   </g>
   
-  <!-- IR Level - PTO Text -->
+  <!-- ISA Box -->
   <g filter="url(#shadow)">
-    <rect x="400" y="420" width="400" height="80" rx="8" fill="url(#gradPTO)" stroke="#2c5282" stroke-width="2"/>
-    <text x="600" y="455" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">PTO Text Format (.pto)</text>
-    <text x="600" y="475" font-family="Courier New, monospace" font-size="11" fill="#bee3f8" text-anchor="middle">tadd, tload, tmatmul, tstore...</text>
+    <rect x="400" y="725" width="400" height="45" rx="6" fill="url(#gradISA)" stroke="#553c9a" stroke-width="2"/>
+    <text x="600" y="752" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTO ISA (90+ Tile Operations)</text>
   </g>
   
-  <!-- Toolchain - ptoas and ptobc -->
+  <!-- Backend Boxes -->
   <g filter="url(#shadow)">
-    <rect x="200" y="520" width="150" height="60" rx="8" fill="url(#gradTool)" stroke="#c05621" stroke-width="2"/>
-    <text x="275" y="545" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">ptoas</text>
-    <text x="275" y="562" font-family="Arial, sans-serif" font-size="10" fill="#fffaf0" text-anchor="middle">PTO Assembler</text>
+    <rect x="80" y="810" width="180" height="35" rx="5" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
+    <text x="170" y="833" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">Ascend A2/A3</text>
   </g>
   
   <g filter="url(#shadow)">
-    <rect x="400" y="520" width="150" height="60" rx="8" fill="url(#gradTool)" stroke="#c05621" stroke-width="2"/>
-    <text x="475" y="545" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">ptobc</text>
-    <text x="475" y="562" font-family="Arial, sans-serif" font-size="10" fill="#fffaf0" text-anchor="middle">PTO Bytecode</text>
+    <rect x="280" y="810" width="180" height="35" rx="5" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
+    <text x="370" y="833" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">Ascend A5</text>
   </g>
   
   <g filter="url(#shadow)">
-    <rect x="600" y="520" width="200" height="60" rx="8" fill="url(#gradTool)" stroke="#c05621" stroke-width="2"/>
-    <text x="700" y="545" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="white" text-anchor="middle">MLIR Pipeline</text>
-    <text x="700" y="562" font-family="Arial, sans-serif" font-size="10" fill="#fffaf0" text-anchor="middle">Optimization passes</text>
+    <rect x="480" y="810" width="180" height="35" rx="5" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
+    <text x="570" y="833" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">CPU Simulator</text>
   </g>
   
-  <!-- Output boxes -->
-  <g filter="url(#shadow)">
-    <rect x="150" y="640" width="200" height="60" rx="8" fill="url(#gradAS)" stroke="#553c9a" stroke-width="2"/>
-    <text x="250" y="670" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTO-C++</text>
-    <text x="250" y="687" font-family="Arial, sans-serif" font-size="10" fill="#e9d8fd" text-anchor="middle">AscendC kernel code</text>
-  </g>
+  <!-- Arrows: Frontend to PTO Files -->
+  <line x1="150" y1="190" x2="400" y2="255" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <line x1="310" y1="190" x2="480" y2="255" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <line x1="470" y1="190" x2="560" y2="255" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <line x1="630" y1="190" x2="640" y2="255" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
   
-  <g filter="url(#shadow)">
-    <rect x="400" y="640" width="200" height="60" rx="8" fill="url(#gradBC)" stroke="#b7791f" stroke-width="2"/>
-    <text x="500" y="670" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTO-BC</text>
-    <text x="500" y="687" font-family="Arial, sans-serif" font-size="10" fill="#fefcbf" text-anchor="middle">Binary bytecode</text>
-  </g>
+  <!-- Arrow: PTO Files to ptoas -->
+  <line x1="600" y1="310" x2="600" y2="365" stroke="#805ad5" stroke-width="2" marker-end="url(#arrowMain)"/>
   
-  <g filter="url(#shadow)">
-    <rect x="650" y="640" width="200" height="60" rx="8" fill="url(#gradPTO)" stroke="#2c5282" stroke-width="2"/>
-    <text x="750" y="670" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PTO IR</text>
-    <text x="750" y="687" font-family="Arial, sans-serif" font-size="10" fill="#bee3f8" text-anchor="middle">MLIR representation</text>
-  </g>
+  <!-- Arrow: ptoas to Generated Code -->
+  <line x1="525" y1="420" x2="400" y2="480" stroke="#e53e3e" stroke-width="2" marker-end="url(#arrowGen)"/>
+  <line x1="600" y1="420" x2="600" y2="480" stroke="#e53e3e" stroke-width="2" marker-end="url(#arrowGen)"/>
+  <line x1="675" y1="420" x2="800" y2="480" stroke="#d69e2e" stroke-width="2" marker-end="url(#arrowOpt)"/>
   
-  <!-- ISA Level -->
-  <g filter="url(#shadow)">
-    <rect x="350" y="710" width="500" height="60" rx="8" fill="url(#gradISA)" stroke="#9b2c2c" stroke-width="2"/>
-    <text x="600" y="740" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">PTO ISA (90+ Tile Operations)</text>
-    <text x="600" y="757" font-family="Courier New, monospace" font-size="10" fill="#fed7d7" text-anchor="middle">TADD, TMATMUL, TLOAD, TSTORE, TGATHER, TSCATTER...</text>
-  </g>
+  <!-- Arrow: ptobc to PTO-BC -->
+  <line x1="600" y1="540" x2="750" y2="605" stroke="#d69e2e" stroke-width="2" marker-end="url(#arrowOpt)"/>
   
-  <!-- Backend Level -->
-  <g filter="url(#shadow)">
-    <rect x="50" y="830" width="200" height="50" rx="8" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
-    <text x="150" y="858" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">Ascend A2 (910B)</text>
-  </g>
+  <!-- Arrows: Generated Code to PTO ISA -->
+  <line x1="400" y1="660" x2="500" y2="725" stroke="#805ad5" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <line x1="750" y1="660" x2="700" y2="725" stroke="#805ad5" stroke-width="2" marker-end="url(#arrowMain)"/>
   
-  <g filter="url(#shadow)">
-    <rect x="270" y="830" width="200" height="50" rx="8" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
-    <text x="370" y="858" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">Ascend A3 (910C)</text>
-  </g>
-  
-  <g filter="url(#shadow)">
-    <rect x="490" y="830" width="200" height="50" rx="8" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
-    <text x="590" y="858" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">Ascend A5 (950)</text>
-  </g>
-  
-  <g filter="url(#shadow)">
-    <rect x="710" y="830" width="200" height="50" rx="8" fill="url(#gradBackend)" stroke="#2d3748" stroke-width="2"/>
-    <text x="810" y="858" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">CPU (x86_64/AArch64)</text>
-  </g>
-  
-  <!-- Arrows -->
-  <!-- Frontends to PTO Text -->
-  <line x1="230" y1="320" x2="400" y2="420" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="440" y1="320" x2="450" y2="420" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="650" y1="320" x2="550" y2="420" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="860" y1="320" x2="650" y2="420" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="1070" y1="320" x2="750" y2="420" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  
-  <!-- PTO Text to tools -->
-  <line x1="520" y1="500" x2="350" y2="520" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="680" y1="500" x2="550" y2="520" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="780" y1="500" x2="700" y2="520" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  
-  <!-- Tools to outputs -->
-  <line x1="275" y1="580" x2="250" y2="640" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="475" y1="580" x2="500" y2="640" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="700" y1="580" x2="750" y2="640" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  
-  <!-- Outputs to ISA -->
-  <line x1="250" y1="700" x2="450" y2="710" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="500" y1="700" x2="550" y2="710" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="750" y1="700" x2="650" y2="710" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  
-  <!-- ISA to Backends -->
-  <line x1="500" y1="770" x2="150" y2="830" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="550" y1="770" x2="370" y2="830" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="600" y1="770" x2="590" y2="830" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
-  <line x1="650" y1="770" x2="810" y2="830" stroke="#3182ce" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <!-- Arrows: PTO ISA to Backends -->
+  <line x1="500" y1="748" x2="170" y2="810" stroke="#718096" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <line x1="550" y1="748" x2="370" y2="810" stroke="#718096" stroke-width="2" marker-end="url(#arrowMain)"/>
+  <line x1="600" y1="748" x2="570" y2="810" stroke="#718096" stroke-width="2" marker-end="url(#arrowMain)"/>
   
   <!-- Legend -->
-  <g transform="translate(900, 350)">
-    <rect x="0" y="0" width="250" height="100" rx="5" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <text x="125" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a365d" text-anchor="middle">Legend</text>
-    <line x1="15" y1="40" x2="45" y2="40" stroke="#3182ce" stroke-width="2"/>
-    <polygon points="45,37 45,43 52,40" fill="#3182ce"/>
-    <text x="60" y="44" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">Main flow</text>
-    <line x1="15" y1="60" x2="45" y2="60" stroke="#d69e2e" stroke-width="2"/>
-    <polygon points="45,57 45,63 52,60" fill="#d69e2e"/>
-    <text x="60" y="64" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">Optional path</text>
-    <line x1="15" y1="80" x2="45" y2="80" stroke="#805ad5" stroke-width="2"/>
-    <polygon points="45,77 45,83 52,80" fill="#805ad5"/>
-    <text x="60" y="84" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">Submodule</text>
+  <g transform="translate(850, 130)">
+    <rect x="0" y="0" width="200" height="90" rx="5" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <text x="100" y="18" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#1a365d" text-anchor="middle">Legend</text>
+    <line x1="15" y1="35" x2="40" y2="35" stroke="#3182ce" stroke-width="2"/>
+    <polygon points="40,32 40,38 47,35" fill="#3182ce"/>
+    <text x="55" y="39" font-family="Arial, sans-serif" font-size="9" fill="#4a5568">Main compilation</text>
+    <line x1="15" y1="55" x2="40" y2="55" stroke="#e53e3e" stroke-width="2"/>
+    <polygon points="40,52 40,58 47,55" fill="#e53e3e"/>
+    <text x="55" y="59" font-family="Arial, sans-serif" font-size="9" fill="#4a5568">Code generation</text>
+    <line x1="15" y1="75" x2="40" y2="75" stroke="#d69e2e" stroke-width="2"/>
+    <polygon points="40,72 40,78 47,75" fill="#d69e2e"/>
+    <text x="55" y="79" font-family="Arial, sans-serif" font-size="9" fill="#4a5568">Optional path</text>
   </g>
   
+  <!-- Flow Labels -->
+  <text x="720" y="395" font-family="Arial, sans-serif" font-size="9" fill="#805ad5" text-anchor="middle">compiles to</text>
+  <text x="450" y="550" font-family="Arial, sans-serif" font-size="9" fill="#e53e3e" text-anchor="middle">generates</text>
+  <text x="810" y="550" font-family="Arial, sans-serif" font-size="9" fill="#d69e2e" text-anchor="middle">encodes to</text>
+  
   <!-- Version Info -->
-  <text x="600" y="885" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">PTO Tile Library v1.0 | Generated: February 2026</text>
+  <text x="600" y="840" font-family="Arial, sans-serif" font-size="9" fill="#718096" text-anchor="middle">PTO Tile Library v1.0 | February 2026</text>
 </svg>
