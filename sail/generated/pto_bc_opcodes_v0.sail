@@ -3,7 +3,7 @@ $ifndef PTO_BC_OPCODES_V0
 $define PTO_BC_OPCODES_V0
 
 /* Variant maps (label -> variant_u8) */
-/* {"pto.section": {"cube": 0, "vector": 1}, "pto.tgemv": {"acc": 1, "base": 0, "bias": 2, "mx": 3}, "pto.tmatmul": {"acc": 1, "base": 0, "bias": 2, "mx": 3}, "pto.tmatmul.mx": {"acc": 1, "base": 0, "bias": 2}} */
+/* {"pto.section": {"cube": 0, "vector": 1}, "pto.tgemv": {"acc": 1, "base": 0, "bias": 2, "mx": 3}, "pto.tmatmul": {"acc": 1, "base": 0, "bias": 2}, "pto.tmatmul.mx": {"acc": 1, "base": 0, "bias": 2}} */
 
 val opcode_schema_builtin_gen : u16 -> option(opcode_schema)
 function opcode_schema_builtin_gen(op) =
@@ -159,7 +159,6 @@ function opcode_operands_by_variant_gen(op, variant) =
       0 => Some(3)
       1 => Some(4)
       2 => Some(4)
-      3 => Some(5)
     | _ => None()
     }
     0x1033 => match variant {

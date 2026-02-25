@@ -295,6 +295,10 @@ def normalize_op_name(name: str) -> tuple[str, str | None]:
     if name in ALIAS_OPS:
         name = ALIAS_OPS[name]
 
+    # Exact family base op (e.g. `pto.tmatmul.mx`) should stay as base.
+    if name in FAMILIES:
+        return name, None
+
     # Special-case section kind: pto.section.vector/cube
     if name.startswith("pto.section."):
         parts = name.split(".")

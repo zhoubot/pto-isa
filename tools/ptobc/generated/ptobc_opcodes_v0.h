@@ -462,7 +462,6 @@ inline std::optional<OpcodeAndVariant> lookupOpcodeAndVariantByFullName(llvm::St
     .Case("pto.tmatmul", OpcodeAndVariant{0x1032, 1, 0})
     .Case("pto.tmatmul.acc", OpcodeAndVariant{0x1032, 1, 1})
     .Case("pto.tmatmul.bias", OpcodeAndVariant{0x1032, 1, 2})
-    .Case("pto.tmatmul.mx", OpcodeAndVariant{0x1032, 1, 3})
     .Case("pto.tmatmul.mx", OpcodeAndVariant{0x1033, 1, 0})
     .Case("pto.tmatmul.mx.acc", OpcodeAndVariant{0x1033, 1, 1})
     .Case("pto.tmatmul.mx.bias", OpcodeAndVariant{0x1033, 1, 2})
@@ -493,7 +492,6 @@ inline const char *fullNameFromOpcodeVariant(uint16_t opcode, uint8_t variant) {
     case 0: return "pto.tmatmul";
     case 1: return "pto.tmatmul.acc";
     case 2: return "pto.tmatmul.bias";
-    case 3: return "pto.tmatmul.mx";
     default: return info->name;
     }
   case 0x1033:
@@ -522,7 +520,6 @@ inline std::optional<int> lookupOperandsByVariant(uint16_t opcode, uint8_t varia
     case 0: return 3;
     case 1: return 4;
     case 2: return 4;
-    case 3: return 5;
     default: return std::nullopt;
     }
   case 0x1033:
@@ -537,6 +534,6 @@ inline std::optional<int> lookupOperandsByVariant(uint16_t opcode, uint8_t varia
 }
 
 // Variant maps (label -> variant_u8), mirrored from the Sail generator:
-// {"pto.section": {"cube": 0, "vector": 1}, "pto.tgemv": {"acc": 1, "base": 0, "bias": 2, "mx": 3}, "pto.tmatmul": {"acc": 1, "base": 0, "bias": 2, "mx": 3}, "pto.tmatmul.mx": {"acc": 1, "base": 0, "bias": 2}}
+// {"pto.section": {"cube": 0, "vector": 1}, "pto.tgemv": {"acc": 1, "base": 0, "bias": 2, "mx": 3}, "pto.tmatmul": {"acc": 1, "base": 0, "bias": 2}, "pto.tmatmul.mx": {"acc": 1, "base": 0, "bias": 2}}
 
 } // namespace ptobc::v0
