@@ -18,3 +18,14 @@ If you are looking for the *ISA reference*, start from `docs/isa/README.md`.
 ## Related
 
 - PTO abstract machine model: `docs/machine/README.md`
+- ISA reference: `docs/isa/README.md`
+
+## Related Components
+
+| Component | Description | Path |
+|-----------|-------------|------|
+| **PTO ISA** | Virtual instruction set architecture | [`include/pto/`](include/pto/) |
+| **PTO-AS** | Assembly language specification | [`docs/grammar/PTO-AS.md`](docs/grammar/PTO-AS.md) |
+| **pyPTO** | Python frontend for PTO | [`docs/pyPTO/`](docs/pyPTO/) |
+| **ptoas** | PTO assembler and MLIR dialect | [`ptoas/`](ptoas/) |
+| **TileLang Ascend** | High-level framework integration | [External: tilelang-ascend](https://github.com/tile-ai/tilelang-ascend/) |
