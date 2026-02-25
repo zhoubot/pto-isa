@@ -15,6 +15,7 @@ This directory contains comprehensive documentation for the PTO ISA (Instruction
 | **PTO-BC Bytecode** | Binary encoding specification | [`docs/bytecode/`](bytecode/) |
 | **PTO-IR** | Non-ISA operations (L1/L2) | [`docs/ir/`](ir/) |
 | **Programming Guide** | Developer guides and tutorials | [`docs/coding/`](coding/) |
+| **Tutorials** | Step-by-step tutorials for common operations | [`docs/coding/tutorials/`](coding/tutorials/) |
 | **Machine Model** | Abstract machine architecture | [`docs/machine/`](machine/) |
 
 ## Quick Navigation
@@ -23,7 +24,11 @@ This directory contains comprehensive documentation for the PTO ISA (Instruction
 
 - **Getting Started**: [getting-started.md](../getting-started.md)
 - **Programming Model**: [coding/ProgrammingModel.md](coding/ProgrammingModel.md)
-- **Tutorial**: [coding/tutorial.md](coding/tutorial.md)
+- **Beginner Tutorial**: [coding/tutorial.md](coding/tutorial.md)
+- **Tutorials**: [coding/tutorials/](coding/tutorials/)
+  - [Vector Add](coding/tutorials/vec-add.md)
+  - [GEMM Operation](coding/tutorials/gemm.md)
+  - [Row Softmax](coding/tutorials/row-softmax.md)
 
 ### For ISA Reference
 
@@ -80,6 +85,90 @@ PTO supports two programming models:
 
 See: [coding/ProgrammingModel.md](coding/ProgrammingModel.md) for details.
 
+## How the PTO Flow Works
+
+The PTO toolchain transforms user kernels into executable code for Ascend NPUs or CPU simulation:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           1. User Kernel Development                                │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │      pyPTO      │  │     PTODSL      │  │  TileLang Ascend │  │  PTO-Lang   │ │
+│  │  (Python DSL)  │  │   (Python DSL)  │  │  (High-level)   │  │  (Generic)  │ │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘  └──────┬─────┘ │
+└───────────┼─────────────────────┼─────────────────────┼─────────────────────┼────────┘
+            │                     │                     │                     │
+            ▼                     ▼                     ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           2. PTO Text Format (.pto files)                          │
+│  Textual representation of tile operations: tadd, tload, tmatmul, tstore, etc.    │
+│  Example:                                                                            │
+│  ```pto                                                                              │
+│  func.func @gemm(%a: !pto.tensor<16x16xf16>, %b: !pto.tensor<16x16xf16>) {       │
+│    %tA = pto.tload %a : !pto.tensor<16x16xf16>                                    │
+│    %tB = pto.tload %b : !pto.tensor<16x16xf16>                                    │
+│    %tC = pto.tmatmul %tA, %tB : (!pto.MatTile, !pto.RightTile) -> !pto.AccTile  │
+│    pto.tstore %c, %tC : !pto.tensor<16x16xf16>                                    │
+│    return                                                                            │
+│  }                                                                                  │
+│  ```                                                                                │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼ (ptoas assembler)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           3. ptoas - PTO Assembler                                  │
+│  Compiles PTO text to AscendC C++ kernel code                                      │
+│                                                                                     │
+│  Usage: `ptoas input.pto -o output.cpp`                                           │
+│  Tool: [`PTOAS/`](../PTOAS/) (submodule)                                         │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ├──────────────────────────────────┬─────────────────────────────────────┐
+            │                                  │                                     │
+            ▼ (optional)                       ▼ (optional)                          │
+┌─────────────────────────────┐   ┌─────────────────────────────────────────────────┐
+│    4a. PTO-C++ Output     │   │    4b. ptobc - PTO Bytecode Encoder           │
+│    Generated AscendC C++   │   │    Binary encoding for PTO programs            │
+│    kernel code             │   │                                                 │
+│                             │   │    Usage: `ptobc encode input.pto -o out.ptobc│
+│                             │   │    Tool: [`tools/ptobc/`](../tools/ptobc/)  │
+└──────────────┬──────────────┘   └─────────────────────┬───────────────────────┘
+               │                                        │
+               ▼                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           5. PTO ISA (90+ Tile Operations)                          │
+│  Core instruction set: TADD, TMATMUL, TLOAD, TSTORE, TGATHER, TSCATTER, etc.      │
+│  Headers: [`include/pto/`](../include/pto/)                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           6. Backend Execution                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐  │
+│  │  Ascend A2   │  │  Ascend A3   │  │  Ascend A5   │  │        CPU          │  │
+│  │   (910B)    │  │   (910C)    │  │   (950)     │  │   (x86_64/AArch64)│  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Quick Start: Compiling a PTO Kernel
+
+```bash
+# Step 1: Write your kernel in PTO text format (example.pto)
+# Step 2: Compile with ptoas
+ptoas example.pto -o example.cpp
+
+# Step 3: Compile the generated C++ with AscendC compiler
+aicompile example.cpp -o example.o
+
+# Step 4: Link and run on NPU
+```
+
+```bash
+# Alternative: Encode to PTO-BC bytecode
+ptobc encode example.pto -o example.ptobc
+```
+
 ## PTO Ecosystem
 
 ```
@@ -99,10 +188,6 @@ User Kernels (pyPTO / PTODSL / TileLang)
          │
          ▼
     PTO ISA
-         │
-    ┌────┴────┐
-    │         │
-  NPU      CPU
 ```
 
 ## Related Documentation
@@ -121,9 +206,9 @@ User Kernels (pyPTO / PTODSL / TileLang)
 | Project | Description | Link |
 |---------|-------------|------|
 | **pyPTO** | Python-first frontend for PTO kernels | [GitCode](https://gitcode.com/cann/pypto/) |
-| **PTODSL** | Python DSL | [GitHub](https://github.com/huawei-csl/pto-dsl) |
+| **PTODSL** | Python DSL for kernel authoring | [GitHub](https://github.com/huawei-csl/pto-dsl) |
 | **PTOAS** | Assembler and MLIR dialect | [GitHub](https://github.com/zhangstevenunity/PTOAS) |
-| **TileLang Ascend** | High-level framework | [GitHub](https://github.com/tile-ai/tilelang-ascend/) |
+| **TileLang Ascend** | High-level framework for Ascend | [GitHub](https://github.com/tile-ai/tilelang-ascend/) |
 
 ---
 
