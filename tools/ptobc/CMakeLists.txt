@@ -7,8 +7,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(LLVM REQUIRED CONFIG)
 find_package(MLIR REQUIRED CONFIG)
 
+# Prefer the in-tree PTOAS install by default, but allow overriding via:
+#   -DPTOAS_ROOT=/path/to/PTOAS/install
+set(PTOAS_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../PTOAS/install" CACHE PATH "Path to PTOAS install prefix")
+if (EXISTS "${PTOAS_ROOT}/lib/cmake/PTOAS/PTOASConfig.cmake")
+  list(APPEND CMAKE_PREFIX_PATH "${PTOAS_ROOT}")
+endif()
+find_package(PTOAS CONFIG REQUIRED)
+
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
+message(STATUS "Using PTOASConfig.cmake in: ${PTOAS_DIR}")
 
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
@@ -35,7 +44,7 @@ add_executable(ptobc
 target_include_directories(ptobc PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/generated
-  ${CMAKE_SOURCE_DIR}/PTOAS/include
+  ${PTOAS_INCLUDE_DIRS}
 )
 
 # MLIR deps
@@ -43,6 +52,7 @@ llvm_map_components_to_libnames(LLVM_LIBS Support)
 
 target_link_libraries(ptobc PRIVATE
   ${LLVM_LIBS}
+  PTOAS::PTOIR
   MLIRIR
   MLIRParser
   MLIRSupport
@@ -51,6 +61,7 @@ target_link_libraries(ptobc PRIVATE
   MLIRSCFDialect
 )
 
-# NOTE: We intentionally do NOT link PTO dialect libs yet.
-# In v0 we parse/print `.pto` via MLIR with allow-unregistered enabled. The encoder stores
-# types/attrs as assembly strings (lossless) and does not require dialect registration.
+# NOTE: We only link PTOAS::PTOIR (dialect + IR). We intentionally do NOT link
+# transform libraries. The encoder still stores types/attrs as asm strings for
+# lossless round-trip, but now we can parse PTODSL-produced `.pto` without
+# requiring users to quote every pto op.
