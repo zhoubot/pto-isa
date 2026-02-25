@@ -53,6 +53,27 @@ static std::string hexFloatLiteral(mlir::FloatAttr a) {
   return os.str().str();
 }
 
+static void sortAttributesLexicographically(mlir::ModuleOp module) {
+  module.walk([&](mlir::Operation *op) {
+    auto attrs = op->getAttrs();
+    if (attrs.size() <= 1) return;
+
+    llvm::SmallVector<mlir::NamedAttribute, 8> sorted(attrs.begin(), attrs.end());
+    llvm::sort(sorted, [](const mlir::NamedAttribute &a, const mlir::NamedAttribute &b) {
+      return a.getName().getValue() < b.getName().getValue();
+    });
+
+    // Only write back if something actually changed.
+    if (llvm::equal(sorted, attrs, [](const mlir::NamedAttribute &x, const mlir::NamedAttribute &y) {
+          return x.getName() == y.getName() && x.getValue() == y.getValue();
+        })) {
+      return;
+    }
+
+    op->setAttrs(sorted);
+  });
+}
+
 static void canonicalizeScalarFloatConstants(mlir::ModuleOp module,
                                              const mlir::AsmState::LocationMap &locMap,
                                              std::vector<std::string> &lines) {
@@ -92,6 +113,9 @@ static void canonicalizeScalarFloatConstants(mlir::ModuleOp module,
 
 std::string printModuleCanonical(mlir::ModuleOp module,
                                  const CanonicalPrintOptions &opt) {
+  // Enforce canonical attribute ordering before printing.
+  sortAttributesLexicographically(module);
+
   mlir::OpPrintingFlags flags;
   flags.useLocalScope();
   flags.assumeVerified();
