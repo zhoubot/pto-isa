@@ -219,6 +219,28 @@ PTO_INST RecordEvent TSTORE_FP(GlobalData &dst, TileData &src, FpTileData &fp, W
     return {};
 }
 
+// Push/Pop: GM tile FIFO helpers (prototype).
+//
+// These are intended as explicit producer/consumer operations around GM-backed tile FIFOs
+// (e.g. Cube producer -> Vec consumer). The `token` operand is reserved for future
+// cross-core synchronization and/or FIFO slot selection; today the default backends treat
+// it as a no-op hint.
+template <typename GlobalData, typename TileData, typename... WaitEvents>
+PTO_INST RecordEvent TPUSH(GlobalData &dst, TileData &src, uint16_t token, WaitEvents &...events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TPUSH, dst, src, token);
+    return {};
+}
+
+template <typename TileData, typename GlobalData, typename... WaitEvents>
+PTO_INST RecordEvent TPOP(TileData &dst, GlobalData &src, uint16_t token, WaitEvents &...events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TPOP, dst, src, token);
+    return {};
+}
+
 template <typename TileDataDst, typename TileDataSrc0, typename TileDataSrc1, typename... WaitEvents>
 PTO_INST RecordEvent TDIV(TileDataDst &dst, TileDataSrc0 &src0, TileDataSrc1 &src1, WaitEvents &... events)
 {

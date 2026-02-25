@@ -28,13 +28,13 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Index-based gather:
 
 ```text
-%dst = tgather %src0, %indices : !pto.tile<...> -> !pto.tile<...>
+tgather %dst, %src0, %indices : (!pto.tile<...>, !pto.tile<...>)
 ```
 
 Mask-pattern gather:
 
 ```text
-%dst = tgather %src {maskPattern = #pto.mask_pattern<P0101>} : !pto.tile<...> -> !pto.tile<...>
+tgather %dst, %src {maskPattern = #pto.mask_pattern<P0101>} : (!pto.tile<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)

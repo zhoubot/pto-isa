@@ -24,7 +24,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst, %idx = tsort32 %src : !pto.tile<...> -> (!pto.tile<...>, !pto.tile<...>)
+tsort32 %dst, %src, %idx : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)

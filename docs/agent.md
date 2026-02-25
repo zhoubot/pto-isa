@@ -27,6 +27,36 @@ This document is a fast, practical orientation for agents working in this repo: 
   - NPU ST build/run: `tests/script/run_st.py`, `tests/run_st.sh`
   - Test layout overview: `tests/README.md`
 - Demos: `demos/` (CPU demos used by `tests/run_cpu.py --demo ...`)
+- Kernels: `kernels/` (self-contained kernel/operator mini-projects)
+  - Python GEMM end-to-end example (CPU + NPU): `kernels/custom/gemm_python/`
+  - A3 GEMM performance kernel + runner: `kernels/manual/a2a3/gemm_performance/`
+
+## GEMM Performance (A3, 24 cube cores)
+
+Reference kernel: `kernels/manual/a2a3/gemm_performance/gemm_performance_kernel.cpp`.
+
+Runner: `kernels/manual/a2a3/gemm_performance/run.py` (writes artifacts under `/tmp/pto-isa-gemm-performance/{npu,sim}/` by default).
+
+NPU performance (device timestamps via ACL events):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --soc-version Ascend910B1 --device 7 --warmup 20 --iters 50 --no-check
+```
+
+NPU correctness validation (numpy, without full output D2H):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --soc-version Ascend910B1 --device 7 --warmup 5 --iters 20 --check-samples 16
+```
+
+Full numpy validation (only feasible for small sizes; example that matches the kernel tiling constraints):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 7 --m 512 --k 256 --n 1536 --check-full --iters 3 --warmup 1
+```
+
+Simulator (CA model) note: sim mode builds and runs the CMake binary and can be very slow; use `--sim-timeout-sec` to bound runtime.
+Tip: `--skip-build` only works if the existing `.so` matches the requested constants; otherwise rebuild (or use a different `--out-so`).
 
 ## Run: CPU Simulator (Recommended First)
 
@@ -94,9 +124,465 @@ source $HOME/Ascend/ascend-toolkit/latest/bin/setenv.bash
 
 `tests/script/run_st.py` expects `ASCEND_HOME_PATH` to be set (usually done by `setenv.bash`).
 
+### Local Environment Notes (from a working setup)
+
+This repo is designed to “just work” if a standard Ascend Toolkit install is present. In one verified local setup:
+
+- `ASCEND_HOME_PATH=/home/<user>/Ascend/ascend-toolkit/latest` is set (and `tests/script/run_st.py` also auto-falls back to `~/Ascend/ascend-toolkit/latest` if unset).
+- Common related env vars are present: `ASCEND_TOOLKIT_HOME`, `ASCEND_OPP_PATH`, `ASCEND_AICPU_PATH`, `ASCEND_HOME_PATH`.
+- Toolkit layout may provide `tools/simulator` as a symlink to an arch-specific directory (e.g. `aarch64-linux/simulator`); `run_st.py` searches multiple candidate paths to find `simulator/<SOC>/lib{,64}`.
+- `sim` runs default to *not* prepending runtime stub libs because some toolkit builds can crash during static init when stubs are forced.
+  - Opt-in via `PTO_USE_RUNTIME_STUB=1` if you need stubs (see `tests/script/run_st.py:set_env_variables`).
+
 ## Common Pitfalls (And How This Repo Handles Them)
 
 - **GTest ABI mismatch on Linux**: some systems have `libgtest*.a` built with `_GLIBCXX_USE_CXX11_ABI=0`.
   - CPU and NPU ST CMake projects support `PTO_GLIBCXX_USE_CXX11_ABI=auto|0|1` and auto-detect when possible.
 - **`sim` open-files limit**: simulator runs may require a higher `ulimit -n` (see `docs/getting-started.md` and `build.sh`).
 
+## Where Simulator Logs/Dumps Go (and how to keep them quiet)
+
+`tests/script/run_st.py` behavior that’s useful when you want less noise:
+
+- It always rebuilds into a fresh `tests/npu/<soc>/src/st/build/` (the `build/` dir is deleted each run), so old dumps are cleared automatically.
+- For `-r sim` **single-case** runs (when `-g <GTEST_FILTER>` is provided), it **avoids generating heavy simulator dumps by default**.
+  - Set `PTO_ST_LOGS=1` to force `CAMODEL_LOG_PATH=build/<GTEST_FILTER>/` and emit simulator artifacts (e.g. `*.instr_log.dump`, `*.ccu.fixp_issque.dump`).
+  - If a single-case run fails, the script automatically re-runs once with `CAMODEL_LOG_PATH` enabled to collect logs for debugging.
+- When logs are enabled (explicitly or via auto-retry), the script prints a short summary of `SET_FLAG` / `WAIT_FLAG` lines found in `*.instr_log.dump` (see `tests/script/run_st.py:_summarize_set_wait_flags`).
+
+## PTO-AS + `ptoas` Tooling (Assembly → CCE → BIN)
+
+This repo also contains a prototype PTO assembler toolchain under `ptoas/`.
+
+### PTO-AS Syntax Updates (DPS + SSA-Style Sugar)
+
+PTO-AS is primarily a destination-passing style (DPS) format, but the assembler frontends accept a few MLIR-like
+SSA-style conveniences.
+
+Legacy SSA-style result binding (older docs/examples):
+
+```text
+%dst = tadd %src0, %src1 : (...) -> ...
+```
+
+Canonical DPS form (still accepted):
+
+```text
+tadd %dst, %src0, %src1 : (...)
+```
+
+New SSA-style *destination sugar* (recommended for readability; still DPS under the hood):
+
+```text
+%dst = pto.tadd %src0, %src1 : (...)
+%t0  = pto.tload %x[%r0, %c0]
+pto.tstore %y[%r0, %c0], %t0
+```
+
+Declaration updates:
+
+- Tensors can be introduced via `pto.make_tensor_view` from implicit `%argN` kernel args (instead of `.arg %x : !pto.tensor<...>`).
+- Tiles can be introduced via `pto.alloc_tile` (optionally binding an address), replacing the `.arg tile + tassign` pattern.
+
+Key type spelling changes:
+
+- Global memory type renamed from `!pto.gtensor<...>` to `!pto.tensor<...>`.
+- The element field is renamed from `element=...` to `dtype=...`.
+- Canonical spellings live in `docs/grammar/PTO-AS.md`.
+
+Relevant files:
+
+- Spec/grammar: `docs/grammar/PTO-AS.md`, `docs/grammar/PTO-AS.bnf`
+- ISA pages: `docs/isa/*.md` (examples updated to DPS + `!pto.tensor` + `dtype`)
+- TableGen prototype: `ptoas/PTOAS.td` (spec-only dialect surface)
+  - Auto-generated op stubs: `ptoas/PTOASOps.td` (regen: `python3 ptoas/tools/gen_ptoas_ops_td.py`)
+
+### Python Prototype (`*.pto` → `*.bin`) (No MLIR required)
+
+For quick experiments without MLIR, there is a Python pipeline:
+
+- Script: `ptoas/tools/ptoas_build.py`
+- Example input: `ptoas/examples/add16.pto`
+- Output: emits `*_kernel.cpp`, compiles with `bisheng`, and extracts `__aicore_rel_binary` into `*.bin`.
+
+Run:
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/ptoas_build.py ptoas/examples/add16.pto --arch dav-c220-vec
+```
+
+Notes:
+
+- The Python tool accepts the newer `!pto.tensor<dtype=...>` and also tolerates older `!pto.gtensor<element=...>` spellings.
+
+### MLIR-based `ptoas` (Buildable/Distributable Binary)
+
+The in-repo MLIR `ptoas` prototype (`ptoas/mlir/`) has been removed.
+
+The supported `ptoas` implementation now lives in `~/llvm-project` (MLIR PTO dialect),
+and this repo vendors a known-good binary at `bin/ptoas`.
+
+To keep the repo checkout size manageable, `ptoas` may also be provided as a tarball
+(`bin/ptoas.tar.xz` or `bin/ptoas.tar.gz`). If `bin/ptoas` is missing, unpack it with:
+
+```bash
+bash scripts/ptoas_bin.sh unpack
+```
+
+If your repo hosting limits file sizes, the tarball can be split into <10MB chunks:
+
+```bash
+bash scripts/ptoas_bin.sh split
+```
+
+In that layout, the repo contains files like `bin/ptoas.tar.xz.part000`, and `unpack`
+will automatically `join` them before extracting.
+
+To (re)create the tarball from an existing `bin/ptoas`:
+
+```bash
+bash scripts/ptoas_bin.sh pack
+```
+
+Build/update the packaged binary:
+
+```bash
+ninja -C ~/llvm-project/build-mlir ptoas
+cp ~/llvm-project/build-mlir/bin/ptoas ./bin/ptoas
+```
+
+CLI (LLVM `ptoas`):
+
+```bash
+./bin/ptoas input.mlir -o out.cpp [--enable-insert-sync]
+```
+
+Notes:
+
+- Legacy flags like `--target`, `--arch`, `--emit-bin`, `--repo-root`, `--ascend-home`, `--assign-tile-addrs`,
+  and `--insert-events` are not used by the packaged LLVM `ptoas` flow.
+- CPU simulation compiles the same generated kernel C++ with `-D__CPU_SIM` (CPU stubs) instead of generating a
+  separate “cpu target” C++ file.
+
+#### Event Insertion + `set_flag / wait_flag` (A2/A3 contract)
+
+On A2/A3, inter-pipeline sync is lowered to `set_flag(srcPipe, dstPipe, eventId)` / `wait_flag(srcPipe, dstPipe, eventId)`.
+The important compiler-facing rules (simplified) are:
+
+- `set_flag(src,dst,id)` publishes completion of **all prior `src`-pipe ops** (program-order scope) to `dst`.
+- `wait_flag(src,dst,id)` blocks `dst` until the matching token is available, then acts like an acquire for the published `src` effects.
+- Token balance must hold per `(src,dst,id)`: completed waits must never exceed completed sets.
+- Buffer reuse hazards require an explicit reverse dependency `(dst→src)`; otherwise you can get WAR/WAW bugs.
+- The 8 `eventId` slots (0..7) are a bounded resource; avoid reusing an id before the previous token is consumed.
+
+Recent LLVM PTO sync insertion behavior (enabled via `--enable-insert-sync`) to keep event insertion usable in loops:
+
+- Avoids emitting multiple `wait_flag` against the same producer token (prevents deadlocks on token-consuming hardware).
+- Adds loop-carried reverse-dependency “handshakes” around matmul pipelines to protect reuse:
+  - `TMATMUL (PIPE_M) -> TMOV_M2L (PIPE_MTE1)` (L0A/L0B reuse)
+  - `TMOV_M2L (PIPE_MTE1) -> TLOAD (PIPE_MTE2)` (L1/global reuse)
+  - Implementation: `~/llvm-project/mlir/lib/Dialect/PTO/Transforms/PTOInsertSync.cpp`.
+
+#### Recent emitter note: indexed `tload/tstore` tile views
+
+If PTO-AS uses indexed tile accesses like `pto.tload %x[%r, %c]`, the MLIR CCE/CPU emitters must materialize a
+tile-shaped `GlobalTensor` view (rows/cols) to keep A2/A3 layout conversions (e.g., ND2NZ / DN2ZN) correct.
+This is handled in the LLVM PTO lowering in `~/llvm-project` (PTO → EmitC / C++ emission).
+
+#### PTO ISA coverage note (prototype)
+
+`ptoas` CCE/CPU emission covers a core subset explicitly (`tload/tstore/tmov/tadd/tmatmul/...`).
+For most remaining `pto.t*` ops, the emitter falls back to emitting the corresponding uppercase PTO macro
+(e.g. `trowmax -> TROWMAX`, `tmuls -> TMULS`) so Python-authored kernels can still compile end-to-end.
+
+#### End-to-end Test (Emit `.cpp`)
+
+Use the minimal test program:
+
+- `ptoas/examples/add16_min.pto`
+
+Run:
+
+```bash
+./bin/ptoas ptoas/examples/add16_min.pto \
+  -o /tmp/add16_min.cpp \
+  --enable-insert-sync
+```
+
+This produces:
+
+- `/tmp/add16_min.cpp` (generated kernel source)
+
+### Run On Real NPU (CPU Reference + `acl`)
+
+LLVM `ptoas` emits kernel C++ only. A reliable way to validate kernels on real hardware is to build a **fatobj shared
+library** with `bisheng` and launch the kernel via `<<<>>>` (same pattern as `tests/npu/*/src/st`).
+
+End-to-end script (compiles the same `*.pto` to **CPU** and **NPU**, runs both, and compares outputs):
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/run_e2e_npu.py --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+Inputs used by the script:
+
+- `ptoas/examples/add16_e2e.pto` (Vec add)
+- `ptoas/examples/gemm16_e2e.pto` (Cube GEMM: f16xf16->f32)
+
+You can also run the same script on the Ascend simulator:
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/run_e2e_npu.py --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+### Run On CPU Simulator (Emit C++ + `ctypes`)
+
+CPU target emits a shared-library-friendly kernel entry:
+
+- `extern "C" void pto_kernel_cpu(void* arg0, void* arg1, void* arg2)`
+
+End-to-end script (emits `*.cpp`, builds `*.so` with a host C++ compiler, runs on CPU):
+
+```bash
+python3 ptoas/tools/run_e2e_cpu.py
+```
+
+Notes:
+
+- CPU GEMM uses a CPU-specific tile layout that matches `include/pto/cpu/TMatmul.hpp`:
+  - Example: `ptoas/examples/gemm16_cpu.pto`
+
+### Python Frontend (“Binding”) For PTO-AS (Cross-Platform)
+
+There is also a small Python “binding” layer that can **generate PTO-AS** and drive the full toolchain:
+
+- Python packages live under `binding/python`. If you want to import them directly, set:
+  - `export PYTHONPATH="$PWD/binding/python:${PYTHONPATH:-}"`
+- Low-level PTO-AS builder (generates `*.pto` text): `binding/python/ptoas/python/pto_asm.py`
+- AST-based frontend (Python -> PTO-AS, supports `for`/`if` + tensor arg metadata): `binding/python/ptoas/python/ast_frontend.py`
+- Simple Python binding (compile `foo.py` -> `foo.pto`): `binding/python/ptoas/python/binding.py`
+- DSL stubs for IDE/type checking (not executable): `binding/python/ptoas/python/dsl.py`
+- Shared compile/run helpers: `binding/python/ptoas/python/pipeline.py`
+- Host C++ launcher generator (emits `host.cpp` that calls `ptoas_launch` from a fatobj `.so`): `binding/python/ptoas/python/host_codegen.py`
+- End-to-end runner (Python frontend -> `*.pto` -> `ptoas` -> CPU+NPU run -> compare):
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/run_python_frontend_e2e.py --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+Simulator variant:
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 ptoas/tools/run_python_frontend_e2e.py --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+Minimal `foo.py` -> `foo.pto` (includes a small host metadata block at the top of the file):
+
+```bash
+python3 ptoas/tools/python_to_pto.py ptoas/examples/python_kernels.py --kernel add16 --out /tmp/add16.pto
+```
+
+Recommended kernel authoring style (object DSL):
+
+- Import: `from pto_as import PTO, scalar`
+- Declare args/tiles without repeating names:
+  - `q = pto.tensor(dtype="f32", shape=(S, D), role="in")`
+  - `o = pto.tensor(dtype="f32", shape=(S, D), role="out")`
+  - `q_tile = pto.vec(dtype="f32", shape=(S, D))` (shorthand for `vec_tile`)
+- Use “grammar candy” instruction aliases:
+  - `q_tile = pto.load(q)` (defaults to `[0,0]`)
+  - `pto.store(o, out_acc)` (defaults to `[0,0]`)
+- Compile-time constants via `pto.const(...)` support basic arithmetic and `sqrt(...)` folding (AST-only).
+- Python variables can alias PTO-AS names, but you usually don't need explicit string names.
+
+Example: `ptoas/examples/pypto_flash_attention.py`
+
+The metadata block looks like:
+
+- `// PTO_HOST_SPEC_BEGIN v1`
+- JSON payload (arg dtypes/shapes/roles, seed, blockDim)
+- `// PTO_HOST_SPEC_END`
+
+There is also a file-driven flow that takes a Python kernel file and emits:
+
+- `foo.pto`
+- `foo.cpu.cpp` (CPU kernel source)
+- `foo.npu.cpp` (NPU kernel source)
+- `host.cpp` (optional ACL launcher template)
+
+Example (uses `ptoas/examples/python_kernels.py`):
+
+```bash
+python3 ptoas/tools/python_kernel_flow.py ptoas/examples/python_kernels.py --kernel add16 --outdir /tmp/ptoas_py_kernel
+python3 ptoas/tools/python_kernel_flow.py ptoas/examples/python_kernels.py --kernel gemm16 --arch dav-c220-cube --build-so --ascend-home "$ASCEND_HOME_PATH"
+```
+
+Recommended end-to-end runner (CPU ref + NPU run + timeout + optional simulator fallback):
+
+```bash
+python3 ptoas/tools/python_kernel_e2e.py kernels/python/add16.py --kernel add16 --arch dav-c220-vec --run-mode npu --timeout-sec 120
+python3 ptoas/tools/python_kernel_e2e.py kernels/python/gemm16.py --kernel gemm16 --arch dav-c220-cube --run-mode npu --timeout-sec 120
+```
+
+### Run On NPU Simulator (`sim` / A3) (Python Kernel → Compare Against CPU)
+
+This path runs the kernel via Ascend simulator libraries (same SoC mapping as `tests/script/run_st.py`).
+
+If you see `LLVM ERROR: make_tensor_view expects 1 operand (dest)`, your `ptoas` binary is out of date.
+Rebuild it with:
+
+```bash
+ninja -C ~/llvm-project/build-mlir ptoas
+cp ~/llvm-project/build-mlir/bin/ptoas ./bin/ptoas
+```
+
+Prereqs:
+
+- Install and source Ascend toolkit env (sets `ASCEND_HOME_PATH`):
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+source "$ASCEND_HOME_PATH/bin/setenv.bash"
+```
+
+Run (Vec add, A3 simulator):
+
+```bash
+python3 ptoas/tools/run_python_kernel_sim_e2e.py \
+  --py ptoas/examples/python_kernels.py --kernel add16 \
+  --soc a3 --arch dav-c220-vec \
+  --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+Run (Cube GEMM, A3 simulator):
+
+```bash
+python3 ptoas/tools/run_python_kernel_sim_e2e.py \
+  --py ptoas/examples/python_kernels.py --kernel gemm16 \
+  --soc a3 --arch dav-c220-cube \
+  --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+Outputs go to `/tmp/ptoas_py_kernel_sim` by default and include:
+
+- `*.pto` (PTO-AS)
+- `*.cpu.cpp` (CPU source)
+- `*.cpp` (NPU CCE source)
+- `*.bin` (legacy artifact; LLVM `ptoas` does not emit a real `.bin`)
+- `lib*_sim.so` (fatobj .so used for launch)
+- `host.cpp` (standalone C++ launcher template)
+
+### Kernels: `kernels/python/gemm_big` (sim validated)
+
+`kernels/python/gemm_big` is a larger Python-authored GEMM that relies on `--enable-insert-sync` (no manual event ops).
+
+Important layout note:
+
+- The kernel treats `B` as a `DN` view. Host code must pass `b_dev = np.ascontiguousarray(b.T)` (see `kernels/python/gemm_big/run.py`).
+
+Simulator run (example):
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+python3 kernels/python/gemm_big/run.py \
+  --run-mode sim --soc a3 \
+  --m 256 --n 256 --k 256 \
+  --bm 128 --bn 128 --bk 64 \
+  --block-dim 4
+```
+
+### Python ST Runner (CPU + NPU)
+
+Simple Python ST runner for the `ptoas` toolchain:
+
+```bash
+python3 ptoas/tools/run_py_st.py --list
+python3 ptoas/tools/run_py_st.py --case add16 --target both --ascend-home "$ASCEND_HOME_PATH" --device 0
+python3 ptoas/tools/run_py_st.py --case gemm16 --target both --ascend-home "$ASCEND_HOME_PATH" --device 0
+```
+
+Simulator variants:
+
+```bash
+python3 ptoas/tools/run_py_st.py --case add16 --target npu --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0
+python3 ptoas/tools/run_py_st.py --case gemm16 --target npu --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0
+```
+
+### Kernels: Python GEMM Example (CPU + NPU)
+
+There is also a kernel-style example under `kernels/` that uses Python to generate PTO-AS and runs the full toolchain:
+
+```bash
+python3 kernels/custom/gemm_python/run.py --target cpu
+python3 kernels/custom/gemm_python/run.py --target npu --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+python3 kernels/custom/gemm_python/run.py --target npu --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+python3 kernels/custom/gemm_python/run.py --target both --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+There are also Python-first examples that always emit:
+
+- `*.pto` (PTO-AS)
+- `foo.cpp` (CCE source, compiled by `bisheng -xcce` on real NPU env)
+- `host.cpp` (a standalone C++ launcher for the fatobj `.so`)
+
+```bash
+python3 kernels/python/fa/run.py --target cpu
+python3 kernels/python/gemm/run.py --target cpu
+
+# Simulator + compare against CPU
+python3 kernels/python/fa/run.py --target npu --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+python3 kernels/python/gemm/run.py --target npu --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --device 0 --block-dim 1
+```
+
+### Kernels: Python Examples Regression (CPU + NPU)
+
+End-to-end examples written as Python kernels under `kernels/python/*.py` (flat layout, compiled by the AST frontend)
+can be run as a small regression suite. This folder also carries simplified, runnable ports of the upstream
+`~/github/pto-isa/examples/*.py` filenames (e.g. `kernels/python/pto_isa_sinh.py`, `kernels/python/pto_fused_softmax.py`).
+
+```bash
+export ASCEND_HOME_PATH=$HOME/Ascend/ascend-toolkit/latest
+
+# Simulator (A3)
+python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH"
+
+# Real NPU
+python3 kernels/python/run_regression.py --run-mode npu --ascend-home "$ASCEND_HOME_PATH"
+
+# Add per-case timeout (kills hung NPU runs) and retry transient failures:
+python3 kernels/python/run_regression.py --run-mode npu --timeout-sec 180 --retries 2 --ascend-home "$ASCEND_HOME_PATH"
+
+# If a case times out on NPU, rerun it under simulator to collect logs:
+python3 kernels/python/run_regression.py --run-mode npu --timeout-sec 180 --sim-on-timeout --ascend-home "$ASCEND_HOME_PATH"
+
+# Run a subset
+python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --cases add16,softmax16,gemm16
+
+# Show compiler output (otherwise build logs are hidden for tidy progress)
+python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "$ASCEND_HOME_PATH" --verbose-build
+```
+
+Notes:
+
+- `binding/python/ptoas/python/ast_frontend.py` ignores Python docstrings / bare string expression statements inside the kernel body.
+  Use `# ...` comments or `pto.comment("...")` for remarks you want to preserve in the generated PTO-AS.
+
+### Control Flow In PTO-AS (Prototype)
+
+PTO-AS frontend also supports a small subset of MLIR-like SCF control flow (textual blocks):
+
+```text
+scf.for %i = 0 to 2 step 1 {
+  %cond = pto.icmp_lt %i, 1 : i1
+  scf.if %cond {
+    ...
+  } else {
+    ...
+  }
+}
+```

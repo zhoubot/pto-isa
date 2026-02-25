@@ -220,6 +220,45 @@ If the run succeeds, the output prints:
 test success
 ```
 
+## Python Runner (sim + NPU, Performance-Oriented)
+
+This directory also provides a Python runner that:
+
+- Builds `gemm_performance_kernel.cpp` into a callable `libgemm_performance.so` (fatobj).
+- Runs it on real NPU via `acl` Python bindings, and runs sim mode via the CA model binary build.
+- Reports average kernel time and a rough TFLOPS estimate.
+- Optionally performs a lightweight correctness check (random output samples).
+
+Run:
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 0 --warmup 5 --iters 20 --no-check
+```
+
+Simulator mode:
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode sim --soc-version Ascend910B1
+```
+
+To enable the sample-based check (numpy reference; reads only sampled float32s from device):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 0 --warmup 5 --iters 20 --check-samples 16
+```
+
+Full numpy validation (only feasible for small `m/k/n`):
+
+```bash
+python3 kernels/manual/a2a3/gemm_performance/run.py --run-mode npu --device 0 --m 512 --k 256 --n 1536 --check-full --iters 3 --warmup 1
+```
+
+Notes:
+
+- By default, the runner writes build artifacts under `/tmp/pto-isa-gemm-performance/{npu,sim}/`. Override with `--work-dir`.
+- NPU throughput can vary slightly across devices; try `--device 7` to reproduce ~300 TFLOPS on this machine.
+- If you pass `--skip-build`, the runner checks that the existing `.so` matches the requested `m/k/n` and other constants; otherwise it errors and asks you to rebuild.
+
 ## Changelog
 
 | Date       | Change |

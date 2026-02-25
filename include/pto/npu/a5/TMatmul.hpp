@@ -291,14 +291,14 @@ template <AccPhase Phase = AccPhase::Unspecified, typename TileRes, typename Til
 PTO_INTERNAL void TMATMUL_MX_IMPL(TileRes &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix,
                                   TileRightScale &bScaleMatrix, TileBias &biasData)
 {
-    CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
-    static_assert(std::is_same_v<typename TileBias::DType, float>, "TMatmulMX:No supported bias data type.");
-    static_assert((TileBias::Loc == TileType::Bias) && (TileBias::Rows == 1), "TMatmulMX:TileBias must be single row.");
+    using AType = typename TileLeft::DType;
+    using BType = typename TileRight::DType;
+    constexpr bool isMx = isSupportedFp4Combo<AType, BType> || isSupportedFp8Combo<AType, BType>;
 
-    uint16_t m = aMatrix.GetValidRow();
-    uint16_t k = aMatrix.GetValidCol();
-    uint16_t n = bMatrix.GetValidCol();
-    CheckDynamicMmad(m, k, n);
+    if constexpr (isMx) {
+        CheckMadMxValid<TileRes, TileLeft, TileLeftScale, TileRight, TileRightScale>();
+        static_assert(std::is_same_v<typename TileBias::DType, float>, "TMatmulMX:No supported bias data type.");
+        static_assert((TileBias::Loc == TileType::Bias) && (TileBias::Rows == 1), "TMatmulMX:TileBias must be single row.");
 
     TMatmulMxBias<Phase, TileRes, TileLeft, TileRight, true, false, true>(cMatrix.data(), aMatrix.data(),
                                                                           bMatrix.data(), biasData.data(), m, k, n);

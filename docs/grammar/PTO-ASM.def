@@ -1,0 +1,104 @@
+分类	PTO	IR-level1	IR-level2
+SSA格式，编译器做地址分配和同步，不支持alloc_tile及同步原语，只支持单输出	DPS格式，用户指定内存的复用，IR提供alloc_tile，提供同步原语/op
+View	make_tensor_view	%dst = pto.make_tensor_view %ptr, shape = [sh1,sh2,sh3,sh4,sh5] strides = [st1,st2,st3,st4,st5] : !pto.tensor_view<sh1xsh2xsh3xsh4xsh5xdtype>
+partition_view	%dst = pto.partition_view %src, offsets = [of1,of2,of3,of4,of5], sizes = [sh1,sh2,sh3,sh4,sh5] : !pto.tensor_view<sh1xsh2xsh3xsh4xsh5xdtype> -> !pto.partition_tensor_view<sh1xsh2xsh3xsh4xsh5xdtype>
+alloc_tile(静态参数)	%dst = pto.alloc_tile : !pto.tile_buf<loc, dtype, rows, cols, v_row, v_col, blayout, slayou, fractal, pad>
+alloc_tile(动态参数)	%dst = pto.alloc_tile valid_row = %vr valid_col = %vc : !pto.tile_buf<loc, dtype, rows, cols, v_row=?, v_col=?, blayout, slayou, fractal, pad>
+获取核参数	get_block_idx	%idx  = pto.get_block_idx	%idx  = pto.get_block_idx
+get_subblock_idx	%idx  = pto.get_subblock_idx	%idx  = pto.get_subblock_idx
+get_block_num	%num  = pto.get_block_num	%num  = pto.get_block_num
+get_subblock_num	%num  = pto.get_subblock_num	%num  = pto.get_subblock_num
+内存	TLOAD	"%dst = pto.tload %mem : !pto.partition_tensor_view<MxNxdtype> -> 
+!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>"	pto.tload ins(%mem : !pto.partition_tensor_view<MxNxdtype>) outs(%dst : !pto.tile_buf<...>)
+TSTORE	"pto.tstore %src, %mem : (!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>, 
+!pto.partition_tensor_view<MxNxdtype>) -> ()"	pto.tstore ins(%src : !pto.tile_buf<...>) outs(%mem : !pto.partition_tensor_view<MxNxdtype>)
+TSTORE_FP	"pto.tstore.fp %src, %fp, %mem : (!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>, !pto.tile<...>, 
+!pto.partition_tensor_view<MxNxdtype>) -> ()"	pto.tstore_fp ins(%src, %fp : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%mem : !pto.partition_tensor_view<MxNxdtype>)
+MGATHER	"%dst = pto.mgather %mem, %idx : (!pto.partition_tensor_view<MxNxdtype>, pto.tile<...>) 
+-> !pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>"	pto.mgather ins(%mem, %idx : !pto.partition_tensor_view<MxNxdtype>, !pto.tile_buf<MxNxdtype) outs(%dst : !pto.tile_buf<...>)
+MSCATTER	"pto.mscatter %src, %idx, %mem : (!pto.tile<loc, dtype, rows, cols, blayout, slayou, fractal, pad>, !pto.tile<...>, 
+!pto.partition_tensor_view<MxNxdtype>) -> ()"	pto.mscatter ins(%src, %idx : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%mem : !pto.partition_tensor_view<MxNxdtype>)
+同步	RECORD_EVENT	pto.record_event[src_op, dst_op, eventID]	支持的op：TLOAD， TSTORE_ACC，TSTORE_VEC，TMOV_M2L，TMOV_M2S，TMOV_M2B，TMOV_M2V，TMOV_V2M，TMATMUL，TVEC
+WAIT_EVENT	pto.wait_event[src_op, dst_op, eventID]	支持的op：TLOAD， TSTORE_ACC，TSTORE_VEC，TMOV_M2L，TMOV_M2S，TMOV_M2B，TMOV_M2V，TMOV_V2M，TMATMUL，TVEC
+Tile x Tile	TADD	%dst = pto.tadd %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tadd ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSUB	%dst = pto.tsub %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tsub ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TMUL	%dst = pto.tmul %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tmul ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TDIV	%dst = pto.tdiv %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tdiv ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TREM	%dst = pto.trem %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.trem ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TAND	%dst = pto.tand %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tand ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TOR	%dst = pto.tor %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tor ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TXOR	%dst = pto.txor %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.txor ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSHL	%dst = pto.tshl %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tshl ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSHR	%dst = pto.tshr %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tshr ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TMAX	%dst = pto.tmax %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tmax ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TMIN	%dst = pto.tmin %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tmin ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TPRELU	%dst = pto.tprelu %src0, %src1 : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tprelu ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TCMP	%dst = pto.tcmp %src0, %src1 {cmpMode = #pto.cmp<xx>} : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tcmp ins(%src0, %src1  {cmpMode = #pto.cmp<xx>} : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TABS	%dst = pto.tabs %src : !pto.tile<...> -> !pto.tile<...>	pto.tabs ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TEXP	%dst = pto.texp %src : !pto.tile<...> -> !pto.tile<...>	pto.texp ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TLOG	%dst = pto.tlog %src : !pto.tile<...> -> !pto.tile<...>	pto.tlog ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSQRT	%dst = pto.tsqrt %src : !pto.tile<...> -> !pto.tile<...>	pto.tsqrt ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TRSQRT	%dst = pto.trsqrt %src : !pto.tile<...> -> !pto.tile<...>	pto.trsqrt ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TRECIP	%dst = pto.trecip %src : !pto.tile<...> -> !pto.tile<...>	pto.trecip ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TNEG	%dst = pto.tneg %src : !pto.tile<...> -> !pto.tile<...>	pto.tneg ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TNOT	%dst = pto.tnot %src : !pto.tile<...> -> !pto.tile<...>	pto.tnot ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TRELU	%dst = pto.trelu %src : !pto.tile<...> -> !pto.tile<...>	pto.trelu ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TCVT	%dst = pto.tcvt %src {rmode = #pto.round_mode<CAST_RINT>} : !pto.tile<...> -> !pto.tile<...>	pto.tcvt ins(%src {rmode = #pto.round_mode<CAST_RINT>} : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TADDC	%dst = pto.taddc %src0, %src1, %src2 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.taddc ins(%src0, %src1, %src2 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSUBC	%dst = pto.tsubc %src0, %src1, %src2 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tsubc ins(%src0, %src1, %src2 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSEL	%dst = pto.tsel %mask, %src0, %src1 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tsel ins(%mask, %src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+Tile × 标量	TADDS	%dst = pto.tadds %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tadds ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TSUBS	%dst = pto.tsubs %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tsubs ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TMULS	%dst = pto.tmuls %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tmuls ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TDIVS	"%dst = pto.tdivs %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+%dst = pto.tdivs %scalar, %src : (dtype, !pto.tile<...>) -> !pto.tile<...>"	"pto.tdivs ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+pto.tdivs ins(%scalar, %src : dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)"
+TREMS	%dst = pto.trems %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.trems ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TANDS	%dst = pto.tands %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tands ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TORS	%dst = pto.tors %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tors ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TXORS	%dst = pto.txors %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.txors ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TSHLS	%dst = pto.tshls %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tshls ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TSHRS	%dst = pto.tshrs %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tshrs ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TMAXS	%dst = pto.tmaxs %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tmaxs ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TMINS	%dst = pto.tmins %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tmins ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TLRELU	%dst = pto.tlrelu %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tlrelu ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TCMPS	%dst = pto.tcmps %src, %scalar {cmpMode = #pto.cmp<xx>} : (!pto.tile<...>, dtype) -> !pto.tile<...>	pto.tcmps ins(%src, %scalar {cmpMode = #pto.cmp<xx>} : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TADDSC	%dst = pto.taddsc %src0, %scalar, %src1 : (!pto.tile<...>, dtype, !pto.tile<...>) -> !pto.tile<...>	pto.taddsc ins(%src0, %scalar, %src1 : !pto.tile_buf<...>, dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSUBSC	%dst = pto.tsubsc %src0, %scalar, %src1 : (!pto.tile<...>, dtype, !pto.tile<...>) -> !pto.tile<...>	pto.tsubsc ins(%src0, %scalar, %src1 : !pto.tile_buf<...>, dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSELS	%dst = pto.tsels %src0, %src1, %scalar : (!pto.tile<...>, dtype, !pto.tile<...>) -> !pto.tile<...>	pto.tsels ins(%src0, %src1, %scalar : !pto.tile_buf<...>, dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TEXPANDS	%dst = pto.texpands %scalar : dtype -> !pto.tile<...>	pto.texpands ins(%scalar : dtype) outs(%dst : !pto.tile_buf<...>)
+轴向归约/展开	TROWSUM	%dst = pto.trowsum %src : !pto.tile<...> -> !pto.tile<...>	pto.trowsum ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TROWMAX	%dst = pto.trowmax %src : !pto.tile<...> -> !pto.tile<...>	pto.trowmax ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TROWMIN	%dst = pto.trowmin %src : !pto.tile<...> -> !pto.tile<...>	pto.trowmin ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TROWEXPAND	%dst = pto.trowexpand %src : !pto.tile<Mx1xdtype> -> !pto.tile<...>	pto.trowexpand ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TCOLSUM	%dst = pto.tcolsum %src : !pto.tile<...> -> !pto.tile<...>	pto.tcolsum ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TCOLMAX	%dst = pto.tcolmax %src : !pto.tile<...> -> !pto.tile<...>	pto.tcolmax ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TCOLMIN	%dst = pto.tcolmin %src : !pto.tile<...> -> !pto.tile<...>	pto.tcolmin ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TCOLEXPAND	%dst = pto.tcolexpand %src : !pto.tile<1xNxdtype> -> !pto.tile<...>	pto.tcolexpand ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TROWEXPANDDIV	%dst = pto.tcolexpanddiv %src0, %src1 : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>	pto.tcolexpanddiv ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TROWEXPANDMUL	%dst = pto.tcolexpandmul %src0, %src1 : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>	pto.tcolexpandmul ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TROWEXPANDSUB	%dst = pto.tcolexpandsub %src0, %src1 : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>	pto.tcolexpandsub ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+Padding	TFILLPAD	%dst = pto.tfillpad %src : !pto.tile<...> -> !pto.tile<...>	pto.tfillpad ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+矩阵乘	TMATMUL	%acc = pto.tmatmul %a, %b : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tmatmul ins(%a, %b : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%acc : !pto.tile_buf<...>)
+TMATMUL_MX	"%acc = pto.tmatmul.mx %a, %a_scale, %b, %b_scale : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>) 
+-> !pto.tile<...>"	pto.tmatmul.mx ins(%a, %a_scale, %b, %b_scale : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%acc1 : !pto.tile_buf<...>)
+TMATMUL_ACC	%acc1 = pto.tmatmul.acc %a, %b, %acc0 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tmatmul.acc ins(%a, %b, %acc0 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%acc1 : !pto.tile_buf<...>)
+TMATMUL_BIAS	%acc = pto.tmatmul.bias %a, %b, %bias : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>	pto.tmatmul.bias ins(%a, %b, %bias : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%acc : !pto.tile_buf<...>)
+数据搬运/布局	TMOV	%dst = pto.tmov.s2d %src  : !pto.tile<...> -> !pto.tile<...>	pto.tmov.s2d ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TMOV_FP	%dst = pto.tmov.fp %src, %fp : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>	pto.tmov.fp ins(%src, %fp : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TTRANS	%dst = pto.ttrans %src : !pto.tile<...> -> !pto.tile<...>	pto.ttrans ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TEXTRACT	%dst = pto.textract %src, %idxrow, %idxcol : (!pto.tile<...>, <int32>) -> !pto.tile<...>	pto.textract ins(%src, %idxrow, %idxcol : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+TRESHAPE	%dst = pto.treshape %src : !pto.tile<...> -> !pto.tile<...>	pto.treshape ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TASSIGN	pto.tassign %tile, %addr : !pto.tile<...>, dtype	pto.tassign ins(%src : !pto.tile_buf<...>, dtype)
+复杂指令	TCI	%dst = pto.tci %scalar {descending = false} : dtype -> !pto.tile<...>	pto.tci ins(%scalar : dtype) outs(%dst : !pto.tile_buf<...>)
+TGATHER	"%dst = pto.tgather %src, %indices : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+%dst = pto.tgather %src {maskPattern = #pto.mask_pattern<P0101>} : !pto.tile<...> -> !pto.tile<...>"	"pto.tgather ins(%src, %indices : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+pto.tgather ins(%src, {maskPattern = #pto.mask_pattern<P0101>} : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)"
+TGATHERB	%dst = pto.tgatherb %src, %offsets : (dtype, !pto.tile<...>) -> !pto.tile<...>	pto.tgatherb ins(%src, %offsets : dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSCATTER	%dst = pto.tscatter %src, %idx : !pto.tile<...>, !pto.tile<...> -> !pto.tile<...>	pto.tscatter ins(%src, %idx : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TSORT32	%dst, %idx = pto.tsort32 %src : !pto.tile<...> -> (!pto.tile<...>, !pto.tile<...>)	pto.tsort32 ins(%src : !pto.tile_buf<...>) outs(%dst, idx : !pto.tile_buf<...>, !pto.tile_buf<...>)
+TMRGSORT	"%dst, %executed = pto.tmrgsort %src0, %src1, %src2, %src3 {exhausted = false}
+ : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> (!pto.tile<...>, vector<4xi16>)"	pto.mrgsort ins(%src0, %src1, %src2, %src3 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst, %executed : !pto.tile_buf<...>, vector<4xi16>)
+TPARTADD	%dst = pto.tpartadd %src0, %src1 : !pto.tile<...> -> !pto.tile<...>	pto.tpartadd ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TPARTMAX	%dst = pto.tpartmax %src0, %src1 : !pto.tile<...> -> !pto.tile<...>	pto.tpartmax ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+TPARTMIN	%dst = pto.tpartmin %src0, %src1 : !pto.tile<...> -> !pto.tile<...>	pto.tpartmin ins(%src0, %src1 : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)

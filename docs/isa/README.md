@@ -8,6 +8,7 @@ This directory contains the per-instruction reference for the PTO Tile Lib ISA.
 
 - Source of truth (C++ intrinsics): `include/pto/common/pto_instr.hpp`
 - Common conventions (operands, events, modifiers): `docs/isa/conventions.md`
+- Formal IR syntax (IR-level1/IR-level2): `docs/grammar/PTO-ASM.def`
 
 ## Synchronization
 - [TSYNC](TSYNC.md) - Synchronize PTO execution (wait on events or insert a per-op pipeline barrier).

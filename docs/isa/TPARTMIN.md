@@ -29,7 +29,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tpartmin %src0, %src1 : !pto.tile<...> -> !pto.tile<...>
+tpartmin %dst, %src0, %src1 : (!pto.tile<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)

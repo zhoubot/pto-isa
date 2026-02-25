@@ -19,6 +19,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TAssign.hpp"
 #include "pto/npu/a2a3/TSync.hpp"
 #include "pto/npu/a2a3/TAdd.hpp"
+#include "pto/npu/a2a3/TCarryOp.hpp"
 #include "pto/npu/a2a3/TAnd.hpp"
 #include "pto/npu/a2a3/TOr.hpp"
 #include "pto/npu/a2a3/TXor.hpp"
@@ -42,6 +43,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TLoad.hpp"
 #include "pto/npu/a2a3/TCvt.hpp"
 #include "pto/npu/a2a3/TStore.hpp"
+#include "pto/npu/a2a3/TPushPop.hpp"
 #include "pto/npu/a2a3/TTrans.hpp"
 #include "pto/npu/a2a3/TReshape.hpp"
 #include "pto/npu/a2a3/TRowSum.hpp"
@@ -70,7 +72,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TSetImg2colPadding.hpp"
 #ifdef _DEBUG
 #include "pto/npu/a2a3/TPrint.hpp"
-#endif
 #include "pto/npu/a2a3/TRowExpand.hpp"
 #include "pto/npu/a2a3/TRowExpandAdd.hpp"
 #include "pto/npu/a2a3/TRowExpandDiv.hpp"
@@ -88,8 +89,13 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TColMin.hpp"
 #include "pto/npu/a2a3/TScatter.hpp"
 #include "pto/npu/a2a3/TColExpand.hpp"
+#include "pto/npu/a2a3/TColExpandDiv.hpp"
+#include "pto/npu/a2a3/TColExpandMul.hpp"
+#include "pto/npu/a2a3/TColExpandSub.hpp"
+#include "pto/npu/a2a3/TColExpandExpdif.hpp"
 #include "pto/npu/a2a3/TTri.hpp"
 #include "pto/npu/a2a3/TLRelu.hpp"
+#include "pto/npu/a2a3/TPRelu.hpp"
 #include "pto/npu/a2a3/TPrefetch.hpp"
 #include "pto/npu/a2a3/TPrelu.hpp"
 #include "pto/npu/a2a3/TInsert.hpp"
@@ -107,6 +113,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TAssign.hpp"
 #include "pto/npu/a5/TSync.hpp"
 #include "pto/npu/a5/TAdd.hpp"
+#include "pto/npu/a5/TCarryOp.hpp"
 #include "pto/npu/a5/TAnd.hpp"
 #include "pto/npu/a5/TAndS.hpp"
 #include "pto/npu/a5/TOr.hpp"
@@ -134,6 +141,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TCvt.hpp"
 #endif
 #include "pto/npu/a5/TStore.hpp"
+#include "pto/npu/a5/TPushPop.hpp"
 #include "pto/npu/a5/TMrgSort.hpp"
 #include "pto/npu/a5/TMatmul.hpp"
 #include "pto/npu/a5/TCmps.hpp"
@@ -176,10 +184,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TSetImg2colPadding.hpp"
 #ifdef _DEBUG
 #include "pto/npu/a5/TPrint.hpp"
-#endif
 #include "pto/npu/a5/TGather.hpp"
 #include "pto/npu/a5/TRsqrt.hpp"
 #include "pto/npu/a5/TUnaryOp.hpp"
+#include "pto/npu/a5/TPRelu.hpp"
 #include "pto/npu/a5/TGatherB.hpp"
 #include "pto/npu/a5/TBinSOp.hpp"
 #include "pto/npu/a5/TDiv.hpp"
@@ -197,6 +205,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TTri.hpp"
 #include "pto/npu/a5/TPrefetch.hpp"
 #include "pto/npu/a5/TInsert.hpp"
+#include "pto/npu/a5/MGatherScatter.hpp"
 #endif
 
 #ifdef PTO_NPU_ARCH_KIRIN9030

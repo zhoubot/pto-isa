@@ -267,6 +267,13 @@ public:
     int64_t stride[GlobalTensorDim::TOTAL_DIM] = {1};
 };
 
+// 2D shorthand: `Stride<S0, S1>` means `[1, 1, 1, S0, S1]`.
+template <int S0, int S1>
+struct Stride<S0, S1, DYNAMIC, DYNAMIC, DYNAMIC> : public Stride<1, 1, 1, S0, S1> {
+    using Parent = Stride<1, 1, 1, S0, S1>;
+    using Parent::Parent;
+};
+
 template <typename Element_, typename Shape_, typename Stride_, Layout Layout_ = Layout::ND>
 struct GlobalTensor {
     using Shape = Shape_;

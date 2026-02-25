@@ -319,10 +319,11 @@ PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
     using T = typename TileData::DType;
     static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1, "Fix: TFillPad type must be b4/b8/b16/b32.");
 
-    uint32_t validDstRow = dst.GetValidRow();
-    uint32_t validDstCol = dst.GetValidCol();
-    TFillPad<TileData>(dst.data(), validDstRow, validDstCol);
-}
+	        uint32_t validDstRow = dst.GetValidRow();
+	        uint32_t validDstCol = dst.GetValidCol();
+	        TFillPad<TileData>(dst.data(), validDstRow, validDstCol);
+	    }
+	}
 
 } // namespace pto
 #endif

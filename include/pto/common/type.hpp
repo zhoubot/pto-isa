@@ -12,6 +12,55 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define _PTO_INCLUDE_NPU_TYPE_H_
 #ifndef __CPU_SIM
 #define AICORE [aicore]
+
+// Some toolchains do not provide a built-in `__VEC_SCOPE__` token. The PTO NPU
+// headers use it as a structured scope marker:
+//   __VEC_SCOPE__ { ... }
+// Define a benign fallback.
+#ifndef __VEC_SCOPE__
+#define __VEC_SCOPE__ if (true)
+#endif
+
+// The CCE runtime wrapper injects the intrinsic type tags (e.g. Mode_Zeroing_Type,
+// PostUpdateType, ...) but does not always provide the convenience macros used by
+// PTO headers. Define the macros when missing.
+#ifndef MODE_UNKNOWN
+#define MODE_UNKNOWN Mode_Unknown_Type()
+#endif
+#ifndef MODE_MERGING
+#define MODE_MERGING Mode_Merging_Type()
+#endif
+#ifndef MODE_ZEROING
+#define MODE_ZEROING Mode_Zeroing_Type()
+#endif
+#ifndef MODE_MERGING_SRC0
+#define MODE_MERGING_SRC0 Mode_Merging_Src0_Type()
+#endif
+
+#ifndef PART_EVEN
+#define PART_EVEN PartEvenType()
+#endif
+#ifndef PART_ODD
+#define PART_ODD PartOddType()
+#endif
+
+#ifndef NO_POST_UPDATE
+#define NO_POST_UPDATE NoPostUpdateType()
+#endif
+#ifndef POST_UPDATE
+#define POST_UPDATE PostUpdateType()
+#endif
+
+// Event/mask intrinsics are provided by the CCE toolchain. Some compilation
+// pipelines (e.g. fatobj / host+device split) may compile portions of code
+// without pulling in the full intrinsic prototypes, so provide conservative
+// forward declarations here.
+extern "C" {
+void set_flag(...);
+void wait_flag(...);
+void set_vector_mask(...);
+void set_vector_mask_dup(...);
+}
 #else
 #define AICORE
 #endif

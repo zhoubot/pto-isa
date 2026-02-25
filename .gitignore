@@ -2,9 +2,13 @@
 .idea
 .vscode
 .DS_Store
+out
 build
 build_tests
 demos/**/build/
+ptoas/out/
+ptoas/mlir/build/
+ptoas/mlir/build-*/
 site/
 .venv-mkdocs/
 *.o

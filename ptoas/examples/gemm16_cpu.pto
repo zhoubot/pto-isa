@@ -1,0 +1,25 @@
+module {
+  func.func @gemm16(%arg0: !pto.ptr<f16>, %arg1: !pto.ptr<f16>, %arg2: !pto.ptr<f32>) {
+    %c16 = arith.constant 16 : index
+    %c1 = arith.constant 1 : index
+    %a = pto.make_tensor_view %arg0, shape = [%c16, %c16] strides = [%c16, %c1] : !pto.tensor_view<2xf16>
+    %b = pto.make_tensor_view %arg1, shape = [%c16, %c16] strides = [%c16, %c1] : !pto.tensor_view<2xf16>
+    %c = pto.make_tensor_view %arg2, shape = [%c16, %c16] strides = [%c16, %c1] : !pto.tensor_view<2xf32>
+    %a_mat = pto.alloc_tile : !pto.tile_buf<loc=mat, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>
+    %b_mat = pto.alloc_tile : !pto.tile_buf<loc=mat, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>
+    %a_left = pto.alloc_tile : !pto.tile_buf<loc=left, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>
+    %b_right = pto.alloc_tile : !pto.tile_buf<loc=right, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=col_major, fractal=512, pad=0>
+    %c_acc = pto.alloc_tile : !pto.tile_buf<loc=acc, dtype=f32, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=1024, pad=0>
+    %c0 = arith.constant 0 : index
+    %t1 = pto.subview %a, offsets = [%c0, %c0], sizes = [%c16, %c16] : !pto.tensor_view<2xf16> -> !pto.tile_view<16x16xf16>
+    pto.tload ins(%t1 : !pto.tile_view<16x16xf16>) outs(%a_mat : !pto.tile_buf<loc=mat, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>)
+    %t2 = pto.subview %b, offsets = [%c0, %c0], sizes = [%c16, %c16] : !pto.tensor_view<2xf16> -> !pto.tile_view<16x16xf16>
+    pto.tload ins(%t2 : !pto.tile_view<16x16xf16>) outs(%b_mat : !pto.tile_buf<loc=mat, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>)
+    "pto.tmov"(%a_mat, %a_left) : (!pto.tile_buf<loc=mat, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>, !pto.tile_buf<loc=left, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>) -> ()
+    "pto.tmov"(%b_mat, %b_right) : (!pto.tile_buf<loc=mat, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>, !pto.tile_buf<loc=right, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=col_major, fractal=512, pad=0>) -> ()
+    "pto.tmatmul"(%a_left, %b_right, %c_acc) : (!pto.tile_buf<loc=left, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=512, pad=0>, !pto.tile_buf<loc=right, dtype=f16, rows=16, cols=16, v_row=16, v_col=16, blayout=row_major, slayout=col_major, fractal=512, pad=0>, !pto.tile_buf<loc=acc, dtype=f32, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=1024, pad=0>) -> ()
+    %t3 = pto.subview %c, offsets = [%c0, %c0], sizes = [%c16, %c16] : !pto.tensor_view<2xf32> -> !pto.tile_view<16x16xf32>
+    pto.tstore ins(%c_acc : !pto.tile_buf<loc=acc, dtype=f32, rows=16, cols=16, v_row=16, v_col=16, blayout=col_major, slayout=row_major, fractal=1024, pad=0>) outs(%t3 : !pto.tile_view<16x16xf32>)
+    func.return
+  }
+}

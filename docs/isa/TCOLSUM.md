@@ -24,7 +24,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tcolsum %src {isBinary = false} : !pto.tile<...> -> !pto.tile<...>
+tcolsum %dst, %src {isBinary = false} : (!pto.tile<...>, !pto.tile<...>)
 ```
 Lowering may introduce internal scratch tiles; the C++ intrinsic requires an explicit `tmp` operand.
 

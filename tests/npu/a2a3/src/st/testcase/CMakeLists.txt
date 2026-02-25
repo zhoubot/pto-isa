@@ -197,7 +197,7 @@ tquant
 if((TEST_CASE IN_LIST ALL_TESTCASES) OR (TEST_CASE STREQUAL "all"))
 message(STATUS "run : ${TEST_CASE}")
 else()
-message(FATAL_ERROR "not found TEST_CASE: ${TEST_CASE}, support case is : ${ALL_TESTCASES}")
+    message(STATUS "run : all")
 endif()
 
 

@@ -35,7 +35,21 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form (conceptual):
 
 ```text
-%dst = tfillpad %src : !pto.tile<...> -> !pto.tile<...>
+tfillpad %dst, %src : (!pto.tile<...>, !pto.tile<...>)
+```
+
+## IR Syntax
+
+### IR-level1 (SSA)
+
+```mlir
+%dst = pto.tfillpad %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### IR-level2 (DPS)
+
+```mlir
+pto.tfillpad ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 ```
 
 ### IR Level 1 (SSA)
