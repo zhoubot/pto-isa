@@ -12,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ptobc {
@@ -72,6 +73,169 @@ static void sortAttributesLexicographically(mlir::ModuleOp module) {
 
     op->setAttrs(sorted);
   });
+}
+
+static bool isSSAIdentChar(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+         c == '_' || c == '.' || c == '$' || c == '-' ;
+}
+
+static std::string renameSSAInText(const std::string &text,
+                                   const std::unordered_map<std::string, std::string> &map) {
+  std::string out;
+  out.reserve(text.size());
+
+  for (size_t i = 0; i < text.size(); ++i) {
+    char c = text[i];
+    if (c != '%') {
+      out.push_back(c);
+      continue;
+    }
+
+    // Parse SSA identifier after '%'.
+    size_t j = i + 1;
+    while (j < text.size() && isSSAIdentChar(text[j])) ++j;
+    if (j == i + 1) {
+      out.push_back('%');
+      continue;
+    }
+
+    std::string key = text.substr(i + 1, j - (i + 1));
+    auto it = map.find(key);
+    if (it == map.end()) {
+      // No rename.
+      out.push_back('%');
+      out.append(key);
+    } else {
+      out.push_back('%');
+      out.append(it->second);
+    }
+
+    i = j - 1;
+  }
+  return out;
+}
+
+static void collectSSADefsFromSignature(const std::string &line,
+                                        std::vector<std::string> &out) {
+  // Collect `%name:` occurrences within (...) in `func.func` or `^bb` lines.
+  // This is a lightweight heuristic but works for standard MLIR assembly.
+  size_t lpar = line.find('(');
+  if (lpar == std::string::npos) return;
+  size_t rpar = line.find(')', lpar + 1);
+  if (rpar == std::string::npos) return;
+
+  for (size_t i = lpar + 1; i < rpar; ++i) {
+    if (line[i] != '%') continue;
+    size_t j = i + 1;
+    while (j < rpar && isSSAIdentChar(line[j])) ++j;
+    if (j == i + 1) continue;
+    // Must be followed by ':' to be an arg/blkarg.
+    if (j < rpar && line[j] == ':') {
+      out.push_back(line.substr(i + 1, j - (i + 1)));
+    }
+    i = j;
+  }
+}
+
+static bool parseConstantLine(const std::string &line, std::string &imm, std::string &ty) {
+  // Match: "%x = arith.constant <imm> : <ty>" (pretty form)
+  // We don't try to parse attributes on constants.
+  static const std::regex re(R"(^[ \t]*%[-a-zA-Z$._0-9]+[ \t]*=[ \t]*arith\.constant[ \t]+(.+?)[ \t]*:[ \t]*([^ \t]+)[ \t]*$)");
+  std::smatch m;
+  if (!std::regex_match(line, m, re)) return false;
+  imm = m[1].str();
+  ty = m[2].str();
+  return true;
+}
+
+static std::string canonicalConstBaseName(const std::string &imm, const std::string &ty) {
+  // Build a deterministic `%c...`-style base name derived from the printed immediate.
+  // Examples:
+  //   imm=32 ty=index -> c32
+  //   imm=7 ty=i32 -> c7_i32
+  //   imm=0x3F800000 ty=f32 -> c0x3F800000_f32
+  std::string base = "c";
+  base += imm;
+  if (ty != "index") {
+    base += "_";
+    base += ty;
+  }
+  return base;
+}
+
+static std::string canonicalizeSSANames(const std::string &printed) {
+  auto lines = splitLinesPreserveEmpty(printed);
+
+  std::vector<std::string> defs;
+  defs.reserve(256);
+
+  for (const auto &ln : lines) {
+    if (ln.find("func.func") != std::string::npos) {
+      collectSSADefsFromSignature(ln, defs);
+      continue;
+    }
+    if (!ln.empty() && ln[0] == '^') {
+      collectSSADefsFromSignature(ln, defs);
+      continue;
+    }
+    // Op results at start of line.
+    // e.g. "  %12 = ..." or "  %c0 = ..." or "%0:2 = ...".
+    size_t pos = ln.find('%');
+    if (pos == std::string::npos) continue;
+    // Require this to be a definition: '%' must appear before '='.
+    size_t eq = ln.find('=');
+    if (eq == std::string::npos || pos > eq) continue;
+
+    size_t j = pos + 1;
+    while (j < ln.size() && isSSAIdentChar(ln[j])) ++j;
+    if (j == pos + 1) continue;
+    defs.push_back(ln.substr(pos + 1, j - (pos + 1)));
+  }
+
+  std::unordered_map<std::string, std::string> ren;
+  ren.reserve(defs.size() * 2);
+
+  // Pre-scan constants for nicer `%c...` aliases.
+  std::unordered_map<std::string, int> constCounts;
+
+  // Assign names in definition order, but keep constants named via their immediates.
+  uint64_t nextNonConst = 0;
+
+  for (const auto &old : defs) {
+    // Find the line that defines this value to see if it is a constant.
+    // (Linear scan; ok for now.)
+    bool isConst = false;
+    std::string imm, ty;
+    for (const auto &ln : lines) {
+      // quick filter
+      if (ln.find('%' + old) == std::string::npos) continue;
+      if (ln.find("= arith.constant") == std::string::npos) continue;
+      // Must be the definition line.
+      size_t pos = ln.find('%');
+      if (pos == std::string::npos) continue;
+      size_t j = pos + 1;
+      while (j < ln.size() && isSSAIdentChar(ln[j])) ++j;
+      if (ln.substr(pos + 1, j - (pos + 1)) != old) continue;
+      if (parseConstantLine(ln, imm, ty)) {
+        isConst = true;
+      }
+      break;
+    }
+
+    if (isConst) {
+      std::string base = canonicalConstBaseName(imm, ty);
+      int &n = constCounts[base];
+      std::string name = base;
+      if (n > 0) name += "_" + std::to_string(n);
+      ++n;
+      ren.emplace(old, name);
+    } else {
+      ren.emplace(old, std::to_string(nextNonConst++));
+    }
+  }
+
+  return renameSSAInText(printed, ren);
 }
 
 static void canonicalizeScalarFloatConstants(mlir::ModuleOp module,
@@ -138,6 +302,10 @@ std::string printModuleCanonical(mlir::ModuleOp module,
   canonicalizeScalarFloatConstants(module, locMap, lines);
 
   std::string out = joinLines(lines);
+
+  // Canonicalize SSA naming.
+  out = canonicalizeSSANames(out);
+
   return out;
 }
 
