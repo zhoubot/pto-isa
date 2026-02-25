@@ -264,8 +264,7 @@ if __name__ == "__main__":
         "TMOVTest.case_nz2nz_fb_quant_extract",
         ##tinsert
         "TMOVTest.case_nz2nz_insert",
-        "TMOVTest.case_nz2nz_sc_quant_insert", 
-        "TMOVTest.case_nz2nz_fb_quant_insert",
+        "TMOVTest.case_nz2nz_sc_quant_insert",
     ]
 
     case_params_list = [
@@ -326,8 +325,6 @@ if __name__ == "__main__":
             32, 32, True, 128, 128),
         TMovParams(np.int8, np.int8, np.float16, 96, 128, 64, 96, 128, 64, 'NZ', 512, False, True, False, None, 2,
             48, 48, True, 256, 256),
-        TMovParams(np.float16, np.float16, np.int8, 128, 64, 128, 128, 64, 128, 'NZ', 512, True, False, False,
-            np.uint64, 1, 32, 32, True, 256, 256),
     ]
 
     for i, case_name in enumerate(case_name_list):

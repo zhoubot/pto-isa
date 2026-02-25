@@ -18,21 +18,24 @@ namespace pto {
 
 template <typename T>
 struct GatherB {
-    PTO_INTERNAL static void GatherBInstr(
-        __ubuf__ T *dst, __ubuf__ uint32_t *offset, uint32_t srcAddr, uint16_t dstRepeatStride, uint8_t repeats) {
+    PTO_INTERNAL static void GatherBInstr(__ubuf__ T *dst, __ubuf__ uint32_t *offset, uint32_t srcAddr,
+                                          uint16_t dstRepeatStride, uint8_t repeats)
+    {
         vgatherb((__ubuf__ T *)dst, offset, srcAddr, dstRepeatStride, 1, repeats);
     }
 
     PTO_INTERNAL static void GatherBInstrB8(__ubuf__ uint16_t *dst, __ubuf__ uint32_t *offset, uint32_t srcAddr,
-        uint16_t dstRepeatStride, uint8_t repeats) {
+                                            uint16_t dstRepeatStride, uint8_t repeats)
+    {
         vgatherb((__ubuf__ uint16_t *)dst, offset, srcAddr, dstRepeatStride, 1, repeats);
     }
 };
 
 template <typename Op, typename T, unsigned elementsPerRepeat, unsigned blockSizeElem, unsigned dstRowStride,
-    unsigned offsetRowStride>
-PTO_INTERNAL void GatherBlockHead(
-    __ubuf__ T *dstPtr, __ubuf__ uint32_t *offsetPtr, uint32_t &srcAddr, unsigned validRow, unsigned numRepeatPerLine) {
+          unsigned offsetRowStride>
+PTO_INTERNAL void GatherBlockHead(__ubuf__ T *dstPtr, __ubuf__ uint32_t *offsetPtr, uint32_t &srcAddr,
+                                  unsigned validRow, unsigned numRepeatPerLine)
+{
     unsigned numLoop = numRepeatPerLine / REPEAT_MAX;
     unsigned remainAfterLoop = numRepeatPerLine % REPEAT_MAX;
     for (int i = 0; i < validRow; i++) {
@@ -44,7 +47,7 @@ PTO_INTERNAL void GatherBlockHead(
                         offsetPtr + i * offsetRowStride + j * 8 * REPEAT_MAX, srcAddr, 8, REPEAT_MAX);
                 } else {
                     Op::GatherBInstr((__ubuf__ T *)(dstPtr + i * dstRowStride + j * elementsPerRepeat * REPEAT_MAX),
-                        offsetPtr + i * offsetRowStride + j * 8 * REPEAT_MAX, srcAddr, 8, REPEAT_MAX);
+                                     offsetPtr + i * offsetRowStride + j * 8 * REPEAT_MAX, srcAddr, 8, REPEAT_MAX);
                 }
             }
         }
@@ -55,46 +58,51 @@ PTO_INTERNAL void GatherBlockHead(
                     offsetPtr + i * offsetRowStride + numLoop * 8 * REPEAT_MAX, srcAddr, 8, remainAfterLoop);
             } else {
                 Op::GatherBInstr((__ubuf__ T *)(dstPtr + i * dstRowStride + numLoop * elementsPerRepeat * REPEAT_MAX),
-                    offsetPtr + i * offsetRowStride + numLoop * 8 * REPEAT_MAX, srcAddr, 8, remainAfterLoop);
+                                 offsetPtr + i * offsetRowStride + numLoop * 8 * REPEAT_MAX, srcAddr, 8,
+                                 remainAfterLoop);
             }
         }
     }
 }
 
 template <typename Op, typename T, unsigned elementsPerRepeat, unsigned blockSizeElem, unsigned dstRowStride,
-    unsigned offsetRowStride>
-PTO_INTERNAL void GatherBlockTail(
-    __ubuf__ T *dstPtr, __ubuf__ uint32_t *offsetPtr, uint32_t &srcAddr, unsigned validRow, unsigned validCol) {
+          unsigned offsetRowStride>
+PTO_INTERNAL void GatherBlockTail(__ubuf__ T *dstPtr, __ubuf__ uint32_t *offsetPtr, uint32_t &srcAddr,
+                                  unsigned validRow, unsigned validCol)
+{
     unsigned numLoop = validRow / REPEAT_MAX;
     unsigned remainAfterLoop = validRow % REPEAT_MAX;
     if (numLoop) {
         for (int i = 0; i < numLoop; i++) {
             if constexpr (sizeof(T) == 1) {
                 Op::GatherBInstrB8((__ubuf__ uint16_t *)(dstPtr + i * REPEAT_MAX * dstRowStride),
-                    offsetPtr + i * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem, REPEAT_MAX);
+                                   offsetPtr + i * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem,
+                                   REPEAT_MAX);
             } else {
                 Op::GatherBInstr((__ubuf__ T *)(dstPtr + i * REPEAT_MAX * dstRowStride),
-                    offsetPtr + i * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem, REPEAT_MAX);
+                                 offsetPtr + i * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem,
+                                 REPEAT_MAX);
             }
         }
     }
     if (remainAfterLoop) {
         if constexpr (sizeof(T) == 1) {
             Op::GatherBInstrB8((__ubuf__ uint16_t *)(dstPtr + numLoop * REPEAT_MAX * dstRowStride),
-                offsetPtr + numLoop * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem,
-                remainAfterLoop);
+                               offsetPtr + numLoop * REPEAT_MAX * offsetRowStride, srcAddr,
+                               dstRowStride / blockSizeElem, remainAfterLoop);
         } else {
             Op::GatherBInstr((__ubuf__ T *)(dstPtr + numLoop * REPEAT_MAX * dstRowStride),
-                offsetPtr + numLoop * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem,
-                remainAfterLoop);
+                             offsetPtr + numLoop * REPEAT_MAX * offsetRowStride, srcAddr, dstRowStride / blockSizeElem,
+                             remainAfterLoop);
         }
     }
 }
 
 template <typename Op, typename T, unsigned elementsPerRepeat, unsigned blockSizeElem, unsigned dstRowStride,
-    unsigned offsetRowStride>
-PTO_INTERNAL void TGatherBlock(
-    __ubuf__ T *dstPtr, __ubuf__ uint32_t *offsetPtr, uint32_t &srcAddr, unsigned validRow, unsigned validCol) {
+          unsigned offsetRowStride>
+PTO_INTERNAL void TGatherBlock(__ubuf__ T *dstPtr, __ubuf__ uint32_t *offsetPtr, uint32_t &srcAddr, unsigned validRow,
+                               unsigned validCol)
+{
     unsigned numRepeatPerLine = validCol / elementsPerRepeat;
     unsigned numRemainPerLine = validCol % elementsPerRepeat;
     if (numRepeatPerLine > 0) {
@@ -111,10 +119,12 @@ PTO_INTERNAL void TGatherBlock(
 }
 
 template <typename TileDataDst, typename TileDataSrc, typename TileDataOffset, unsigned elementsPerRepeat,
-    unsigned blockSizeElem, unsigned dstRowStride, unsigned offsetRowStride>
+          unsigned blockSizeElem, unsigned dstRowStride, unsigned offsetRowStride>
 __tf__ PTO_INTERNAL void TGatherB(typename TileDataDst::TileDType __out__ dst,
-    typename TileDataSrc::TileDType __in__ src, typename TileDataOffset::TileDType __in__ offset, unsigned validRow,
-    unsigned validCol) {
+                                  typename TileDataSrc::TileDType __in__ src,
+                                  typename TileDataOffset::TileDType __in__ offset, unsigned validRow,
+                                  unsigned validCol)
+{
     __ubuf__ uint32_t *offsetPtr = (__ubuf__ uint32_t *)__cce_get_tile_ptr(offset);
     uint32_t srcAddr = (uint64_t)(__ubuf__ typename TileDataSrc::DType *)__cce_get_tile_ptr(src);
     if constexpr (sizeof(typename TileDataDst::DType) == 4 || sizeof(typename TileDataDst::DType) == 2) {
@@ -130,12 +140,13 @@ __tf__ PTO_INTERNAL void TGatherB(typename TileDataDst::TileDType __out__ dst,
     } else {
         static_assert(sizeof(typename TileDataDst::DType) == 4 || sizeof(typename TileDataDst::DType) == 2 ||
                           sizeof(typename TileDataDst::DType) == 1,
-            "Fix: TGATHERB has invalid data type.");
+                      "Fix: TGATHERB has invalid data type.");
     }
 }
 
 template <typename TileDataDst, typename TileDataSrc, typename TileDataOffset>
-PTO_INTERNAL void TGATHERB_IMPL(TileDataDst &dst, TileDataSrc &src, TileDataOffset &offset) {
+PTO_INTERNAL void TGATHERB_IMPL(TileDataDst &dst, TileDataSrc &src, TileDataOffset &offset)
+{
     static_assert(TileDataDst::isRowMajor, "Fix: TGATHERB has not supported Layout type.");
     constexpr unsigned blockSizeElem = BLOCK_BYTE_SIZE / sizeof(typename TileDataDst::DType);
     constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(typename TileDataDst::DType);

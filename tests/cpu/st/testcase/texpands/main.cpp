@@ -15,7 +15,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace PtoTestCommon;
 
-
 class TEXPANDSTest : public testing::Test {
 protected:
     void SetUp() override
@@ -24,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -32,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
 void LaunchTExpandS(void *out, float scalar, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
-void test_texpands() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
+void test_texpands()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -54,7 +54,7 @@ void test_texpands() {
     float scalar;
     std::string scalar_file = GetGoldenDir() + "/scalar.bin";
     std::ifstream file(scalar_file, std::ios::binary);
-    file.read(reinterpret_cast<char*>(&scalar), 4);
+    file.read(reinterpret_cast<char *>(&scalar), 4);
     file.close();
 
     LaunchTExpandS<T, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType>(dstDevice, scalar, stream);
@@ -81,29 +81,36 @@ void test_texpands() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TEXPANDSTest, case_float_64x64_64x64_64x64_PAD_VALUE_NULL) {
+TEST_F(TEXPANDSTest, case_float_64x64_64x64_64x64_PAD_VALUE_NULL)
+{
     test_texpands<float, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TEXPANDSTest, case_int32_64x64_64x64_64x64_PAD_VALUE_NULL) {
+TEST_F(TEXPANDSTest, case_int32_64x64_64x64_64x64_PAD_VALUE_NULL)
+{
     test_texpands<int32_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TEXPANDSTest, case_half_64x64_64x64_64x64_PAD_VALUE_NULL) {
+TEST_F(TEXPANDSTest, case_half_64x64_64x64_64x64_PAD_VALUE_NULL)
+{
     test_texpands<aclFloat16, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TEXPANDSTest, case_int16_64x64_64x64_64x64_PAD_VALUE_NULL) {
+TEST_F(TEXPANDSTest, case_int16_64x64_64x64_64x64_PAD_VALUE_NULL)
+{
     test_texpands<int16_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
 
-
-TEST_F(TEXPANDSTest, case_float_60x60_64x64_60x60_PAD_VALUE_MAX) {
+TEST_F(TEXPANDSTest, case_float_60x60_64x64_60x60_PAD_VALUE_MAX)
+{
     test_texpands<float, 60, 60, 64, 64, 60, 60, PAD_VALUE_MAX>();
 }
-TEST_F(TEXPANDSTest, case_int32_60x60_64x64_60x60_PAD_VALUE_MAX) {
+TEST_F(TEXPANDSTest, case_int32_60x60_64x64_60x60_PAD_VALUE_MAX)
+{
     test_texpands<int32_t, 60, 60, 64, 64, 60, 60, PAD_VALUE_MAX>();
 }
-TEST_F(TEXPANDSTest, case_half_1x3600_2x4096_1x3600_PAD_VALUE_MAX) {
+TEST_F(TEXPANDSTest, case_half_1x3600_2x4096_1x3600_PAD_VALUE_MAX)
+{
     test_texpands<aclFloat16, 1, 3600, 2, 4096, 1, 3600, PAD_VALUE_MAX>();
 }
-TEST_F(TEXPANDSTest, case_int16_16x200_20x512_16x200_PAD_VALUE_MAX) {
+TEST_F(TEXPANDSTest, case_int16_16x200_20x512_16x200_PAD_VALUE_MAX)
+{
     test_texpands<int16_t, 16, 200, 20, 512, 16, 200, PAD_VALUE_MAX>();
 }

@@ -15,7 +15,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace pto;
 
 template <typename T, int validRow, int validCol, int Row, int Col, bool src0eqdst>
-__global__ AICORE void runTRowExpandMax( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T __in__ *src1) {
+__global__ AICORE void runTRowExpandMax(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1)
+{
     constexpr uint16_t src1Row = ((validRow * sizeof(T) + 31) / 32) * (32 / sizeof(T));
     using GlobalDataDst = GlobalTensor<T, Shape<1, 1, 1, Row, Col>, Stride<1, 1, 1, Col, 1>>;
     using TileDataDst = Tile<TileType::Vec, T, Row, Col, BLayout::RowMajor, -1, -1>;
@@ -51,7 +52,8 @@ __global__ AICORE void runTRowExpandMax( __gm__ T __out__ *out, __gm__ T __in__ 
 }
 
 template <typename T, int validRow, int validCol, int Row, int Col, bool src0eqdst>
-__global__ AICORE void runTRowExpandMax2( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T __in__ *src1) {
+__global__ AICORE void runTRowExpandMax2(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1)
+{
     constexpr uint16_t src1Row = ((validRow * sizeof(T) + 31) / 32) * (32 / sizeof(T));
     constexpr uint16_t src1Col = 32 / sizeof(T);
     using GlobalDataDst = GlobalTensor<T, Shape<1, 1, 1, Row, Col>, Stride<1, 1, 1, Col, 1>>;
@@ -90,35 +92,37 @@ __global__ AICORE void runTRowExpandMax2( __gm__ T __out__ *out, __gm__ T __in__
 template <typename T, int validRow, int validCol, int Row, int Col, bool src0eqdst>
 void launchTRowExpandMax(T *out, T *src0, T *src1, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTRowExpandMax<half, validRow, validCol, Row, Col, src0eqdst><<<1, nullptr, stream>>>((half*)(out),
-                                                                                     (half*)(src0),
-                                                                                     (half*)(src1));
-    else 
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTRowExpandMax<half, validRow, validCol, Row, Col, src0eqdst>
+            <<<1, nullptr, stream>>>((half *)(out), (half *)(src0), (half *)(src1));
+    else
         runTRowExpandMax<T, validRow, validCol, Row, Col, src0eqdst><<<1, nullptr, stream>>>(out, src0, src1);
 }
 
 template <typename T, int validRow, int validCol, int Row, int Col, bool src0eqdst>
 void launchTRowExpandMax2(T *out, T *src0, T *src1, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTRowExpandMax2<half, validRow, validCol, Row, Col, src0eqdst><<<1, nullptr, stream>>>((half*)(out),
-                                                                                     (half*)(src0),
-                                                                                     (half*)(src1));
-    else 
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTRowExpandMax2<half, validRow, validCol, Row, Col, src0eqdst>
+            <<<1, nullptr, stream>>>((half *)(out), (half *)(src0), (half *)(src1));
+    else
         runTRowExpandMax2<T, validRow, validCol, Row, Col, src0eqdst><<<1, nullptr, stream>>>(out, src0, src1);
 }
 
 template void launchTRowExpandMax<float, 16, 16, 16, 16, true>(float *out, float *src0, float *src1, void *stream);
 template void launchTRowExpandMax<float, 16, 16, 32, 32, true>(float *out, float *src0, float *src1, void *stream);
-template void launchTRowExpandMax<aclFloat16, 16, 16, 16, 16, true>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
-template void launchTRowExpandMax<aclFloat16, 16, 16, 32, 32, true>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
+template void launchTRowExpandMax<aclFloat16, 16, 16, 16, 16, true>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1,
+                                                                    void *stream);
+template void launchTRowExpandMax<aclFloat16, 16, 16, 32, 32, true>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1,
+                                                                    void *stream);
 template void launchTRowExpandMax<float, 1, 16384, 1, 16384, true>(float *out, float *src0, float *src1, void *stream);
 template void launchTRowExpandMax<float, 2048, 1, 2048, 8, true>(float *out, float *src0, float *src1, void *stream);
 template void launchTRowExpandMax2<float, 16, 16, 16, 16, true>(float *out, float *src0, float *src1, void *stream);
 template void launchTRowExpandMax2<float, 16, 16, 32, 32, true>(float *out, float *src0, float *src1, void *stream);
-template void launchTRowExpandMax2<aclFloat16, 16, 16, 16, 16, true>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
-template void launchTRowExpandMax2<aclFloat16, 16, 16, 32, 32, true>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
+template void launchTRowExpandMax2<aclFloat16, 16, 16, 16, 16, true>(aclFloat16 *out, aclFloat16 *src0,
+                                                                     aclFloat16 *src1, void *stream);
+template void launchTRowExpandMax2<aclFloat16, 16, 16, 32, 32, true>(aclFloat16 *out, aclFloat16 *src0,
+                                                                     aclFloat16 *src1, void *stream);
 template void launchTRowExpandMax2<float, 1, 16384, 1, 16384, true>(float *out, float *src0, float *src1, void *stream);
 template void launchTRowExpandMax2<float, 2048, 1, 2048, 8, true>(float *out, float *src0, float *src1, void *stream);
 template void launchTRowExpandMax<float, 16, 16, 16, 16, false>(float *out, float *src0, float *src1, void *stream);

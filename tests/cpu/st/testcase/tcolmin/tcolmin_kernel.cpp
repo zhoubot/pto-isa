@@ -54,4 +54,3 @@ void LaunchTCOLMIN(T *out, T *src, void *stream)
 template void LaunchTCOLMIN<float, 64, 64, 64, 64>(float *out, float *src, void *stream);
 template void LaunchTCOLMIN<aclFloat16, 64, 64, 64, 64>(aclFloat16 *out, aclFloat16 *src, void *stream);
 template void LaunchTCOLMIN<float, 32, 32, 32, 16>(float *out, float *src, void *stream);
-

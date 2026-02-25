@@ -18,39 +18,36 @@ full text of the License.
 
 namespace pto {
 
-
 template <typename TileDataOut, typename TileDataIn>
-PTO_INTERNAL void TRESHAPE_IMPL(TileDataOut &dst, TileDataIn &src) {
-  static_assert(is_tile_data_v<TileDataIn>, "input must be a Tile instance.");
-  static_assert(is_tile_data_v<TileDataOut>, "output must be a Tile instance.");
+PTO_INTERNAL void TRESHAPE_IMPL(TileDataOut &dst, TileDataIn &src)
+{
+    static_assert(is_tile_data_v<TileDataIn>, "input must be a Tile instance.");
+    static_assert(is_tile_data_v<TileDataOut>, "output must be a Tile instance.");
 
-  using DType = typename TileDataIn::DType;
-  using NewElement = typename TileDataOut::DType;
+    using DType = typename TileDataIn::DType;
+    using NewElement = typename TileDataOut::DType;
 
-  constexpr auto Loc = TileDataIn::Loc;
-  constexpr auto NewLoc = TileDataOut::Loc;
+    constexpr auto Loc = TileDataIn::Loc;
+    constexpr auto NewLoc = TileDataOut::Loc;
 
-  constexpr int Numel = TileDataIn::Numel;
-  constexpr int NewNumel = TileDataOut::Numel;
+    constexpr int Numel = TileDataIn::Numel;
+    constexpr int NewNumel = TileDataOut::Numel;
 
-  constexpr auto SFractal = TileDataIn::SFractal;
-  constexpr auto NewSFractal = TileDataOut::SFractal;
+    constexpr auto SFractal = TileDataIn::SFractal;
+    constexpr auto NewSFractal = TileDataOut::SFractal;
 
-  // 1. TileType must match
-  static_assert(Loc == NewLoc,
-                "TRESHAPE: Source and target TileType must be identical.");
+    // 1. TileType must match
+    static_assert(Loc == NewLoc, "TRESHAPE: Source and target TileType must be identical.");
 
-  // 2. Byte size must match
-  static_assert(sizeof(DType) * Numel == sizeof(NewElement) * NewNumel,
-                "TRESHAPE: Total byte size must match.");
+    // 2. Byte size must match
+    static_assert(sizeof(DType) * Numel == sizeof(NewElement) * NewNumel, "TRESHAPE: Total byte size must match.");
 
-  // 3. reshape between non-boxed and boxed tile is not allowed.
-  static_assert(
-      (SFractal == SLayout::NoneBox && NewSFractal == SLayout::NoneBox) ||
-          (SFractal != SLayout::NoneBox && NewSFractal != SLayout::NoneBox),
-      "TRESHAPE: Cannot reshape between boxed and non-boxed layouts.");
+    // 3. reshape between non-boxed and boxed tile is not allowed.
+    static_assert((SFractal == SLayout::NoneBox && NewSFractal == SLayout::NoneBox) ||
+                      (SFractal != SLayout::NoneBox && NewSFractal != SLayout::NoneBox),
+                  "TRESHAPE: Cannot reshape between boxed and non-boxed layouts.");
 
-  TASSIGN_IMPL(dst, reinterpret_cast<uintptr_t>(src.data()));
+    TASSIGN_IMPL(dst, reinterpret_cast<uintptr_t>(src.data()));
 }
 } // namespace pto
 

@@ -15,20 +15,17 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 template <typename T, typename AddrType>
-PTO_INTERNAL void TASSIGN_IMPL(T &obj, AddrType addr) {
-  if constexpr (is_tile_data_v<T>) {
-    return;
-  } else {
-    static_assert(is_global_data_v<T>,
-                  "Only Tile and GlobalTensor data types are supported.");
-    static_assert(
-        std::is_pointer_v<AddrType>,
-        "GlobalTensor can only be assigned with address of pointer type.");
-    static_assert(
-        std::is_same_v<std::remove_cv_t<std::remove_pointer_t<AddrType>>, typename T::DType>,
-        "GlobalTensor can only be assigned with pointer of same data type.");
-    obj.SetAddr(addr);
-  }
+PTO_INTERNAL void TASSIGN_IMPL(T &obj, AddrType addr)
+{
+    if constexpr (is_tile_data_v<T>) {
+        return;
+    } else {
+        static_assert(is_global_data_v<T>, "Only Tile and GlobalTensor data types are supported.");
+        static_assert(std::is_pointer_v<AddrType>, "GlobalTensor can only be assigned with address of pointer type.");
+        static_assert(std::is_same_v<std::remove_cv_t<std::remove_pointer_t<AddrType>>, typename T::DType>,
+                      "GlobalTensor can only be assigned with pointer of same data type.");
+        obj.SetAddr(addr);
+    }
 }
 } // namespace pto
 #endif

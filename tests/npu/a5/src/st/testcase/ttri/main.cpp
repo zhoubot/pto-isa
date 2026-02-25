@@ -20,11 +20,14 @@ void LaunchTTri(T *out, void *stream);
 
 class TTRITest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,7 +36,8 @@ std::string GetGoldenDir() {
 }
 
 template <typename T, int validRows, int validCols, int upperOrLower, int diagonal>
-void test_ttri() {
+void test_ttri()
+{
     size_t fileSize = validRows * validCols * sizeof(T);
 
     aclInit(nullptr);
@@ -70,39 +74,59 @@ void test_ttri() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TTRITest, case_float_32x91_lower_diag_0) {
+TEST_F(TTRITest, case_fp16_20x32_lower_diag_0)
+{
+    test_ttri<aclFloat16, 20, 32, 0, 0>();
+}
+TEST_F(TTRITest, case_uint8_20x32_lower_diag_0)
+{
+    test_ttri<uint8_t, 20, 32, 0, 0>();
+}
+TEST_F(TTRITest, case_float_32x91_lower_diag_0)
+{
     test_ttri<float, 32, 91, 0, 0>();
 }
-TEST_F(TTRITest, case_float_128x128_lower_diag_0) {
+TEST_F(TTRITest, case_float_128x128_lower_diag_0)
+{
     test_ttri<float, 128, 128, 0, 0>();
 }
-TEST_F(TTRITest, case_float_32x91_lower_diag_3) {
+TEST_F(TTRITest, case_float_32x91_lower_diag_3)
+{
     test_ttri<float, 32, 91, 0, 3>();
 }
-TEST_F(TTRITest, case_float_128x128_lower_diag_3) {
+TEST_F(TTRITest, case_float_128x128_lower_diag_3)
+{
     test_ttri<float, 128, 128, 0, 3>();
 }
-TEST_F(TTRITest, case_float_32x91_lower_diag_n3) {
+TEST_F(TTRITest, case_float_32x91_lower_diag_n3)
+{
     test_ttri<float, 32, 91, 0, -3>();
 }
-TEST_F(TTRITest, case_float_128x128_lower_diag_n3) {
+TEST_F(TTRITest, case_float_128x128_lower_diag_n3)
+{
     test_ttri<float, 128, 128, 0, -3>();
 }
-TEST_F(TTRITest, case_float_32x91_upper_diag_0) {
+TEST_F(TTRITest, case_float_32x91_upper_diag_0)
+{
     test_ttri<float, 32, 91, 1, 0>();
 }
-TEST_F(TTRITest, case_float_128x128_upper_diag_0) {
+TEST_F(TTRITest, case_float_128x128_upper_diag_0)
+{
     test_ttri<float, 128, 128, 1, 0>();
 }
-TEST_F(TTRITest, case_float_32x91_upper_diag_3) {
+TEST_F(TTRITest, case_float_32x91_upper_diag_3)
+{
     test_ttri<float, 32, 91, 1, 3>();
 }
-TEST_F(TTRITest, case_float_128x128_upper_diag_3) {
+TEST_F(TTRITest, case_float_128x128_upper_diag_3)
+{
     test_ttri<float, 128, 128, 1, 3>();
 }
-TEST_F(TTRITest, case_float_32x91_upper_diag_n3) {
+TEST_F(TTRITest, case_float_32x91_upper_diag_n3)
+{
     test_ttri<float, 32, 91, 1, -3>();
 }
-TEST_F(TTRITest, case_float_128x128_upper_diag_n3) {
+TEST_F(TTRITest, case_float_128x128_upper_diag_n3)
+{
     test_ttri<float, 128, 128, 1, -3>();
 }

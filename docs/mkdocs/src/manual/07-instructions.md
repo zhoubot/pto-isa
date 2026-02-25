@@ -1,65 +1,97 @@
-# 7. Instruction set
+# 7. Instruction families and contracts
 
-## 7.1 Instruction reference
+## 7.1 Scope
 
-The canonical instruction reference is:
+This chapter defines family-level normative contracts.
+Per-op normative details remain in `docs/isa/*.md`.
 
-- `docs/isa/README.md`
+## 7.2 Family taxonomy
 
-Each instruction page defines:
+PTO instruction families:
 
-- assembly syntax
-- intrinsic API shape (when applicable)
-- operand constraints (types, shapes, layouts, locations)
-- semantic definition over the valid region
-- examples and CPU simulator notes
+1. synchronization and resource binding
+2. elementwise tile-tile operations
+3. tile-scalar and tile-immediate operations
+4. axis reduce and expand operations
+5. memory operations (`GM <-> Tile` and indexed variants)
+6. matrix multiply and GEMV operations
+7. data movement and layout transforms
+8. irregular/complex operations
 
-## 7.2 Category overview
+The source-synchronized inventory is maintained by `docs/isa/manifest.yaml`.
 
-This manual uses the following categories:
+## 7.3 Common family contract
 
-### Data movement
+Every instruction family MUST define:
 
-- `TLOAD`, `TSTORE`
-- `TASSIGN`
-- `TEXTRACT`, `TMOV`, `TTRANS`, `TRESHAPE`
+- operand/result classes and position rules
+- semantic domain (valid-region handling)
+- required constraints (dtype/layout/location/shape)
+- synchronization/ordering implications
+- diagnostics behavior for illegal use
+- implementation-defined boundaries
 
-### Elementwise and scalar-tile ops
+## 7.4 Valid-region-first rule
 
-- arithmetic: `TADD`, `TSUB`, `TMUL`, `TDIV`, …
-- math: `TEXP`, `TLOG`, `TSQRT`, `TRSQRT`, `TRECIP`, …
-- bitwise: `TAND`, `TOR`, `TXOR`, shifts, …
+Unless a specific instruction states otherwise:
 
-### Reductions and expands
+- semantics are defined only on the operation's valid domain
+- out-of-domain results are unspecified
+- family contracts MUST state domain-composition rules for multi-input operations
 
-- row reductions: `TROWMAX`, `TROWMIN`, `TROWSUM`
-- col reductions: `TCOLMAX`, `TCOLMIN`, `TCOLSUM`
-- expand/broadcast: `TROWEXPAND`, `TCOLEXPAND`, and friends
+## 7.5 Family-level summaries
 
-### Compare / select
+### 7.5.1 Synchronization and resource binding
 
-- compare: `TCMP`, `TCMPS`
-- select: `TSEL`, `TSELS`
+Includes `TSYNC`, `TASSIGN`, mode/config instructions.
+These operations define ordering or state-configuration effects and MUST preserve architecture ordering semantics.
 
-### Gather / scatter
+### 7.5.2 Elementwise and scalar variants
 
-- tile gather/scatter: `TGATHER`, `TSCATTER`
-- memory gather/scatter: `MGATHER`, `MSCATTER`
+Includes arithmetic, bitwise, compare, select, unary math, and scalar-fused forms.
+Operations MUST define per-element behavior and mode-specific constraints.
 
-### Matrix multiply
+### 7.5.3 Reduce/expand families
 
-- `TMATMUL` and accumulation variants
+Includes row/column reductions and broadcast-like expansions.
+Operations MUST define axis semantics and domain compatibility.
 
-### Synchronization
+### 7.5.4 Memory families
 
-- `TSYNC`
+Includes load/store/prefetch and indexed gather/scatter forms.
+Operations MUST define mapping between tile domains and memory domains.
 
-## 7.3 Common semantic rule
+### 7.5.5 Matrix families
 
-Unless an instruction states otherwise:
+Includes `TMATMUL*` and `TGEMV*` families.
+Contracts MUST define accumulation domain, operand-role legality, and precision-mode interactions.
 
-- results are defined for indices in the operand valid region(s)
-- undefined/out-of-mask elements are not part of the architectural contract
+### 7.5.6 Movement/layout families
 
-If you rely on out-of-range values, make them explicit with a defined padding/fill operation.
+Includes extract/insert/reshape/transpose/fillpad-like transforms.
+Contracts MUST define index mapping and domain preservation rules.
 
+### 7.5.7 Complex/irregular families
+
+Includes sort/quant/partial/gather variants and other special operations.
+Contracts MUST explicitly identify implementation-defined portions.
+
+## 7.6 Documentation contract for per-op pages
+
+Each per-instruction page SHOULD follow Appendix B template sections:
+
+- Syntax
+- Operands
+- Semantics
+- Constraints
+- Diagnostics
+- Implementation-defined behavior
+- Compatibility notes
+
+## 7.7 Coverage and synchronization policy
+
+Family and instruction indexes MUST stay synchronized with:
+
+- `docs/isa/manifest.yaml`
+- `include/pto/common/pto_instr.hpp`
+- generated index/matrix tooling in `docs/tools/`

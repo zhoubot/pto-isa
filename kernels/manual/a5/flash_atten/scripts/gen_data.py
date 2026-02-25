@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # --------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ S0_BASE = 64
 HEAD_SIZE = 128
 TILE_S1_DEFAULT = 256
 
-def gen_case(path, s0, s1, head_size=HEAD_SIZE, cube_s1=128, tile_s1=TILE_S1_DEFAULT):
+def gen_case(path, s0, s1, head_size=HEAD_SIZE, cube_s1=128, tile_s1=TILE_S1_DEFAULT, is_causal=False):
     # generate inputs in FP16, compute golden in FP32
     q_fp32 = (np.random.randn(s0, head_size).astype(np.float16) * 1.5).astype(np.float32)
     k_fp32 = (np.random.randn(head_size, s1).astype(np.float16) * 1.5).astype(np.float32)
@@ -49,7 +49,10 @@ def gen_case(path, s0, s1, head_size=HEAD_SIZE, cube_s1=128, tile_s1=TILE_S1_DEF
     # also produce softmax x_exp (per-row) saved as FP16 and tmp_float_exp saved as FP32
     # compute softmax in tiled fashion by TILE_S1 tiles (default 256)
     arr_f32 = golden.astype(np.float32)
-    scale = 1/np.sqrt(HEAD_SIZE)
+    if is_causal:
+        mask = np.triu((np.ones(arr_f32.shape) * float(-3.40282e+38)).astype(np.float32), 1)
+        arr_f32 += mask
+    scale = 1/np.sqrt(head_size)
     num_tiles = s1 // tile_s1
 
     # allocate full arrays to collect per-tile exponentials and per-tile global sums
@@ -154,6 +157,7 @@ if __name__ == '__main__':
     parser.add_argument("--head-size", type=int, help="HEAD_SIZE for a single on-demand case")
     parser.add_argument("--s0", type=int, help="S0 for a single on-demand case")
     parser.add_argument("--s1", type=int, help="S1 for a single on-demand case")
+    parser.add_argument("--causal-mask", type=int, help="Enable causel mask")
     args = parser.parse_args()
 
     script_root = Path(__file__).resolve().parents[1]
@@ -213,4 +217,4 @@ if __name__ == '__main__':
     for name, (s0, head_size, s1, cube_s1, tile_s1) in cases:
         case_dir = build_dir / name
         os.makedirs(case_dir, exist_ok=True)
-        gen_case(str(case_dir), s0, s1, head_size, cube_s1, tile_s1)
+        gen_case(str(case_dir), s0, s1, head_size, cube_s1, tile_s1, bool(args.causal_mask))

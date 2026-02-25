@@ -17,11 +17,14 @@ using namespace PtoTestCommon;
 
 class MGATHERTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -89,4 +92,7 @@ void test_mgather()
     EXPECT_TRUE(ResultCmp<float>(golden, devFinal, 0.001f));
 }
 
-TEST_F(MGATHERTest, case_float_16x16_src512) { test_mgather<16, 16, 512>(); }
+TEST_F(MGATHERTest, case_float_16x16_src512)
+{
+    test_mgather<16, 16, 512>();
+}

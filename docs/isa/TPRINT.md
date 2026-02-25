@@ -1,5 +1,10 @@
 # TPRINT
 
+
+## Tile Operation Diagram
+
+![TPRINT tile operation](../figures/isa/TPRINT.svg)
+
 ## Introduction
 
 Print the contents of a Tile or GlobalTensor for debugging purposes directly from device code.
@@ -20,20 +25,17 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 tprint %src : !pto.tile<...> | !pto.global<...>
 ```
 
-## IR Syntax
+### IR Level 1 (SSA)
 
-### IR-level1 (SSA)
-
-```mlir
-// Not supported in IR-level1 (frontend lowers to a comment)
+```text
+pto.tprint %src : !pto.tile<...> | !pto.partition_tensor_view<MxNxdtype> -> ()
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-// Not supported in IR-level2 (frontend lowers to a comment)
+```text
+pto.tprint ins(%src : !pto.tile_buf<...> | !pto.partition_tensor_view<MxNxdtype>)
 ```
-
 ## C++ Intrinsic
 Declared in `include/pto/common/pto_instr.hpp`:
 ```cpp
@@ -114,3 +116,35 @@ PTO_INTERNAL void DebugGlobalTensor(__gm__ float *src) {
   TPRINT(srcGlobal);
 }
 ```
+
+## Math Interpretation
+
+Unless otherwise specified, semantics are defined over the valid region and target-dependent behavior is marked as implementation-defined.
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+pto.tprint %src : !pto.tile<...> | !pto.partition_tensor_view<MxNxdtype> -> ()
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+pto.tprint %src : !pto.tile<...> | !pto.partition_tensor_view<MxNxdtype> -> ()
+```
+
+### PTO Assembly Form
+
+```text
+pto.tprint %src : !pto.tile<...> | !pto.partition_tensor_view<MxNxdtype> -> ()
+# IR Level 2 (DPS)
+pto.tprint ins(%src : !pto.tile_buf<...> | !pto.partition_tensor_view<MxNxdtype>)
+```
+

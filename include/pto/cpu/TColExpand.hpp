@@ -23,7 +23,7 @@ namespace pto {
 
 template <typename TileOut, typename TileIn>
 PTO_INTERNAL void TColExpand_Impl(typename TileOut::TileDType dst, typename TileIn::TileDType src, unsigned validRow,
-                                 unsigned validCol)
+                                  unsigned validCol)
 {
     if (validRow == 0 || validCol == 0) {
         return;

@@ -15,15 +15,17 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 template <typename TileData, typename T>
-PTO_INTERNAL void CheckValid() {
+PTO_INTERNAL void CheckValid()
+{
     static_assert((std::is_same<typename TileData::DType, T>::value), "Fix: TCI expect src and dst same datatype");
     static_assert((sizeof(typename TileData::DType) == 4 || (sizeof(typename TileData::DType) == 2)),
-        "Fix: TCI expect datatype is b32 or b16");
+                  "Fix: TCI expect datatype is b32 or b16");
     static_assert((TileData::Cols != 1), "Fix: TCI expect tile row is 1");
 }
 
 template <typename TileData, typename T, int descending>
-__tf__ AICORE void TCI(typename TileData::TileDType __out__ dst, T start, unsigned validCol) {
+__tf__ AICORE void TCI(typename TileData::TileDType __out__ dst, T start, unsigned validCol)
+{
     __ubuf__ typename TileData::DType *dstPtr = (__ubuf__ typename TileData::DType *)__cce_get_tile_ptr(dst);
 
     // scalar
@@ -39,7 +41,8 @@ __tf__ AICORE void TCI(typename TileData::TileDType __out__ dst, T start, unsign
 }
 
 template <typename TileData, typename T, int descending>
-PTO_INTERNAL void TCI_IMPL(TileData &dst, T start) {
+PTO_INTERNAL void TCI_IMPL(TileData &dst, T start)
+{
     CheckValid<TileData, T>();
 
     unsigned validCol = dst.GetValidCol();

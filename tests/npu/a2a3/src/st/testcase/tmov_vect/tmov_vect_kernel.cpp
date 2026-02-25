@@ -16,19 +16,20 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 using namespace pto;
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-__global__ AICORE void runTMOV(__gm__ T __out__ *out, __gm__ T __in__ *src) {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+__global__ AICORE void runTMOV(__gm__ T __out__ *out, __gm__ T __in__ *src)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
     using SrcTileData = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1>;
     using DstTileData = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1>;
-    
+
     SrcTileData srcTile(kTRows_, kTCols_);
     DstTileData dstTile(kTRows_, kTCols_);
 
-    TASSIGN(srcTile, 0x0 + 0x400*block_idx);
-    TASSIGN(dstTile, 0x20000 + 0x400*block_idx);
+    TASSIGN(srcTile, 0x0 + 0x400 * block_idx);
+    TASSIGN(dstTile, 0x20000 + 0x400 * block_idx);
 
     GlobalData srcGlobal(src);
     GlobalData dstGlobal(out);
@@ -43,11 +44,10 @@ __global__ AICORE void runTMOV(__gm__ T __out__ *out, __gm__ T __in__ *src) {
     out = dstGlobal.data();
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void launchTMOV(T *out, T *src, void *stream) {
-    runTMOV<T, kGRows_, kGCols_, kTRows_, kTCols_>
-        <<<1, nullptr, stream>>>(out, src);
+void launchTMOV(T *out, T *src, void *stream)
+{
+    runTMOV<T, kGRows_, kGCols_, kTRows_, kTCols_><<<1, nullptr, stream>>>(out, src);
 }
 
 template void launchTMOV<float, 64, 64, 64, 64>(float *out, float *src, void *stream);

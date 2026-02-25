@@ -12,7 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTSubsc(T *out, T *src0, T *scalar, T *src1, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tsubsc() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tsubsc()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
     size_t scalarSize = sizeof(T);
 
@@ -100,15 +100,19 @@ void test_tsubsc() {
 const int NUM_16 = 16;
 const int NUM_64 = 64;
 const int NUM_256 = 256;
-TEST_F(TSUBSCTest, case_float_64x64_64x64_64x64) {
+TEST_F(TSUBSCTest, case_float_64x64_64x64_64x64)
+{
     test_tsubsc<float, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TSUBSCTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TSUBSCTest, case_int32_64x64_64x64_64x64)
+{
     test_tsubsc<int32_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TSUBSCTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TSUBSCTest, case_int16_64x64_64x64_64x64)
+{
     test_tsubsc<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TSUBSCTest, case_half_16x256_16x256_16x256) {
+TEST_F(TSUBSCTest, case_half_16x256_16x256_16x256)
+{
     test_tsubsc<aclFloat16, NUM_16, NUM_256, NUM_16, NUM_256>();
 }

@@ -15,21 +15,21 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 
-template <typename T> struct TPartMaxOp {
+template <typename T>
+struct TPartMaxOp {
     static constexpr typename Padding<T>::Type PadVal = Padding<T>::Min;
-    PTO_INTERNAL static void BinInstr(RegTensor<T> &dst, RegTensor<T> &src0, RegTensor<T> &src1,
-        MaskReg preg)
+    PTO_INTERNAL static void BinInstr(RegTensor<T> &dst, RegTensor<T> &src0, RegTensor<T> &src1, MaskReg preg)
     {
         vmax(dst, src0, src1, preg, MODE_ZEROING);
     }
 };
 
-template <typename DstTileData, typename Src0TileData, typename Src1TileData> 
-PTO_INTERNAL void TPARTMAX_IMPL(DstTileData &dst, Src0TileData& src0, Src1TileData& src1,
-    VFImplKind version = VFImplKind::VFIMPL_DEFAULT)
+template <typename DstTileData, typename Src0TileData, typename Src1TileData>
+PTO_INTERNAL void TPARTMAX_IMPL(DstTileData &dst, Src0TileData &src0, Src1TileData &src1,
+                                VFImplKind version = VFImplKind::VFIMPL_DEFAULT)
 {
-    TPartMasterImpl<TPartMaxOp<typename DstTileData::DType>, DstTileData, Src0TileData, Src1TileData>
-        (dst, src0, src1, version);
+    TPartMasterImpl<TPartMaxOp<typename DstTileData::DType>, DstTileData, Src0TileData, Src1TileData>(dst, src0, src1,
+                                                                                                      version);
 }
-}  // namespace pto
+} // namespace pto
 #endif

@@ -17,11 +17,14 @@ using namespace PtoTestCommon;
 
 class TCOLEXPANDTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -31,8 +34,9 @@ std::string GetGoldenDir() {
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTCOLEXPAND(T *out, T *src, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tcolexpand() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tcolexpand()
+{
     size_t fileSize = kTRows_ * kTCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -77,6 +81,11 @@ void test_tcolexpand() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TCOLEXPANDTest, case_float_64x64_64x64_64x64) { test_tcolexpand<float, 64, 64, 64, 64>(); }
-TEST_F(TCOLEXPANDTest, case_half_16x256_16x256_16x256) { test_tcolexpand<aclFloat16, 16, 256, 16, 256>(); }
-
+TEST_F(TCOLEXPANDTest, case_float_64x64_64x64_64x64)
+{
+    test_tcolexpand<float, 64, 64, 64, 64>();
+}
+TEST_F(TCOLEXPANDTest, case_half_16x256_16x256_16x256)
+{
+    test_tcolexpand<aclFloat16, 16, 256, 16, 256>();
+}

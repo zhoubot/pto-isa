@@ -20,7 +20,6 @@ void launchTCOLSUM(T *out, T *src, void *stream);
 
 class TCOLSUMTest : public testing::Test {
 public:
-
 protected:
     void SetUp() override
     {}
@@ -29,7 +28,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -52,11 +52,11 @@ bool TCOLSumTestFramework()
     T *dstHost, *srcHost;
     T *dstDevice, *srcDevice;
 
-    aclrtMallocHost((void**)(&dstHost), dstByteSize);
-    aclrtMallocHost((void**)(&srcHost), srcByteSize);
+    aclrtMallocHost((void **)(&dstHost), dstByteSize);
+    aclrtMallocHost((void **)(&srcHost), srcByteSize);
 
-    aclrtMalloc((void**)&dstDevice, dstByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc((void**)&srcDevice, srcByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&dstDevice, dstByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&srcDevice, srcByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
     ReadFile(GetGoldenDir() + "/input.bin", srcByteSize, srcHost, srcByteSize);
 

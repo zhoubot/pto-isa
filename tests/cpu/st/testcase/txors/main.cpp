@@ -12,7 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTXors(T *out, T *src, T *scalar, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_txors() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_txors()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
     size_t scalarSize = sizeof(T);
 
@@ -92,9 +92,11 @@ void test_txors() {
 }
 
 const int NUM_64 = 64;
-TEST_F(TXORSTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TXORSTest, case_int32_64x64_64x64_64x64)
+{
     test_txors<int32_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TXORSTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TXORSTest, case_int16_64x64_64x64_64x64)
+{
     test_txors<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }

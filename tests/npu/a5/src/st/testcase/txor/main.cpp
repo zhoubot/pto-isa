@@ -12,8 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -25,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
 void LaunchTXor(T *out, T *src0, T *src1, void *stream);
 
-template<typename T, int kTRows_, int kTCols_, int vRows, int vCols>
-void test_txor() {
+template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
+void test_txor()
+{
     size_t fileSize = kTRows_ * kTCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -90,38 +89,47 @@ void test_txor() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TXORTest, case1) {
+TEST_F(TXORTest, case1)
+{
     test_txor<uint16_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TXORTest, case2) {
+TEST_F(TXORTest, case2)
+{
     test_txor<uint16_t, 64, 64, 63, 63>();
 }
 
-TEST_F(TXORTest, case3) {
+TEST_F(TXORTest, case3)
+{
     test_txor<uint16_t, 1, 16384, 1, 16384>();
 }
 
-TEST_F(TXORTest, case4) {
+TEST_F(TXORTest, case4)
+{
     test_txor<uint16_t, 2048, 16, 2048, 16>();
 }
 
-TEST_F(TXORTest, case5) {
+TEST_F(TXORTest, case5)
+{
     test_txor<uint8_t, 32, 32, 32, 32>();
 }
 
-TEST_F(TXORTest, case6) {
+TEST_F(TXORTest, case6)
+{
     test_txor<uint32_t, 8, 8, 8, 8>();
 }
 
-TEST_F(TXORTest, case7) {
+TEST_F(TXORTest, case7)
+{
     test_txor<int8_t, 32, 32, 32, 32>();
 }
 
-TEST_F(TXORTest, case8) {
+TEST_F(TXORTest, case8)
+{
     test_txor<int16_t, 16, 16, 16, 16>();
 }
 
-TEST_F(TXORTest, case9) {
+TEST_F(TXORTest, case9)
+{
     test_txor<int32_t, 8, 8, 8, 8>();
 }

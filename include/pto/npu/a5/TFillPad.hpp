@@ -19,7 +19,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 namespace pto {
 
 template <typename T, typename U>
-PTO_INTERNAL MaskReg PSetTyped(U dist) {
+PTO_INTERNAL MaskReg PSetTyped(U dist)
+{
     if constexpr (sizeof(T) == sizeof(float)) {
         return pset_b32(dist);
     } else if constexpr (sizeof(T) == sizeof(half)) {
@@ -31,7 +32,8 @@ PTO_INTERNAL MaskReg PSetTyped(U dist) {
 
 template <typename T, typename DistType>
 PTO_INTERNAL void CopyValidElementsVec(__ubuf__ T *dstPtr, __ubuf__ T *srcPtr, uint64_t srcValidRow,
-    uint64_t srcValidCol, unsigned srcStride, unsigned dstStride, DistType distValue) {
+                                       uint64_t srcValidCol, unsigned srcStride, unsigned dstStride, DistType distValue)
+{
     constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(T);
     RegTensor<T> vreg0;
     MaskReg preg;
@@ -48,8 +50,9 @@ PTO_INTERNAL void CopyValidElementsVec(__ubuf__ T *dstPtr, __ubuf__ T *srcPtr, u
 
 template <typename TileDataDst, typename TileDataSrc, bool inplace>
 __tf__ PTO_INTERNAL void TFillPad(typename TileDataDst::TileDType __out__ dst,
-    typename TileDataSrc::TileDType __in__ src, uint64_t dstValidRow, uint64_t dstValidCol, uint64_t srcValidRow,
-    uint64_t srcValidCol) {
+                                  typename TileDataSrc::TileDType __in__ src, uint64_t dstValidRow,
+                                  uint64_t dstValidCol, uint64_t srcValidRow, uint64_t srcValidCol)
+{
     using T = typename TileDataSrc::DType;
     using U = typename TileDataDst::DType;
     __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
@@ -64,7 +67,8 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileDataDst::TileDType __out__ dst,
     *(T *)&padValue = *((T *)&uint_pv);
 
     static_assert(sizeof(T) == sizeof(U), "Fix: TFillPad src and dst data type is different!");
-    __VEC_SCOPE__ {
+    __VEC_SCOPE__
+    {
         constexpr auto distValue =
             std::integral_constant<::DistVST, static_cast<::DistVST>(GetDistVst<T, DistVST::DIST_NORM>())>();
         if constexpr (!inplace) {
@@ -98,7 +102,8 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileDataDst::TileDType __out__ dst,
 } // end of tf
 
 template <typename TileDataDst, typename TileDataSrc, bool inplace>
-PTO_INTERNAL void TFILLPAD_GENERIC_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_GENERIC_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     constexpr unsigned blockSizeElem = BLOCK_BYTE_SIZE / sizeof(typename TileDataSrc::DType);
     constexpr unsigned srcStride = TileDataSrc::RowStride;
     constexpr unsigned dstStride = TileDataDst::RowStride;
@@ -113,30 +118,33 @@ PTO_INTERNAL void TFILLPAD_GENERIC_IMPL(TileDataDst &dst, TileDataSrc &src) {
     static_assert(sizeof(T) == sizeof(U), "Fix: TFillPad src and dst data type is different!");
     static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1, "Fix: TFillPad has invalid data type.");
 
-    TFillPad<TileDataDst, TileDataSrc, inplace>(
-        dst.data(), src.data(), validDstRow, validDstCol, validSrcRow, validSrcCol);
+    TFillPad<TileDataDst, TileDataSrc, inplace>(dst.data(), src.data(), validDstRow, validDstCol, validSrcRow,
+                                                validSrcCol);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void TFILLPAD_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     static_assert(TileDataDst::Cols == TileDataSrc::Cols && TileDataDst::Rows == TileDataSrc::Rows,
-        "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
+                  "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
 
     TFILLPAD_GENERIC_IMPL<TileDataDst, TileDataSrc, false>(dst, src);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void TFILLPAD_INPLACE_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_INPLACE_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     static_assert(TileDataDst::Cols == TileDataSrc::Cols && TileDataDst::Rows == TileDataSrc::Rows,
-        "Fix: TFillPad Dst vecTile Rows/Cols must be greater or equal to src vecTile.");
+                  "Fix: TFillPad Dst vecTile Rows/Cols must be greater or equal to src vecTile.");
 
     TFILLPAD_GENERIC_IMPL<TileDataDst, TileDataSrc, true>(dst, src);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void TFILLPAD_EXPAND_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_EXPAND_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     static_assert(TileDataDst::Cols >= TileDataSrc::Cols && TileDataDst::Rows >= TileDataSrc::Rows,
-        "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
+                  "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
 
     TFILLPAD_GENERIC_IMPL<TileDataDst, TileDataSrc, false>(dst, src);
 }
@@ -161,8 +169,9 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileData::TileDType __out__ dst, uint
     if (blockLen != 0) {
         create_cbuf_matrix((__cbuf__ uint16_t *)(dstPtr + dstValidRow * elementsPerBlock), repeatConfig, 0);
     }
-    if (alignedValidCol != TileData::Cols) { // if alignedValidCol is not equal to TileData::Cols, need to pad the left column
-        blockLen = TileData::Rows;        // unit is 32B
+    if (alignedValidCol <
+        TileData::Cols) { // if alignedValidCol is not equal to TileData::Cols, need to pad the left column
+        blockLen = TileData::Rows * (TileData::Cols - alignedValidCol) / elementsPerBlock; // unit is 32B
         repeatConfig = (static_cast<uint64_t>(blockLen) << 16) | // [30:16] is the block number of each repeat
                        (static_cast<uint64_t>(0) << 32) | 1;     // [46:32] is the repeat gap
         create_cbuf_matrix((__cbuf__ uint16_t *)(dstPtr + TileData::Rows * alignedValidCol), repeatConfig, 0);
@@ -174,9 +183,9 @@ template <typename TileData, PadValue PadVal = PadValue::Zero>
 PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
 {
     static_assert(!TileData::isRowMajor && (TileData::SFractal == SLayout::RowMajor),
-        "Fix: TFillPad Dst matTile now only support NZ layout.");
+                  "Fix: TFillPad Dst matTile now only support NZ layout.");
     static_assert(TileData::PadVal == PadValue::Zero || TileData::PadVal == PadValue::Null,
-        "Fix: TFillPad dst matTile pad value only support Zero or Null!");
+                  "Fix: TFillPad dst matTile pad value only support Zero or Null!");
     using T = typename TileData::DType;
     static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1, "Fix: TFillPad type must be b4/b8/b16/b32.");
 
@@ -184,7 +193,6 @@ PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
     uint32_t validDstCol = dst.GetValidCol();
     TFillPad<TileData>(dst.data(), validDstRow, validDstCol);
 }
-
 
 } // namespace pto
 #endif

@@ -12,12 +12,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/pto-inst.hpp"
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
 template <int32_t tilingKey>
-void launchTSHR_demo(uint8_t *out, uint8_t *src,void *stream);
+void launchTSHR_demo(uint8_t *out, uint8_t *src, void *stream);
 
 class TSHRTest : public testing::Test {
 protected:
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTSHR(T *out, T *src0, T *src1, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tshr() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tshr()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -94,9 +94,11 @@ void test_tshr() {
 const int NUM_16 = 16;
 const int NUM_64 = 64;
 const int NUM_256 = 256;
-TEST_F(TSHRTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TSHRTest, case_int16_64x64_64x64_64x64)
+{
     test_tshr<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TSHRTest, case_int32_16x256_16x256_16x256) {
+TEST_F(TSHRTest, case_int32_16x256_16x256_16x256)
+{
     test_tshr<int32_t, NUM_16, NUM_256, NUM_16, NUM_256>();
 }

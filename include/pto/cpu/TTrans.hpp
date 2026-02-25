@@ -12,49 +12,47 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #include <pto/common/pto_tile.hpp>
 #include "pto/cpu/tile_offsets.hpp"
-namespace pto
+namespace pto {
+template <typename DstTileData, typename SrcTileData>
+void TTrans_Impl(typename DstTileData::TileDType dst, typename SrcTileData::TileDType src, unsigned validRow,
+                 unsigned validCol)
 {
-    template <typename DstTileData, typename SrcTileData>
-    void TTrans_Impl(typename DstTileData::TileDType dst,
-                            typename SrcTileData::TileDType src,
-                            unsigned validRow, unsigned validCol
-                        ) {
-        for(size_t c=0; c< validCol; c++) {
-            size_t subTileSrcC = c / SrcTileData::InnerCols;
-            size_t innerSrcC = c % SrcTileData::InnerCols;
-            size_t subTileDstC = c / DstTileData::InnerCols;
-            size_t innerDstC = c % DstTileData::InnerCols;
+    for (size_t c = 0; c < validCol; c++) {
+        size_t subTileSrcC = c / SrcTileData::InnerCols;
+        size_t innerSrcC = c % SrcTileData::InnerCols;
+        size_t subTileDstC = c / DstTileData::InnerCols;
+        size_t innerDstC = c % DstTileData::InnerCols;
 
-            for(size_t r=0; r<validRow; r++) {
-                size_t srcTileIdx, dstTileIdx;
-                if constexpr (SrcTileData::SFractal == SLayout::NoneBox)
-                    srcTileIdx = GetTileElementOffsetPlain<SrcTileData>(r, c);
-                else {
-                    size_t subTileR = r / SrcTileData::InnerRows;
-                    size_t innerR = r % SrcTileData::InnerRows;
-                    srcTileIdx = GetElementOffsetSubfractals<SrcTileData>(subTileSrcC,innerSrcC,subTileR,innerR);
-                }
-
-                if constexpr (DstTileData::SFractal == SLayout::NoneBox)
-                    dstTileIdx = GetTileElementOffsetPlain<DstTileData>(c, r);
-                else {
-                    size_t subTileR = r / DstTileData::InnerRows;
-                    size_t innerR = r % DstTileData::InnerRows;
-                    dstTileIdx = GetElementOffsetSubfractals<DstTileData>(subTileR,innerR, subTileDstC,innerDstC);
-                }
-                dst[dstTileIdx] = src[srcTileIdx];
+        for (size_t r = 0; r < validRow; r++) {
+            size_t srcTileIdx, dstTileIdx;
+            if constexpr (SrcTileData::SFractal == SLayout::NoneBox)
+                srcTileIdx = GetTileElementOffsetPlain<SrcTileData>(r, c);
+            else {
+                size_t subTileR = r / SrcTileData::InnerRows;
+                size_t innerR = r % SrcTileData::InnerRows;
+                srcTileIdx = GetElementOffsetSubfractals<SrcTileData>(subTileSrcC, innerSrcC, subTileR, innerR);
             }
+
+            if constexpr (DstTileData::SFractal == SLayout::NoneBox)
+                dstTileIdx = GetTileElementOffsetPlain<DstTileData>(c, r);
+            else {
+                size_t subTileR = r / DstTileData::InnerRows;
+                size_t innerR = r % DstTileData::InnerRows;
+                dstTileIdx = GetElementOffsetSubfractals<DstTileData>(subTileR, innerR, subTileDstC, innerDstC);
+            }
+            dst[dstTileIdx] = src[srcTileIdx];
         }
     }
+}
 
-    template <typename DstTileData, typename SrcTileData, typename TmpTileData>
-    PTO_INTERNAL void TTRANS_IMPL(DstTileData &dst, SrcTileData &src, TmpTileData &tmp) {
-        static_assert (SrcTileData::ValidRow == DstTileData::ValidCol && SrcTileData::ValidCol == DstTileData::ValidRow);
-        unsigned validRow = src.GetValidRow();
-        unsigned validCol = src.GetValidCol();
-        TTrans_Impl<DstTileData, SrcTileData>(dst.data(), src.data(), validRow, validCol);
-    }
-} 
+template <typename DstTileData, typename SrcTileData, typename TmpTileData>
+PTO_INTERNAL void TTRANS_IMPL(DstTileData &dst, SrcTileData &src, TmpTileData &tmp)
+{
+    static_assert(SrcTileData::ValidRow == DstTileData::ValidCol && SrcTileData::ValidCol == DstTileData::ValidRow);
+    unsigned validRow = src.GetValidRow();
+    unsigned validCol = src.GetValidCol();
+    TTrans_Impl<DstTileData, SrcTileData>(dst.data(), src.data(), validRow, validCol);
+}
+} // namespace pto
 
-
-#endif  // TTRANS_HPP
+#endif // TTRANS_HPP

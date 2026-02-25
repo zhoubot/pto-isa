@@ -92,16 +92,16 @@ def gen_golden_data(case_name, param):
     base_m, base_k, base_n = param.base_m, param.base_k, param.base_n
 
     if a_type == fp4_e2m1x2:
-        x1_gm = np.random.randint(-7, 7, [m, k]).astype(a_type)
+        x1_gm = np.random.randint(-6, 6, [m, k]).astype(a_type)
     elif a_type == fp4_e1m2x2:
-        x1_gm = np.random.randint(-2, 2, [m, k]).astype(a_type)
+        x1_gm = np.random.randint(-1, 2, [m, k]).astype(a_type)
     else:
         x1_gm = np.random.randint(-10, 10, [m, k]).astype(a_type)
 
     if b_type == fp4_e2m1x2:
-        x2_gm = np.random.randint(-7, 7, [k, n]).astype(b_type)
+        x2_gm = np.random.randint(-6, 6, [k, n]).astype(b_type)
     elif b_type == fp4_e1m2x2:
-        x2_gm = np.random.randint(-2, 2, [k, n]).astype(b_type)
+        x2_gm = np.random.randint(-1, 2, [k, n]).astype(b_type)
     else:
         x2_gm = np.random.randint(-10, 10, [k, n]).astype(b_type)
 

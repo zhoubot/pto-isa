@@ -15,21 +15,22 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace PtoTestCommon;
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void launchTMOV(T *out, T *src, void *stream);
 
 template <int32_t testKey>
 int gen_input_golden(uint8_t *input, uint8_t *golden);
 
-
 class TMOVTest : public testing::Test {
-    protected:
-    void SetUp() override {}
-    void TearDown() override {}
+protected:
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -37,8 +38,9 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tmov(){
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tmov()
+{
     uint32_t N = kTRows_;
     uint32_t M = kTCols_;
     size_t dataSize = N * M * sizeof(T);
@@ -56,7 +58,7 @@ void test_tmov(){
     aclrtMalloc((void **)(&dstDevice), dataSize, ACL_MEM_MALLOC_HUGE_FIRST);
     aclrtMalloc((void **)(&srcDevice), dataSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
-    ReadFile(GetGoldenDir() + "/input_arr.bin",  dataSize, srcHost, dataSize);
+    ReadFile(GetGoldenDir() + "/input_arr.bin", dataSize, srcHost, dataSize);
 
     aclrtMemcpy(srcDevice, dataSize, srcHost, dataSize, ACL_MEMCPY_HOST_TO_DEVICE);
     launchTMOV<T, kGRows_, kGCols_, kTRows_, kTCols_>(dstDevice, srcDevice, stream);
@@ -79,69 +81,83 @@ void test_tmov(){
     std::vector<T> devFinal(dataSize);
     ReadFile(GetGoldenDir() + "/golden.bin", dataSize, golden.data(), dataSize);
     ReadFile(GetGoldenDir() + "/output_z.bin", dataSize, devFinal.data(), dataSize);
-    
+
     bool ret = ResultCmp<T>(golden, devFinal, 0.001f);
 
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TMOVTest, vect_copy_case1) {
+TEST_F(TMOVTest, vect_copy_case1)
+{
     test_tmov<float, 64, 64, 64, 64>();
 }
 
-TEST_F(TMOVTest, vect_copy_case2) {
+TEST_F(TMOVTest, vect_copy_case2)
+{
     test_tmov<float, 32, 32, 32, 32>();
 }
 
-TEST_F(TMOVTest, vect_copy_case3) {
+TEST_F(TMOVTest, vect_copy_case3)
+{
     test_tmov<float, 128, 128, 128, 128>();
 }
 
-TEST_F(TMOVTest, vect_copy_case4) {
+TEST_F(TMOVTest, vect_copy_case4)
+{
     test_tmov<float, 128, 32, 128, 32>();
 }
 
-TEST_F(TMOVTest, vect_copy_case5) {
+TEST_F(TMOVTest, vect_copy_case5)
+{
     test_tmov<float, 128, 64, 128, 64>();
 }
 
-TEST_F(TMOVTest, vect_copy_case6) {
+TEST_F(TMOVTest, vect_copy_case6)
+{
     test_tmov<aclFloat16, 64, 64, 64, 64>();
 }
 
-TEST_F(TMOVTest, vect_copy_case7) {
+TEST_F(TMOVTest, vect_copy_case7)
+{
     test_tmov<aclFloat16, 32, 32, 32, 32>();
 }
 
-TEST_F(TMOVTest, vect_copy_case8) {
+TEST_F(TMOVTest, vect_copy_case8)
+{
     test_tmov<aclFloat16, 128, 128, 128, 128>();
 }
 
-TEST_F(TMOVTest, vect_copy_case9) {
+TEST_F(TMOVTest, vect_copy_case9)
+{
     test_tmov<aclFloat16, 128, 32, 128, 32>();
 }
 
-TEST_F(TMOVTest, vect_copy_case10) {
+TEST_F(TMOVTest, vect_copy_case10)
+{
     test_tmov<aclFloat16, 128, 64, 128, 64>();
 }
 
-
-TEST_F(TMOVTest, vect_copy_case11) {
+TEST_F(TMOVTest, vect_copy_case11)
+{
     test_tmov<uint8_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TMOVTest, vect_copy_case12) {
+TEST_F(TMOVTest, vect_copy_case12)
+{
     test_tmov<uint8_t, 32, 32, 32, 32>();
 }
 
-TEST_F(TMOVTest, vect_copy_case13) {
+TEST_F(TMOVTest, vect_copy_case13)
+{
     test_tmov<uint8_t, 128, 128, 128, 128>();
 }
 
-TEST_F(TMOVTest, vect_copy_case14) {
+TEST_F(TMOVTest, vect_copy_case14)
+{
     test_tmov<uint8_t, 128, 32, 128, 32>();
 }
 
-TEST_F(TMOVTest, vect_copy_case15) {
+TEST_F(TMOVTest, vect_copy_case15)
+{
     test_tmov<uint8_t, 128, 64, 128, 64>();
 }

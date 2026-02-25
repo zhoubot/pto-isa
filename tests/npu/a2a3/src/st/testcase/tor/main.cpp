@@ -12,8 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -25,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
 void LaunchTOr(T *out, T *src0, T *src1, void *stream);
 
-template<typename T, int kTRows_, int kTCols_, int vRows, int vCols>
-void test_tor() {
+template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
+void test_tor()
+{
     size_t fileSize = kTRows_ * kTCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -90,22 +89,37 @@ void test_tor() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TORTest, case1) {
+TEST_F(TORTest, case1)
+{
     test_tor<uint16_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TORTest, case2) {
+TEST_F(TORTest, case2)
+{
     test_tor<uint16_t, 64, 64, 63, 63>();
 }
 
-TEST_F(TORTest, case3) {
+TEST_F(TORTest, case3)
+{
     test_tor<uint16_t, 1, 16384, 1, 16384>();
 }
 
-TEST_F(TORTest, case4) {
+TEST_F(TORTest, case4)
+{
     test_tor<uint16_t, 2048, 16, 2048, 16>();
 }
 
-TEST_F(TORTest, case5) {
+TEST_F(TORTest, case5)
+{
     test_tor<int16_t, 64, 64, 64, 64>();
+}
+
+TEST_F(TORTest, case6)
+{
+    test_tor<uint8_t, 64, 64, 63, 63>();
+}
+
+TEST_F(TORTest, case7)
+{
+    test_tor<int8_t, 64, 64, 63, 63>();
 }

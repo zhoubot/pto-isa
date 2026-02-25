@@ -1,5 +1,10 @@
 # TGATHERB
 
+
+## Tile Operation Diagram
+
+![TGATHERB tile operation](../figures/isa/TGATHERB.svg)
+
 ## Introduction
 
 Gather elements using byte offsets.
@@ -21,20 +26,18 @@ Synchronous form:
 ```text
 tgatherb %dst, %src, %offsets : (!pto.tile<...>, !pto.tile<...>)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
-%dst = pto.tgatherb %src, %offsets : (dtype, !pto.tile<...>) -> !pto.tile<...>
+```text
+%dst = pto.tgatherb %src, %offsets : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-pto.tgatherb ins(%src, %offsets : dtype, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```text
+pto.tgatherb ins(%src, %offsets : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -97,3 +100,31 @@ void example_manual() {
   TGATHERB(dst, src, off);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.tgatherb %src, %offsets : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.tgatherb %src, %offsets : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = tgatherb %src, %offsets : !pto.tile<...> -> !pto.tile<...>
+# IR Level 2 (DPS)
+pto.tgatherb ins(%src, %offsets : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+

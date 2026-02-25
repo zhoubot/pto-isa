@@ -53,7 +53,9 @@ class TestParams:
 def generate_case_name(param):
     dtype_str = {
         np.int16: 'int16',
-        np.uint16: 'uint16'
+        np.uint16: 'uint16',
+        np.int8: 'int8',
+        np.uint8: 'uint8'
     }[param.dtype]
     return (
         f"TNOTTest.case_{dtype_str}_"
@@ -73,7 +75,9 @@ if __name__ == "__main__":
 
     case_params_list = [
         TestParams(np.int16, 64, 64, 64, 64, 64, 64),
-        TestParams(np.uint16, 60, 60, 64, 64, 60, 60)
+        TestParams(np.uint16, 60, 60, 64, 64, 60, 60),
+        TestParams(np.int8, 64, 64, 64, 64, 64, 64),
+        TestParams(np.uint8, 60, 60, 64, 64, 60, 60)
     ]
 
     for i, param in enumerate(case_params_list):

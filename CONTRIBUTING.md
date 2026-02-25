@@ -69,7 +69,8 @@
   ```
 
   开发完成后，请检查以下内容：
-  - 代码交付件完整性（含 ST 测试用例代码）  
+  - 代码交付件完整性（含 ST 测试用例代码）
+  - 代码符合.clang-format和pyproject.toml规范，提交前请使用命令clang-format -i -style=file <文件名>和ruff format <文件名>修复代码规范问题
   - PR 是否已关联对应 Issue  
   - 是否签署 CLA  
   - 通过评论 `compile` 指令触发开源仓门禁，并依据 CI 检测结果进行修改。如涉及codecheck误报，请提交给sig成员屏蔽。

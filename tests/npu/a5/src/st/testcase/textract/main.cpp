@@ -35,7 +35,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -284,9 +285,12 @@ protected:
 template <int32_t key, typename T, typename U, typename S>
 void tmov_test(uint32_t M, uint32_t K, uint32_t N, uint32_t targetM = 0, uint32_t targetK = 0, uint32_t targetN = 0)
 {
-    if (targetM == 0) targetM = M;
-    if (targetN == 0) targetN = N;
-    if (targetK == 0) targetK = K;
+    if (targetM == 0)
+        targetM = M;
+    if (targetN == 0)
+        targetN = N;
+    if (targetK == 0)
+        targetK = K;
     if (targetM < M || targetN < N || targetK < K) {
         printf("Error: targetM targetN targetK should large than M N K");
         return;

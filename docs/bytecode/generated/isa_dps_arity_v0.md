@@ -1,0 +1,115 @@
+# PTO-BC v0 — ISA DPS arity report (generated)
+
+Source: `docs/isa/*.md` DPS lines `pto.xxx ins(...) outs(...)`.
+
+Columns: op | dps_arity | operand_mode | num_operands | imm_kind
+
+- `pto.mgather` | 3 | fixed | 3 | 0x00
+- `pto.mscatter` | 3 | fixed | 3 | 0x00
+- `pto.tabs` | 2 | fixed | 2 | 0x00
+- `pto.tadd` | 3 | fixed | 3 | 0x00
+- `pto.taddc` | 4 | fixed | 4 | 0x00
+- `pto.tadds` | 3 | fixed | 3 | 0x00
+- `pto.taddsc` | 4 | fixed | 4 | 0x00
+- `pto.tand` | 3 | fixed | 3 | 0x00
+- `pto.tands` | 3 | fixed | 3 | 0x00
+- `pto.tci` | 2 | fixed | 2 | 0x00
+- `pto.tcmp` | 3 | fixed | 3 | 0x00
+- `pto.tcmps` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpand` | 2 | fixed | 2 | 0x00
+- `pto.tcolexpandadd` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpanddiv` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpandexpdif` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpandmax` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpandmin` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpandmul` | 3 | fixed | 3 | 0x00
+- `pto.tcolexpandsub` | 3 | fixed | 3 | 0x00
+- `pto.tcolmax` | 2 | fixed | 2 | 0x00
+- `pto.tcolmin` | 2 | fixed | 2 | 0x00
+- `pto.tcolprod` | 2 | fixed | 2 | 0x00
+- `pto.tcolsum` | 3 | fixed | 3 | 0x00
+- `pto.tcvt` | 2 | fixed | 2 | 0x00
+- `pto.tdiv` | 3 | fixed | 3 | 0x00
+- `pto.tdivs` | 3 | fixed | 3 | 0x00
+- `pto.texp` | 2 | fixed | 2 | 0x00
+- `pto.texpands` | 2 | fixed | 2 | 0x00
+- `pto.textract` | 4 | fixed | 4 | 0x00
+- `pto.textract_fp` | 4 | fixed | 4 | 0x00
+- `pto.tfillpad` | 2 | fixed | 2 | 0x00
+- `pto.tfillpad_expand` | 2 | fixed | 2 | 0x00
+- `pto.tfillpad_inplace` | 2 | fixed | 2 | 0x00
+- `pto.tfmod` | 3 | fixed | 3 | 0x00
+- `pto.tfmods` | 3 | fixed | 3 | 0x00
+- `pto.tgather` | 3 | fixed | 3 | 0x00
+- `pto.tgatherb` | 3 | fixed | 3 | 0x00
+- `pto.tgemv` | 3 | by_variant | 0 | 0x00
+- `pto.tgemv.acc`: MISSING OPCODE
+- `pto.tgemv.bias`: MISSING OPCODE
+- `pto.tgemv.mx`: MISSING OPCODE
+- `pto.timg2col` | 2 | fixed | 2 | 0x00
+- `pto.tinsert` | 3 | fixed | 3 | 0x00
+- `pto.tinsert_fp` | 5 | fixed | 5 | 0x00
+- `pto.tload` | 2 | fixed | 2 | 0x00
+- `pto.tlog` | 2 | fixed | 2 | 0x00
+- `pto.tlrelu` | 3 | fixed | 3 | 0x00
+- `pto.tmatmul` | 3 | by_variant | 0 | 0x00
+- `pto.tmatmul.acc`: MISSING OPCODE
+- `pto.tmatmul.bias`: MISSING OPCODE
+- `pto.tmax` | 3 | fixed | 3 | 0x00
+- `pto.tmaxs` | 3 | fixed | 3 | 0x00
+- `pto.tmin` | 3 | fixed | 3 | 0x00
+- `pto.tmins` | 3 | fixed | 3 | 0x00
+- `pto.tmov` | 2 | fixed | 2 | 0x00
+- `pto.tmov.fp` | 3 | fixed | 3 | 0x00
+- `pto.tmrgsort` | 3 | fixed | 3 | 0x00
+- `pto.tmul` | 3 | fixed | 3 | 0x00
+- `pto.tmuls` | 3 | fixed | 3 | 0x00
+- `pto.tneg` | 2 | fixed | 2 | 0x00
+- `pto.tnot` | 2 | fixed | 2 | 0x00
+- `pto.tor` | 3 | fixed | 3 | 0x00
+- `pto.tors` | 3 | fixed | 3 | 0x00
+- `pto.tpartadd` | 3 | fixed | 3 | 0x00
+- `pto.tpartmax` | 3 | fixed | 3 | 0x00
+- `pto.tpartmin` | 3 | fixed | 3 | 0x00
+- `pto.tpartmul` | 3 | fixed | 3 | 0x00
+- `pto.tprefetch` | 2 | fixed | 2 | 0x00
+- `pto.tprelu` | 3 | fixed | 3 | 0x00
+- `pto.tquant` | 3 | fixed | 3 | 0x00
+- `pto.trecip` | 2 | fixed | 2 | 0x00
+- `pto.trelu` | 2 | fixed | 2 | 0x00
+- `pto.trem` | 3 | fixed | 3 | 0x00
+- `pto.trems` | 3 | fixed | 3 | 0x00
+- `pto.treshape` | 2 | fixed | 2 | 0x00
+- `pto.trowexpand` | 2 | fixed | 2 | 0x00
+- `pto.trowexpandadd` | 3 | fixed | 3 | 0x00
+- `pto.trowexpandexpdif` | 3 | fixed | 3 | 0x00
+- `pto.trowexpandmax` | 3 | fixed | 3 | 0x00
+- `pto.trowexpandmin` | 3 | fixed | 3 | 0x00
+- `pto.trowmax` | 3 | fixed | 3 | 0x00
+- `pto.trowmin` | 3 | fixed | 3 | 0x00
+- `pto.trowsum` | 3 | fixed | 3 | 0x00
+- `pto.trsqrt` | 2 | fixed | 2 | 0x00
+- `pto.tscatter` | 3 | fixed | 3 | 0x00
+- `pto.tsel` | 4 | fixed | 4 | 0x00
+- `pto.tsels` | 4 | fixed | 4 | 0x00
+- `pto.tset_img2col_padding` | 1 | fixed | 1 | 0x00
+- `pto.tset_img2col_rpt` | 1 | fixed | 1 | 0x00
+- `pto.tsetfmatrix` | 1 | fixed | 1 | 0x00
+- `pto.tsethf32mode` | 2 | fixed | 2 | 0x00
+- `pto.tsettf32mode` | 2 | fixed | 2 | 0x00
+- `pto.tshl` | 3 | fixed | 3 | 0x00
+- `pto.tshls` | 3 | fixed | 3 | 0x00
+- `pto.tshr` | 3 | fixed | 3 | 0x00
+- `pto.tshrs` | 3 | fixed | 3 | 0x00
+- `pto.tsort32` | 3 | fixed | 3 | 0x00
+- `pto.tsqrt` | 2 | fixed | 2 | 0x00
+- `pto.tstore` | 2 | fixed | 2 | 0x00
+- `pto.tstore.fp` | 3 | fixed | 3 | 0x00
+- `pto.tsub` | 3 | fixed | 3 | 0x00
+- `pto.tsubc` | 4 | fixed | 4 | 0x00
+- `pto.tsubs` | 3 | fixed | 3 | 0x00
+- `pto.tsubsc` | 4 | fixed | 4 | 0x00
+- `pto.ttrans` | 2 | fixed | 2 | 0x00
+- `pto.ttri` | 3 | fixed | 3 | 0x00
+- `pto.txor` | 3 | fixed | 3 | 0x00
+- `pto.txors` | 3 | fixed | 3 | 0x00

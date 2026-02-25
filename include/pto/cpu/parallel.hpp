@@ -103,4 +103,3 @@ inline void parallel_for_rows(std::size_t rows, std::size_t cols, Fn fn)
 } // namespace pto::cpu
 
 #endif
-

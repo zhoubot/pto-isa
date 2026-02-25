@@ -17,10 +17,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 namespace pto {
 
 // Operation types for TSync - identifies the producer/consumer operation
-enum class SyncOpType : uint8_t {
-    TSTORE_C2GM,  // Store (Cube core operation)
-    TSTORE_V2GM,  // Store (Vector core operation)
-    TLOAD         // Load operation (consumer operation)
+enum class SyncOpType : uint8_t
+{
+    TSTORE_C2GM, // Store (Cube core operation)
+    TSTORE_V2GM, // Store (Vector core operation)
+    TLOAD        // Load operation (consumer operation)
 };
 
 // Compile-time direction inference based on producer/consumer ops
@@ -33,39 +34,39 @@ struct SyncTraits {
     // TSTORE_V2GM -> Vector produces (V2C)
     static constexpr bool is_cube_to_vec = (ProducerOp == SyncOpType::TSTORE_C2GM);
     static constexpr bool is_vec_to_cube = (ProducerOp == SyncOpType::TSTORE_V2GM);
-    
+
     static_assert(ConsumerOp == SyncOpType::TLOAD, "Consumer operation must be TLOAD");
-    static_assert(is_cube_to_vec || is_vec_to_cube, 
+    static_assert(is_cube_to_vec || is_vec_to_cube,
                   "Producer must be either TSTORE_C2GM (Cube) or TSTORE_V2GM (Vector)");
 };
 
 namespace detail {
-    template <int N>
-    struct FlagIDTag {
-        static constexpr int value = N;
-    };
-    
-    // Base counter starts at 0 (user IDs start from 0 to 12)
-    constexpr int kUserFlagIDStart = 0;
-    constexpr int kMaxFlagID = 12;
-    constexpr int kNumUserFlags = kMaxFlagID - kUserFlagIDStart + 1;  // 12 flags
-}
+template <int N>
+struct FlagIDTag {
+    static constexpr int value = N;
+};
+
+// Base counter starts at 0 (user IDs start from 0 to 12)
+constexpr int kUserFlagIDStart = 0;
+constexpr int kMaxFlagID = 12;
+constexpr int kNumUserFlags = kMaxFlagID - kUserFlagIDStart + 1; // 12 flags
+} // namespace detail
 
 /**
  * TSync - Lightweight synchronization primitive for intra-core dependencies
- * 
- * 
+ *
+ *
  * Usage with manual flag ID:
  *   constexpr TSync<TSTORE_C2GM, TLOAD> sync = {BUF0_QK_READY};
- * 
+ *
  * Forward dependency (producer -> consumer):
  *   Producer: sync.record()  // Signal data ready
  *   Consumer: sync.wait()    // Wait for data
- * 
+ *
  * Backward dependency (consumer -> producer):
  *   Producer: sync.allocate() // Wait for buffer space
  *   Consumer: sync.free()     // Signal buffer available
- * 
+ *
  * Template Parameters:
  *   ProducerOp: Producer operation (TSTORE_C2GM or TSTORE_V2GM)
  *   ConsumerOp: Consumer operation (TLOAD)
@@ -75,16 +76,17 @@ struct TSync_Custom {
     using Traits = SyncTraits<ProducerOp, ConsumerOp>;
     static constexpr bool is_c2v = Traits::is_cube_to_vec;
     static constexpr bool is_v2c = Traits::is_vec_to_cube;
-    
-    uint16_t flag_id;  // FFTS flag ID for cross-core synchronization
-    
+
+    uint16_t flag_id; // FFTS flag ID for cross-core synchronization
+
     // Forward dependency: record (producer) and wait (consumer)
 
     /**
      * record - Producer signals that data is ready
      * Called by the producer after completing the operation (TSTORE_C2GM or TSTORE_V2GM)
      */
-    AICORE inline void record() const {
+    AICORE inline void record() const
+    {
         if constexpr (is_c2v) {
             // Cube produces, Vector consumes
             ffts_cross_core_sync(PIPE_FIX, _getFFTSMsg(CV_CORE_SYNC, flag_id));
@@ -93,12 +95,13 @@ struct TSync_Custom {
             ffts_cross_core_sync(PIPE_MTE3, _getFFTSMsg(CV_CORE_SYNC, flag_id));
         }
     }
-    
+
     /**
      * wait - Consumer waits for data to be ready
      * Called by the consumer before accessing the data (TLOAD)
      */
-    AICORE inline void wait() const {
+    AICORE inline void wait() const
+    {
         if constexpr (is_c2v) {
             // Vector waits for Cube
             wait_flag_dev(flag_id);
@@ -107,14 +110,15 @@ struct TSync_Custom {
             wait_flag_dev(flag_id);
         }
     }
-    
+
     // Backward dependency: allocate (producer) and free (consumer)
-    
+
     /**
      * allocate - Producer waits for buffer space to be available
      * Called by the producer before writing new data
      */
-    AICORE inline void allocate() const {
+    AICORE inline void allocate() const
+    {
         if constexpr (is_c2v) {
             // Cube waits for Vector to free buffer
             wait_flag_dev(flag_id + 1);
@@ -123,12 +127,13 @@ struct TSync_Custom {
             wait_flag_dev(flag_id + 1);
         }
     }
-    
+
     /**
      * free - Consumer signals that buffer space is available
      * Called by the consumer after consuming data
      */
-    AICORE inline void free() const {
+    AICORE inline void free() const
+    {
         if constexpr (is_c2v) {
             // Vector frees buffer for Cube
             ffts_cross_core_sync(PIPE_MTE2, _getFFTSMsg(CV_CORE_SYNC, flag_id + 1));
@@ -138,7 +143,6 @@ struct TSync_Custom {
         }
     }
 };
-
 
 } // namespace pto
 

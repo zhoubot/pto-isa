@@ -14,43 +14,37 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "TColReduceOps.hpp"
 
 namespace pto {
-    template <typename T>
-    struct COLMAXOp
+template <typename T>
+struct COLMAXOp {
+    PTO_INTERNAL static void ReduceInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats,
+                                         uint8_t dstRepeatStride, uint8_t src0RepeatStride, uint8_t src1RepeatStride)
     {
-        PTO_INTERNAL static void ReduceInstr(__ubuf__ T *dst, __ubuf__ T *src0, 
-                                              __ubuf__ T *src1, uint8_t repeats,
-                                              uint8_t dstRepeatStride,
-                                              uint8_t src0RepeatStride,
-                                              uint8_t src1RepeatStride)
-        {
-            vmax(dst, src0, src1, repeats, 1, 1, 1, dstRepeatStride, 
-                 src0RepeatStride, src1RepeatStride);
-        }
-    };
-
-    template <typename T, typename TileDataDst, typename TileDataSrc, unsigned srcstride>
-    __tf__ PTO_INTERNAL void TColMax(typename TileDataDst::TileDType __out__ dst,
-                                              typename TileDataSrc::TileDType __in__ src,
-                                              int validRow, int validCol)
-    {
-        __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
-        __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
-
-        ColReduceInstr<COLMAXOp<T>, T, TileDataDst, TileDataSrc, srcstride>(
-            dstPtr, srcPtr, validRow, validCol);
+        vmax(dst, src0, src1, repeats, 1, 1, 1, dstRepeatStride, src0RepeatStride, src1RepeatStride);
     }
+};
 
-    template <typename TileDataOut, typename TileDataIn>
-    PTO_INTERNAL void TCOLMAX_IMPL(TileDataOut &dst, TileDataIn &src) {
-        using T = typename TileDataIn::DType;
-        int ValidRow = src.GetValidRow();
-        int ValidCol = src.GetValidCol();
-        TColReduceCheck<T, TileDataOut, TileDataIn>(ValidRow, ValidCol, dst.GetValidCol());
-        if (ValidRow == 0 || ValidCol == 0) {
-            return;
-        }
-        constexpr int srcstride = TileDataIn::RowStride;
-        TColMax<T, TileDataOut, TileDataIn, srcstride>(dst.data(), src.data(), ValidRow, ValidCol);
-    }
+template <typename T, typename TileDataDst, typename TileDataSrc, unsigned srcstride>
+__tf__ PTO_INTERNAL void TColMax(typename TileDataDst::TileDType __out__ dst,
+                                 typename TileDataSrc::TileDType __in__ src, int validRow, int validCol)
+{
+    __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
+    __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
+
+    ColReduceInstr<COLMAXOp<T>, T, TileDataDst, TileDataSrc, srcstride>(dstPtr, srcPtr, validRow, validCol);
 }
+
+template <typename TileDataOut, typename TileDataIn>
+PTO_INTERNAL void TCOLMAX_IMPL(TileDataOut &dst, TileDataIn &src)
+{
+    using T = typename TileDataIn::DType;
+    int ValidRow = src.GetValidRow();
+    int ValidCol = src.GetValidCol();
+    TColReduceCheck<T, TileDataOut, TileDataIn>(ValidRow, ValidCol, dst.GetValidCol());
+    if (ValidRow == 0 || ValidCol == 0) {
+        return;
+    }
+    constexpr int srcstride = TileDataIn::RowStride;
+    TColMax<T, TileDataOut, TileDataIn, srcstride>(dst.data(), src.data(), ValidRow, ValidCol);
+}
+} // namespace pto
 #endif

@@ -14,22 +14,24 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/tile_offsets.hpp"
 
 namespace pto {
-    template <typename TileData, typename T, int descending>
-    PTO_INTERNAL void Tci_IMPL(typename TileData::TileDType dst, T start, unsigned validCol) {
-        for(int j = 0; j < validCol; j++){
-            int idx = GetTileElementOffset<TileData>(0, j);
-            if constexpr (descending == 1)
-                dst[idx] = start-j;
-            else 
-                dst[idx] = start+j;
-        }
-    }
-
-    template <typename TileData, typename T, int descending>
-    PTO_INTERNAL void TCI_IMPL(TileData &dst, T index) {
-        static_assert((TileData::Rows == 1), "TCI only support 1 row tile");
-        static_assert((std::is_same<typename TileData::DType, T>::value), "TCI data type must match tile data type");
-        Tci_IMPL<TileData, T, descending>(dst.data(), index, dst.GetValidCol());
+template <typename TileData, typename T, int descending>
+PTO_INTERNAL void Tci_IMPL(typename TileData::TileDType dst, T start, unsigned validCol)
+{
+    for (int j = 0; j < validCol; j++) {
+        int idx = GetTileElementOffset<TileData>(0, j);
+        if constexpr (descending == 1)
+            dst[idx] = start - j;
+        else
+            dst[idx] = start + j;
     }
 }
+
+template <typename TileData, typename T, int descending>
+PTO_INTERNAL void TCI_IMPL(TileData &dst, T index)
+{
+    static_assert((TileData::Rows == 1), "TCI only support 1 row tile");
+    static_assert((std::is_same<typename TileData::DType, T>::value), "TCI data type must match tile data type");
+    Tci_IMPL<TileData, T, descending>(dst.data(), index, dst.GetValidCol());
+}
+} // namespace pto
 #endif

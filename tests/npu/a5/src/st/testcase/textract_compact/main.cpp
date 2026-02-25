@@ -26,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,8 +36,8 @@ std::string GetGoldenDir() {
 }
 
 template <int32_t key, typename T, typename U, typename S>
-void textract_test(uint32_t M, uint32_t K, uint32_t N, uint16_t indexM, uint16_t indexK, 
-    uint16_t indexN, uint16_t baseM, uint16_t baseK, uint16_t baseN)
+void textract_test(uint32_t M, uint32_t K, uint32_t N, uint16_t indexM, uint16_t indexK, uint16_t indexN,
+                   uint16_t baseM, uint16_t baseK, uint16_t baseN)
 {
     uint32_t mValid = M - indexM;
     uint32_t nValid = N - indexN;

@@ -19,8 +19,7 @@ template <int32_t tilingKey>
 void launchTMOVAcc2MatNZ2NZ(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2, void *stream);
 
 template <int32_t tilingKey>
-void launchTMOVAcc2MatFBQuantNz(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2, uint8_t *src3,
-    void *stream);
+void launchTMOVAcc2MatFBQuantNz(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2, uint8_t *src3, void *stream);
 
 template <int32_t tilingKey>
 void launchTMOVAcc2MatSCQuantNz(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2, void *stream);
@@ -43,7 +42,7 @@ std::string GetGoldenDir()
 }
 
 template <typename CType, typename AType, typename BType, int32_t key, uint32_t IdxRow = 0, uint32_t IdxCol = 0,
-    bool isInsert = false, uint32_t DstRow = 0, uint32_t DstCol = 0>
+          bool isInsert = false, uint32_t DstRow = 0, uint32_t DstCol = 0>
 void tmov_acc2mat_nz2nz_test(uint32_t M, uint32_t K, uint32_t N)
 {
     size_t aFileSize = M * K * sizeof(AType);
@@ -111,8 +110,8 @@ void tmov_acc2mat_nz2nz_test(uint32_t M, uint32_t K, uint32_t N)
     EXPECT_TRUE(ret);
 }
 
-template <typename CType, typename AType, typename BType, typename QuantType, int32_t key, uint32_t IdxRow = 0, 
-    uint32_t IdxCol = 0, bool isInsert = false, uint32_t DstRow = 0, uint32_t DstCol = 0>
+template <typename CType, typename AType, typename BType, typename QuantType, int32_t key, uint32_t IdxRow = 0,
+          uint32_t IdxCol = 0, bool isInsert = false, uint32_t DstRow = 0, uint32_t DstCol = 0>
 void tmov_acc2mat_nz2nz_fb_quant_test(uint32_t M, uint32_t K, uint32_t N)
 {
     size_t aFileSize = M * K * sizeof(AType);
@@ -148,7 +147,7 @@ void tmov_acc2mat_nz2nz_fb_quant_test(uint32_t M, uint32_t K, uint32_t N)
     ReadFile(GetGoldenDir() + "/quant_gm.bin", FBQuantFileSize, src2Host, FBQuantFileSize);
     if (isInsert) {
         ReadFile(GetGoldenDir() + "/dst.bin", cFileSize, src3Host, cFileSize);
-    }    
+    }
 
     aclrtMemcpy(src0Device, aFileSize, src0Host, aFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
     aclrtMemcpy(src1Device, bFileSize, src1Host, bFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
@@ -188,8 +187,8 @@ void tmov_acc2mat_nz2nz_fb_quant_test(uint32_t M, uint32_t K, uint32_t N)
     EXPECT_TRUE(ret);
 }
 
-template <typename CType, typename AType, typename BType, int32_t key, uint32_t IdxRow = 0,
-    uint32_t IdxCol = 0, bool isInsert = false, uint32_t DstRow = 0, uint32_t DstCol = 0>
+template <typename CType, typename AType, typename BType, int32_t key, uint32_t IdxRow = 0, uint32_t IdxCol = 0,
+          bool isInsert = false, uint32_t DstRow = 0, uint32_t DstCol = 0>
 void tmov_acc2mat_nz2nz_sc_quant_test(uint32_t M, uint32_t K, uint32_t N)
 {
     size_t aFileSize = M * K * sizeof(AType);
@@ -495,7 +494,6 @@ TEST_F(TMOVTest, case_nz2nz_fb_quant_extract)
     tmov_acc2mat_nz2nz_fb_quant_test<int8_t, uint16_t, uint16_t, uint64_t, 11, 32, 32>(M, K, N);
 }
 
-
 TEST_F(TMOVTest, case_nz2nz_insert)
 {
     uint32_t M = 32;
@@ -504,7 +502,6 @@ TEST_F(TMOVTest, case_nz2nz_insert)
 
     tmov_acc2mat_nz2nz_test<uint16_t, uint16_t, uint16_t, 6, 32, 32, true, 128, 128>(M, K, N);
 }
-
 
 TEST_F(TMOVTest, case_nz2nz_sc_quant_insert)
 {

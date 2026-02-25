@@ -16,7 +16,7 @@ using namespace std;
 using namespace PtoTestCommon;
 
 template <typename T, int rows, int src_col, int src_validCol, int dst_col, int dst_validCol>
-void launchTROWEXPAND(T *out, T *src,void *stream);
+void launchTROWEXPAND(T *out, T *src, void *stream);
 
 class TROWEXPANDTest : public testing::Test {
 protected:
@@ -26,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -101,7 +102,6 @@ TEST_F(TROWEXPANDTest, case2)
     EXPECT_TRUE(ret);
 }
 
-
 TEST_F(TROWEXPANDTest, case3)
 {
     bool ret = TRowExpandFramework<float, 16, 32, 1, 512, 512>();
@@ -128,7 +128,7 @@ TEST_F(TROWEXPANDTest, case6)
 
 TEST_F(TROWEXPANDTest, case7)
 {
-    bool ret = TRowExpandFramework<float, 16, 8, 1, 128, 127>();
+    bool ret = TRowExpandFramework<uint16_t, 16, 16, 1, 128, 127>();
     EXPECT_TRUE(ret);
 }
 
@@ -171,5 +171,52 @@ TEST_F(TROWEXPANDTest, case13)
 TEST_F(TROWEXPANDTest, case14)
 {
     bool ret = TRowExpandFramework<float, 16, 1, 1, 8, 8>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case15)
+{
+    bool ret = TRowExpandFramework<int16_t, 16, 16, 1, 512, 512>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case16)
+{
+    bool ret = TRowExpandFramework<int8_t, 16, 32, 1, 256, 256>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case17)
+{
+    bool ret = TRowExpandFramework<int32_t, 16, 8, 1, 128, 128>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case18)
+{
+    bool ret = TRowExpandFramework<int16_t, 16, 16, 1, 256, 255>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case19)
+{
+    bool ret = TRowExpandFramework<int8_t, 16, 32, 1, 512, 511>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case20)
+{
+    bool ret = TRowExpandFramework<int32_t, 16, 8, 1, 128, 127>();
+    EXPECT_TRUE(ret);
+}
+
+TEST_F(TROWEXPANDTest, case21)
+{
+    bool ret = TRowExpandFramework<int16_t, 16, 16, 1, 128, 127>();
+    EXPECT_TRUE(ret);
+}
+TEST_F(TROWEXPANDTest, case22)
+{
+    bool ret = TRowExpandFramework<int8_t, 2, 32, 1, 64, 63>();
     EXPECT_TRUE(ret);
 }

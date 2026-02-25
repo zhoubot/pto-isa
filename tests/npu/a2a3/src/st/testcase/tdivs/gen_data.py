@@ -32,7 +32,7 @@ def gen_golden_data(param):
     for i in range(rows):
         for j in range(cols):
             match = re.search(r'(\d+)$', param.name)
-            if int(match.group(1)) <= 10:
+            if int(match.group(1)) < 10:
                 output_arr[i, j] = input_arr[i, j] / divider[0, 0]
             else:
                 output_arr[i, j] = divider[0, 0] / input_arr[i, j]

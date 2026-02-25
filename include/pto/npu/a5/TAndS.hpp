@@ -25,5 +25,5 @@ PTO_INTERNAL void TANDS_IMPL(TileDataDst &dst, TileDataSrc &src0, typename TileD
     TEXPANDS_IMPL(dst, src1);
     TAND_IMPL(dst, src0, dst);
 }
-}  // namespace pto
+} // namespace pto
 #endif

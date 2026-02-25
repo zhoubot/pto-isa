@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This file is a part of the CANN Open Software.
 # Licensed under CANN Open Software License Agreement Version 1.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -8,8 +8,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ======================================================================================================================
 
-SHORT=r:,v:,n:,c:,a:,p:,i,d
-LONG=run-mode:,soc-version:,npu:,case:,cases:,qk-preload:,intermediate,debug
+SHORT=r:,v:,n:,c:,a:,p:,i,d,m
+LONG=run-mode:,soc-version:,npu:,case:,cases:,qk-preload:,intermediate,debug,mask
 OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
 eval set -- "$OPTS"
 while :
@@ -39,6 +39,9 @@ do
         (-d | --debug )
             DEBUG_BUILD=1
             shift 1;;
+        (-m | --mask )
+            CAUSAL_MASK=1
+            shift 1;;
         (--)
             shift;
             break;;
@@ -48,12 +51,14 @@ do
     esac
 done
 
-if [[ ! "${SOC_VERSION}" =~ ^Ascend ]]; then
-    echo "[ERROR] Unsupported SocVersion: ${SOC_VERSION}"
+pattern="^Ascend910B"
+if [[ ! "$SOC_VERSION" =~ $pattern ]]; then
+    echo "[ERROR] Unsupported SocVersion: ${SOC_VERSION}, this folder only support A2/A3."
     exit 1
 fi
 
-if [[ "${SOC_VERSION}" =~ ^Ascend910B4-1 ]] && [ "${RUN_MODE}" == "sim" ]; then
+pattern="^Ascend910B4-1"
+if [[ "$SOC_VERSION" =~ $pattern ]] && [ "${RUN_MODE}" == "sim" ]; then
     echo "[ERROR] SocVersion: ${SOC_VERSION} can not support sim mode, please use Ascend910B4."
     exit 1
 fi
@@ -98,9 +103,10 @@ echo "[RUN.SH] NPU_ID=${NPU_ID}"
 echo "[RUN.SH] QK_PRELOAD=${QK_PRELOAD}"
 echo "[RUN.SH] GEN_CASE_ARGS=${GEN_CASE_ARGS[*]:-<none>}"
 echo "[RUN.SH] INTERMEDIATE=${INTERMEDIATE:-0}"
+echo "[RUN.SH] CAUSAL_MASK=${CAUSAL_MASK:-0}"
 echo "[RUN.SH] DEBUG=${DEBUG_BUILD:-0}"
 
-python3 ../scripts/generate_cases.py --qk-preload "${QK_PRELOAD}" "${GEN_CASE_ARGS[@]}"
+python3 ../scripts/generate_cases.py --qk-preload "${QK_PRELOAD}" "${GEN_CASE_ARGS[@]}" --causal-mask "${CAUSAL_MASK:-0}"
 
 CMAKE_EXTRA=()
 if [[ -n "${DEBUG_BUILD:-}" ]]; then
@@ -116,12 +122,12 @@ if [[ -n "${INTERMEDIATE:-}" ]]; then
 fi
 
 if [[ -n "${CASE_FILTER:-}" ]]; then
-    python3 ../scripts/gen_data.py --case="${CASE_FILTER}" "${GEN_CASE_ARGS[@]}"
+    python3 ../scripts/gen_data.py --case="${CASE_FILTER}" "${GEN_CASE_ARGS[@]}" --causal-mask "${CAUSAL_MASK:-0}"
     time ./fa_performance --npu="${NPU_ID}" --case="${CASE_FILTER}" "${EXTRA_BIN_ARGS[@]}"
 elif [[ -n "${CASES_RAW:-}" ]]; then
-    python3 ../scripts/gen_data.py "${GEN_CASE_ARGS[@]}"
+    python3 ../scripts/gen_data.py "${GEN_CASE_ARGS[@]}" --causal-mask "${CAUSAL_MASK:-0}"
     time ./fa_performance --npu="${NPU_ID}" --cases="${CASES_RAW}" "${EXTRA_BIN_ARGS[@]}"
 else
-    python3 ../scripts/gen_data.py "${GEN_CASE_ARGS[@]}"
+    python3 ../scripts/gen_data.py "${GEN_CASE_ARGS[@]}" --causal-mask "${CAUSAL_MASK:-0}"
     time ./fa_performance --npu="${NPU_ID}" "${EXTRA_BIN_ARGS[@]}"
 fi

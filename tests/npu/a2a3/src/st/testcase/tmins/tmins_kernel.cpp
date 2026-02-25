@@ -8,8 +8,8 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
+#include <type_traits>
 #include <pto/pto-inst.hpp>
-#include <pto/common/constants.hpp>
 #include "acl/acl.h"
 
 using namespace pto;
@@ -18,11 +18,12 @@ using namespace pto;
 #define PAD_VALUE_MAX (1)
 #define PAD_VALUE_MIN (-1)
 
+#ifdef __CCE_AICORE__
 template <typename T, int TRows, int TCols, int vRows, int vCols, int paddingValueType>
 struct TileDataSelector;
 
 template <typename T, int TRows, int TCols, int vRows, int vCols>
-struct TileDataSelector<T, TRows, TCols, vRows, vCols ,PAD_VALUE_NULL> {
+struct TileDataSelector<T, TRows, TCols, vRows, vCols, PAD_VALUE_NULL> {
     using Type =
         Tile<TileType::Vec, T, TRows, TCols, BLayout::RowMajor, vRows, vCols, SLayout::NoneBox, 512, PadValue::Null>;
 };
@@ -32,14 +33,16 @@ struct TileDataSelector<T, TRows, TCols, vRows, vCols, PAD_VALUE_MIN> {
     using Type =
         Tile<TileType::Vec, T, TRows, TCols, BLayout::RowMajor, vRows, vCols, SLayout::NoneBox, 512, PadValue::Min>;
 };
+#endif
 
-template <typename T, int dstTileH, int dstTileW, int src0TileH, int src0TileW, int src1TileH, int src1TileW,
-          int vRows, int vCols, int padValueType>
-__global__ AICORE void runTMins(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1) {
+template <typename T, int dstTileH, int dstTileW, int src0TileH, int src0TileW, int src1TileH, int src1TileW, int vRows,
+          int vCols, int padValueType>
+__global__ AICORE void runTMins(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1)
+{
     using DynShape = pto::Shape<-1, -1, -1, -1, -1>;
     using DynStride = pto::Stride<-1, -1, -1, -1, -1>;
     using GlobalData = GlobalTensor<T, DynShape, DynStride>;
-    
+
     GlobalData dstGlobal(out, pto::Shape(1, 1, 1, vRows, vCols), pto::Stride(1, 1, 1, dstTileW, 1));
     GlobalData src0Global(src0, pto::Shape(1, 1, 1, vRows, vCols), pto::Stride(1, 1, 1, src0TileW, 1));
     GlobalData src1Global(src1, pto::Shape(1, 1, 1, vRows, vCols), pto::Stride(1, 1, 1, src1TileW, 1));
@@ -70,10 +73,10 @@ __global__ AICORE void runTMins(__gm__ T __out__ *out, __gm__ T __in__ *src0, __
 }
 
 template <typename T, int dstTileH, int dstTileW, int src0TileH, int src0TileW, int src1TileH, int src1TileW, int vRows,
-    int vCols, int padValueType>
+          int vCols, int padValueType>
 void LaunchTMins(T *out, T *src0, T *src1, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> ) {
+    if constexpr (std::is_same_v<T, aclFloat16>) {
         runTMins<half, dstTileH, dstTileW, src0TileH, src0TileW, src1TileH, src1TileW, vRows, vCols, padValueType>
             <<<1, nullptr, stream>>>((half *)(out), (half *)(src0), (half *)(src1));
     } else {
@@ -82,19 +85,21 @@ void LaunchTMins(T *out, T *src0, T *src1, void *stream)
     }
 }
 
-template void LaunchTMins<float, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(
-    float *out, float *src0, float *src1, void *stream);
-template void LaunchTMins<int32_t, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(
-    int32_t *out, int32_t *src0, int32_t *src1, void *stream);
-template void LaunchTMins<aclFloat16, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(
-    aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
-template void LaunchTMins<int16_t, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(
-    int16_t *out, int16_t *src0, int16_t *src1, void *stream);
-template void LaunchTMins<float, 60, 128, 64, 64, 60, 128, 60, 60, PAD_VALUE_MIN>(
-    float *out, float *src0, float *src1, void *stream);
-template void LaunchTMins<int32_t, 60, 128, 64, 64, 60, 128, 60, 60, PAD_VALUE_MIN>(
-    int32_t *out, int32_t *src0, int32_t *src1, void *stream);
-template void LaunchTMins<aclFloat16, 1, 3600, 2, 4096, 1, 3600, 1, 3600, PAD_VALUE_MIN>(
-    aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
-template void LaunchTMins<int16_t, 16, 256, 20, 512, 16, 256, 16, 200, PAD_VALUE_MIN>(
-    int16_t *out, int16_t *src0, int16_t *src1, void *stream);
+template void LaunchTMins<float, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(float *out, float *src0, float *src1,
+                                                                                 void *stream);
+template void LaunchTMins<int32_t, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(int32_t *out, int32_t *src0,
+                                                                                   int32_t *src1, void *stream);
+template void LaunchTMins<aclFloat16, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(aclFloat16 *out, aclFloat16 *src0,
+                                                                                      aclFloat16 *src1, void *stream);
+template void LaunchTMins<int16_t, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(int16_t *out, int16_t *src0,
+                                                                                   int16_t *src1, void *stream);
+template void LaunchTMins<float, 60, 128, 64, 64, 60, 128, 60, 60, PAD_VALUE_MIN>(float *out, float *src0, float *src1,
+                                                                                  void *stream);
+template void LaunchTMins<int32_t, 60, 128, 64, 64, 60, 128, 60, 60, PAD_VALUE_MIN>(int32_t *out, int32_t *src0,
+                                                                                    int32_t *src1, void *stream);
+template void LaunchTMins<aclFloat16, 1, 3600, 2, 4096, 1, 3600, 1, 3600, PAD_VALUE_MIN>(aclFloat16 *out,
+                                                                                         aclFloat16 *src0,
+                                                                                         aclFloat16 *src1,
+                                                                                         void *stream);
+template void LaunchTMins<int16_t, 16, 256, 20, 512, 16, 256, 16, 200, PAD_VALUE_MIN>(int16_t *out, int16_t *src0,
+                                                                                      int16_t *src1, void *stream);

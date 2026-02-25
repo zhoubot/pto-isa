@@ -12,11 +12,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
-
 
 class TNOTTest : public testing::Test {
 protected:
@@ -26,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -34,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void LaunchTNot(T *out, T *input, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void LaunchTNot(T *out, T* input, void *stream);
-
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tnot() {
+void test_tnot()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -82,27 +80,32 @@ void test_tnot() {
     EXPECT_TRUE(ret);
 }
 
-
-TEST_F(TNOTTest, case_int8_64x64_64x64_64x64) {
+TEST_F(TNOTTest, case_int8_64x64_64x64_64x64)
+{
     test_tnot<int8_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TNOTTest, case_uint8_60x60_64x64_60x60) {
+TEST_F(TNOTTest, case_uint8_60x60_64x64_60x60)
+{
     test_tnot<u_int8_t, 60, 60, 64, 64>();
 }
 
-TEST_F(TNOTTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TNOTTest, case_int16_64x64_64x64_64x64)
+{
     test_tnot<int16_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TNOTTest, case_uint16_60x60_64x64_60x60) {
+TEST_F(TNOTTest, case_uint16_60x60_64x64_60x60)
+{
     test_tnot<u_int16_t, 60, 60, 64, 64>();
 }
 
-TEST_F(TNOTTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TNOTTest, case_int32_64x64_64x64_64x64)
+{
     test_tnot<int32_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TNOTTest, case_uint32_60x60_64x64_60x60) {
+TEST_F(TNOTTest, case_uint32_60x60_64x64_60x60)
+{
     test_tnot<u_int32_t, 60, 60, 64, 64>();
 }

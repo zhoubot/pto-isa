@@ -26,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,7 +36,8 @@ std::string GetGoldenDir() {
 }
 
 template <typename T, int Rows, int Cols, int ValidRows, int ValidCols>
-void test_tsel() {
+void test_tsel()
+{
     size_t fileSize = Rows * Cols * sizeof(T);
     size_t maskFileSize = Rows * Cols * sizeof(uint8_t);
 
@@ -96,42 +98,55 @@ void test_tsel() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TSELTest, case1) {
+TEST_F(TSELTest, case1)
+{
     test_tsel<float, 2, 128, 2, 128>();
 }
-TEST_F(TSELTest, case2) {
+TEST_F(TSELTest, case2)
+{
     test_tsel<float, 2, 32, 2, 32>();
 }
-TEST_F(TSELTest, case3) {
+TEST_F(TSELTest, case3)
+{
     test_tsel<float, 2, 160, 2, 160>();
 }
-TEST_F(TSELTest, case4) {
+TEST_F(TSELTest, case4)
+{
     test_tsel<aclFloat16, 2, 128, 2, 128>();
 }
-TEST_F(TSELTest, case5) {
+TEST_F(TSELTest, case5)
+{
     test_tsel<aclFloat16, 2, 32, 2, 32>();
 }
-TEST_F(TSELTest, case6) {
+TEST_F(TSELTest, case6)
+{
     test_tsel<aclFloat16, 2, 160, 2, 160>();
 }
-TEST_F(TSELTest, case7) {
+TEST_F(TSELTest, case7)
+{
     test_tsel<float, 10, 64, 10, 54>();
 }
-TEST_F(TSELTest, case8) {
+TEST_F(TSELTest, case8)
+{
     test_tsel<float, 2, 4096, 2, 4096>();
 }
-TEST_F(TSELTest, case9) {
+TEST_F(TSELTest, case9)
+{
     test_tsel<float, 1024, 8, 1024, 8>();
 }
-TEST_F(TSELTest, case10) {
+TEST_F(TSELTest, case10)
+{
     test_tsel<int32_t, 2, 128, 2, 128>();
 }
-TEST_F(TSELTest, case11) {
+TEST_F(TSELTest, case11)
+{
     test_tsel<int16_t, 2, 128, 2, 128>();
 }
-TEST_F(TSELTest, case12) {
+TEST_F(TSELTest, case12)
+{
     test_tsel<float, 2, 8, 2, 8>();
 }
-TEST_F(TSELTest, case13) {
+TEST_F(TSELTest, case13)
+{
     test_tsel<aclFloat16, 2, 16, 2, 8>();
 }

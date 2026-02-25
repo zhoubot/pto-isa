@@ -12,8 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -25,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTNeg(T *out, T *src, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tneg() {
+void test_tneg()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -90,15 +89,19 @@ void test_tneg() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TNEGTest, case_float_64x64_64x64) {
+TEST_F(TNEGTest, case_float_64x64_64x64)
+{
     test_tneg<float, 64, 64, 64, 64>();
 }
-TEST_F(TNEGTest, case_int32_32x32_32x32) {
+TEST_F(TNEGTest, case_int32_32x32_32x32)
+{
     test_tneg<int32_t, 32, 32, 32, 32>();
 }
-TEST_F(TNEGTest, case_half_32x64_32x64) {
+TEST_F(TNEGTest, case_half_32x64_32x64)
+{
     test_tneg<aclFloat16, 32, 64, 32, 64>();
 }
-TEST_F(TNEGTest, case_int16_64x16_64x16) {
+TEST_F(TNEGTest, case_int16_64x16_64x16)
+{
     test_tneg<int16_t, 64, 16, 64, 16>();
 }

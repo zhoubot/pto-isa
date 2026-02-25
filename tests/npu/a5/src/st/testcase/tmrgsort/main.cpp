@@ -20,7 +20,7 @@ using namespace PtoTestCommon;
 using DataType = float;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kTCols_src1, int kTCols_src2,
-    int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
+          int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
 void LanchTMrgsortMulti(DataType *out, DataType *src0, DataType *src1, DataType *src2, DataType *src3, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, uint32_t blockLen>
@@ -31,8 +31,10 @@ void LanchTMrgsortTopK(DataType *out, DataType *src, void *stream);
 
 class TMRGSORTTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -45,9 +47,9 @@ std::string GetGoldenDir()
 }
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kTCols_src1, int kTCols_src2,
-    int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
+          int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
 void MultiSort(size_t outputFileSize, size_t inputFileSize, std::vector<DataType *> hostList,
-    std::vector<DataType *> deviceList, void *stream)
+               std::vector<DataType *> deviceList, void *stream)
 {
     DataType *dstHost = nullptr, *tmpHost = nullptr, *src0Host = nullptr, *src1Host = nullptr, *src2Host = nullptr,
              *src3Host = nullptr;
@@ -97,7 +99,7 @@ void MultiSort(size_t outputFileSize, size_t inputFileSize, std::vector<DataType
         aclrtMemcpy(src3Device, inputFileSize, src3Host, inputFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
     }
     LanchTMrgsortMulti<T, kGRows_, kGCols_, kTRows_, kTCols_, kTCols_src1, kTCols_src2, kTCols_src3, TOPK, LISTNUM,
-        EXHAUSTED>(dstDevice, src0Device, src1Device, src2Device, src3Device, stream);
+                       EXHAUSTED>(dstDevice, src0Device, src1Device, src2Device, src3Device, stream);
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, outputFileSize, dstDevice, outputFileSize, ACL_MEMCPY_DEVICE_TO_HOST);
@@ -120,7 +122,7 @@ void HandleOutputData(std::vector<DataType> &golden, std::vector<DataType> &devF
 }
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kTCols_src1, int kTCols_src2,
-    int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
+          int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
 void TMrgsortMulti()
 {
     size_t inputFileSize = kGRows_ * kGCols_ * sizeof(DataType);

@@ -59,7 +59,7 @@ ascendc_library(no_workspace_kernel STATIC
 
 ascendc_include_directories(no_workspace_kernel PRIVATE
   ${PTO_LIB_PATH}/include
-  ${PTO_LIB_PATH}/include/common
+  ${PTO_LIB_PATH}/include/pto/common
 )
 
 add_library(${_OPPLUGIN_PYBIND_NAME} SHARED ${_OPPLUGIN_PYBIND_OPS_SRCS})

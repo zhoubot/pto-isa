@@ -19,18 +19,17 @@ template <uint32_t caseId>
 void launchTADDSTestCase(void *out, void *src, float scalar, aclrtStream stream);
 
 class TADDSTest : public testing::Test {
-public: 
+public:
 protected:
     void SetUp() override
-    { 
-    }
+    {}
 
     void TearDown() override
-    {
-    }
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -43,7 +42,7 @@ bool TAddSTestFramework()
 {
     aclInit(nullptr);
     aclrtSetDevice(0);
-    
+
     aclrtStream stream;
     aclrtCreateStream(&stream);
 
@@ -64,8 +63,8 @@ bool TAddSTestFramework()
     ReadFile(GetGoldenDir() + "/input.bin", srcByteSize, srcHost, srcByteSize);
     std::string scalar_file = GetGoldenDir() + "/divider.bin";
     std::ifstream file(scalar_file, std::ios::binary);
-    
-    file.read(reinterpret_cast<char*>(&scalar), 4);
+
+    file.read(reinterpret_cast<char *>(&scalar), 4);
     file.close();
     aclrtMemcpy(srcDevice, srcByteSize, srcHost, srcByteSize, ACL_MEMCPY_HOST_TO_DEVICE);
     launchTADDSTestCase<caseId>(dstDevice, srcDevice, scalar, stream);
@@ -127,4 +126,3 @@ TEST_F(TADDSTest, case6)
     bool ret = TAddSTestFramework<6, float, 256, 256, 16, 16>();
     EXPECT_TRUE(ret);
 }
-

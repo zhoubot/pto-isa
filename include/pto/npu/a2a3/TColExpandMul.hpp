@@ -12,23 +12,41 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TCOLEXPANDMUL_HPP
 
 #include <pto/common/constants.hpp>
+#include <pto/common/utils.hpp>
+#include <pto/npu/a2a3/TColExpandBinOp.hpp>
 
 namespace pto {
 
-template <typename TileDataDst, typename TileDataSrc1>
-PTO_INTERNAL void TCOLEXPANDMUL_IMPL(TileDataDst &dst, TileDataDst &src0, TileDataSrc1 &src1)
+template <typename T>
+struct ColExpandMulOp {
+    PTO_INTERNAL static void ColExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats)
+    {
+        vmul(dst, src0, src1, repeats, 1, 1, 1, 8, 8, 8);
+    }
+    PTO_INTERNAL static void ColExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats,
+                                               uint8_t dstRepeatStride, uint8_t src0RepeatStride,
+                                               uint8_t src1RepeatStride)
+    {
+        vmul(dst, src0, src1, repeats, 1, 1, 1, dstRepeatStride, src0RepeatStride, 0);
+    }
+};
+
+template <typename TileData, typename TileDataSrc>
+PTO_INTERNAL void TCOLEXPANDMUL_IMPL(TileData &dst, TileData &src0, TileDataSrc &src1)
 {
-    using T = typename TileDataDst::DType;
-    static_assert(sizeof(T) * TileDataDst::Rows * TileDataDst::Cols <= TMP_UB_SIZE,
-                  "TCOLEXPANDMUL: scratch tile too large for TMP_UB");
+    using T = typename TileData::DType;
+    static_assert(
+        std::is_same<typename TileData::DType, float>::value || std::is_same<typename TileData::DType, half>::value,
+        "Fix: TCOLEXPANDMUL Invalid data type.");
+    static_assert(TileData::isRowMajor, "Fix: TCOLEXPANDMUL not supported Layout type");
+    constexpr unsigned blockSizeElem = BLOCK_BYTE_SIZE / sizeof(typename TileData::DType);
+    constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(typename TileData::DType);
+    constexpr unsigned rowStride = TileData::RowStride;
+    unsigned validRow = dst.GetValidRow();
+    unsigned validCol = dst.GetValidCol();
 
-    TileDataDst tmp;
-    TASSIGN_IMPL(tmp, TMP_UB_OFFSET);
-    TCOLEXPAND_IMPL(tmp, src1);
-    pipe_barrier(PIPE_V);
-    TMUL_IMPL(dst, src0, tmp);
+    ColExpandBinaryInstr<ColExpandMulOp<T>, TileData, TileDataSrc, elementsPerRepeat, blockSizeElem, rowStride>(
+        dst.data(), src0.data(), src1.data(), validRow, validCol);
 }
-
 } // namespace pto
-
 #endif

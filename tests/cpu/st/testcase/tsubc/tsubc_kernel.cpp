@@ -10,11 +10,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #include "pto/pto-inst.hpp"
 
-
 using namespace pto;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-AICORE void runTSubc( __gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1, __gm__ T __in__ *src2) {
+AICORE void runTSubc(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1, __gm__ T __in__ *src2)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -40,9 +40,10 @@ AICORE void runTSubc( __gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __i
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTSubc(T *out, T *src0, T *src1, T *src2, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTSubc<half, kGRows_, kGCols_, kTRows_, kTCols_>((half*)(out), (half*)(src0), (half*)(src1), (half*)(src2));
-    else 
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTSubc<half, kGRows_, kGCols_, kTRows_, kTCols_>((half *)(out), (half *)(src0), (half *)(src1),
+                                                           (half *)(src2));
+    else
         runTSubc<T, kGRows_, kGCols_, kTRows_, kTCols_>(out, src0, src1, src2);
 }
 

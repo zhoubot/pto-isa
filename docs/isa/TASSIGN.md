@@ -1,5 +1,10 @@
 # TASSIGN
 
+
+## Tile Operation Diagram
+
+![TASSIGN tile operation](../figures/isa/TASSIGN.svg)
+
 ## Introduction
 
 Bind a Tile object to an implementation-defined on-chip address (manual placement).
@@ -20,20 +25,17 @@ Synchronous form:
 tassign %tile, %addr : !pto.tile<...>, index
 ```
 
-## IR Syntax
+### IR Level 1 (SSA)
 
-### IR-level1 (SSA)
-
-```mlir
+```text
 pto.tassign %tile, %addr : !pto.tile<...>, dtype
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-pto.tassign ins(%src : !pto.tile_buf<...>, dtype)
+```text
+pto.tassign ins(%tile, %addr : !pto.tile_buf<...>, dtype)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -85,3 +87,31 @@ void example_manual() {
   TADD(c, a, b);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+pto.tassign %tile, %addr : !pto.tile<...>, dtype
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+pto.tassign %tile, %addr : !pto.tile<...>, dtype
+```
+
+### PTO Assembly Form
+
+```text
+tassign %tile, %addr : !pto.tile<...>, index
+# IR Level 2 (DPS)
+pto.tassign ins(%tile, %addr : !pto.tile_buf<...>, dtype)
+```
+

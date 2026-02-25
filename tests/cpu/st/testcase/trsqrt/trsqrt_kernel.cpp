@@ -40,4 +40,3 @@ void LaunchTRSQRT(float *out, float *src, void *stream)
 }
 
 template void LaunchTRSQRT<64, 64>(float *out, float *src, void *stream);
-

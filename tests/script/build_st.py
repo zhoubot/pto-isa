@@ -129,18 +129,28 @@ def build_project(run_mode, soc_version, testcase = "all"):
         cpu_count = os.cpu_count() or 4
         make_cmd.extend(["-j", str(cpu_count)])
 
-        result = subprocess.run(
+        result = subprocess.Popen(
             make_cmd,
             cwd=build_dir,
-            check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True
         )
-        log("compile process:\n" + result.stdout)
+        while result.poll() is None:
+            line = result.stdout.readline()
+            line.strip()
+            if line:
+                print(line)
+        if result.returncode == 0:
+            print("build success")
+        else:
+            raise RuntimeError("build failed")
 
     except subprocess.CalledProcessError as e:
         log(f"build failed: {e.stdout}")
+        raise
+    except RuntimeError as e:
+        print("build failed")
         raise
     finally:
         os.chdir(original_dir)

@@ -22,6 +22,8 @@ template <int kRows, int kCols>
 void LaunchTROWEXPANDMUL(float *out, float *src0, float *src1, void *stream);
 template <int kRows, int kCols>
 void LaunchTROWEXPANDSUB(float *out, float *src0, float *src1, void *stream);
+template <int kRows, int kCols>
+void LaunchTROWEXPANDADD(float *out, float *src0, float *src1, void *stream);
 
 class TROWEXPAND_Test : public testing::Test {
 };
@@ -148,5 +150,12 @@ TEST_F(TROWEXPAND_Test, case_sub_float_64x64)
 {
     run_vec_op([](float *out, float *src0, float *src1, void *stream) {
         LaunchTROWEXPANDSUB<64, 64>(out, src0, src1, stream);
+    });
+}
+
+TEST_F(TROWEXPAND_Test, case_add_float_64x64)
+{
+    run_vec_op([](float *out, float *src0, float *src1, void *stream) {
+        LaunchTROWEXPANDADD<64, 64>(out, src0, src1, stream);
     });
 }

@@ -14,8 +14,9 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace pto;
 
-template<typename T, int row, int validRow, int col, int validCol>
-PTO_INTERNAL void runTAddS(__gm__ T *out, __gm__  T *src, T scalar) {
+template <typename T, int row, int validRow, int col, int validCol>
+PTO_INTERNAL void runTAddS(__gm__ T *out, __gm__ T *src, T scalar)
+{
     using DynDim2Shape = Shape<1, 1, 1, -1, -1>;
     using DynDim2Stride = pto::Stride<1, 1, -1, -1, 1>;
     using GlobalData = GlobalTensor<T, DynDim2Shape, DynDim2Stride>;
@@ -48,7 +49,7 @@ extern "C" __global__ AICORE void launchTADDSCase1(__gm__ float *out, __gm__ flo
 }
 extern "C" __global__ AICORE void launchTADDSCase2(__gm__ aclFloat16 *out, __gm__ aclFloat16 *src, float scalar)
 {
-    runTAddS<half, 63, 63, 64, 64>((__gm__ half*)out, (__gm__ half*)src, (half)scalar);
+    runTAddS<half, 63, 63, 64, 64>((__gm__ half *)out, (__gm__ half *)src, (half)scalar);
 }
 extern "C" __global__ AICORE void launchTADDSCase3(__gm__ int32_t *out, __gm__ int32_t *src, int32_t scalar)
 {
@@ -68,8 +69,9 @@ extern "C" __global__ AICORE void launchTADDSCase6(__gm__ float *out, __gm__ flo
 }
 
 template <uint32_t caseId>
-void launchTADDSTestCase(void *out, void *src, float scalar, aclrtStream stream) {
-    switch(caseId) {
+void launchTADDSTestCase(void *out, void *src, float scalar, aclrtStream stream)
+{
+    switch (caseId) {
         case 1: {
             launchTADDSCase1((float *)out, (float *)src, scalar);
             break;
@@ -98,7 +100,6 @@ void launchTADDSTestCase(void *out, void *src, float scalar, aclrtStream stream)
         }
     }
 }
-
 
 template void launchTADDSTestCase<1>(void *out, void *src, float scalar, aclrtStream stream);
 template void launchTADDSTestCase<2>(void *out, void *src, float scalar, aclrtStream stream);

@@ -12,7 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -24,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -32,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void LaunchTExp(T *out, T *src, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void LaunchTExp(T *out, T *src,  void *stream);
-
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_texp() {
+void test_texp()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -83,19 +83,23 @@ void test_texp() {
     EXPECT_TRUE(ret);
 }
 
-
-TEST_F(TEXPTest, case_float_64x64_64x64_64x64) {
+TEST_F(TEXPTest, case_float_64x64_64x64_64x64)
+{
     test_texp<float, 64, 64, 64, 64>();
 }
-TEST_F(TEXPTest, case_half_64x64_64x64_64x64) {
+TEST_F(TEXPTest, case_half_64x64_64x64_64x64)
+{
     test_texp<aclFloat16, 64, 64, 64, 64>();
 }
-TEST_F(TEXPTest, case_half_32x32_32x32_32x32) {
+TEST_F(TEXPTest, case_half_32x32_32x32_32x32)
+{
     test_texp<aclFloat16, 32, 32, 32, 32>();
 }
-TEST_F(TEXPTest, case_float_32x32_32x32_32x32) {
+TEST_F(TEXPTest, case_float_32x32_32x32_32x32)
+{
     test_texp<float, 32, 32, 32, 32>();
 }
-TEST_F(TEXPTest, case_float_32x16_32x16_32x16) {
+TEST_F(TEXPTest, case_float_32x16_32x16_32x16)
+{
     test_texp<float, 32, 16, 32, 16>();
 }

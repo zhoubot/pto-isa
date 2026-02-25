@@ -18,34 +18,33 @@ using namespace std;
 using namespace pto;
 
 template <typename T>
-PTO_INTERNAL void runTASSIGN(__gm__ T **out, __gm__ T *src, int offset) {
-  using StaticDim2Shape = Shape<1, 1, 1, 8, 16>;
-  using StaticDim2Stride = pto::Stride<1, 1, 512, 32, 1>;
-  using GlobalData = GlobalTensor<T, StaticDim2Shape, StaticDim2Stride>;
-  GlobalData srcGlobal(src, StaticDim2Shape(), StaticDim2Stride());
+PTO_INTERNAL void runTASSIGN(__gm__ T **out, __gm__ T *src, int offset)
+{
+    using StaticDim2Shape = Shape<1, 1, 1, 8, 16>;
+    using StaticDim2Stride = pto::Stride<1, 1, 512, 32, 1>;
+    using GlobalData = GlobalTensor<T, StaticDim2Shape, StaticDim2Stride>;
+    GlobalData srcGlobal(src, StaticDim2Shape(), StaticDim2Stride());
 
-  TASSIGN(srcGlobal, src + offset);
-  *out = srcGlobal.data();
+    TASSIGN(srcGlobal, src + offset);
+    *out = srcGlobal.data();
 }
 
-extern "C" __global__ AICORE void
-launchTASSIGNCase1(__gm__ float **out, __gm__ float *src, int offset) {
-  runTASSIGN<float>(out, src, offset);
+extern "C" __global__ AICORE void launchTASSIGNCase1(__gm__ float **out, __gm__ float *src, int offset)
+{
+    runTASSIGN<float>(out, src, offset);
 }
 
 template <uint32_t caseId>
-void launchTASSIGNTestCase(void *out, void *src, int offset,
-                           aclrtStream stream) {
-  switch (caseId) {
-  case 1: {
-    launchTASSIGNCase1<<<1, nullptr, stream>>>((float **)out, (float *)src,
-                                               offset);
-    break;
-  }
-  default: {
-  }
-  }
+void launchTASSIGNTestCase(void *out, void *src, int offset, aclrtStream stream)
+{
+    switch (caseId) {
+        case 1: {
+            launchTASSIGNCase1<<<1, nullptr, stream>>>((float **)out, (float *)src, offset);
+            break;
+        }
+        default: {
+        }
+    }
 }
 
-template void launchTASSIGNTestCase<1>(void *out, void *src, int offset,
-                                       aclrtStream stream);
+template void launchTASSIGNTestCase<1>(void *out, void *src, int offset, aclrtStream stream);

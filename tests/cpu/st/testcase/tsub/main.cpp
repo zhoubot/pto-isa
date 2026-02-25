@@ -12,12 +12,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
 template <int32_t tilingKey>
-void launchTSUB_demo(uint8_t *out, uint8_t *src,void *stream);
+void launchTSUB_demo(uint8_t *out, uint8_t *src, void *stream);
 
 class TSUBTest : public testing::Test {
 protected:
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTSub(T *out, T *src0, T *src1, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tsub() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tsub()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -92,15 +92,19 @@ void test_tsub() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TSUBTest, case_float_64x64_64x64_64x64) {
+TEST_F(TSUBTest, case_float_64x64_64x64_64x64)
+{
     test_tsub<float, 64, 64, 64, 64>();
 }
-TEST_F(TSUBTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TSUBTest, case_int32_64x64_64x64_64x64)
+{
     test_tsub<int32_t, 64, 64, 64, 64>();
 }
-TEST_F(TSUBTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TSUBTest, case_int16_64x64_64x64_64x64)
+{
     test_tsub<int16_t, 64, 64, 64, 64>();
 }
-TEST_F(TSUBTest, case_half_16x256_16x256_16x256) {
+TEST_F(TSUBTest, case_half_16x256_16x256_16x256)
+{
     test_tsub<aclFloat16, 16, 256, 16, 256>();
 }

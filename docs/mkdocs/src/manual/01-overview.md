@@ -1,51 +1,67 @@
 # 1. Overview
 
-## 1.1 What PTO programs operate on
+## 1.1 Design goals
 
-At ISA level, PTO is a **tile-oriented** ISA:
+The PTO Virtual ISA is designed to provide:
 
-- A **Tile** is a 2D on-chip operand (conceptually a small matrix with metadata).
-- A **GlobalTensor** is a view of data in global memory (GM), also treated as a typed, shaped object for load/store.
+- a stable architecture contract across evolving hardware generations
+- tile-centric semantics with explicit valid-region behavior
+- explicit boundaries between architecture-defined and implementation-defined behavior
+- a practical bridge from intrinsics and PTO-AS to IR and backend codegen
 
-The ISA is built around moving data between these objects and applying compute over 2D tile regions.
+## 1.2 PTO architectural identity
 
-See also:
+PTO distinguishes itself from generic GPU ISAs by making the following architecture concepts first-class:
 
-- Tile model: `docs/coding/Tile.md`
-- GlobalTensor model: `docs/coding/GlobalTensor.md`
+- **Tile as primary compute unit**: instruction semantics are defined over tile domains.
+- **Valid-region-first semantics**: `Rv/Cv` define architectural compute coverage.
+- **Location-intent model**: tile classes such as `Mat/Left/Right/Acc/Bias/Scale` participate in legality rules.
+- **Dual programming model**: Auto and Manual modes are both architectural citizens.
+- **Event-centric synchronization**: ordering is explicit through events and `TSYNC`.
 
-## 1.2 Instruction families
+## 1.3 Architecture boundary
 
-PTO instructions are grouped by function:
+The architecture defines:
 
-- **Data movement**: `TLOAD`, `TSTORE`, `TASSIGN`, `TEXTRACT`, `TMOV`, `TTRANS`, `TRESHAPE`
-- **Elementwise / scalar-tile**: `TADD`, `TSUB`, `TMUL`, `TDIV`, `TEXP`, `TLOG`, etc.
-- **Reductions / expands**: `TROWMAX`, `TROWSUM`, `TROWEXPAND`, `TCOLSUM`, etc.
-- **Matrix / cube**: `TMATMUL`, `TMATMUL_ACC`, `TMATMUL_BIAS`, …
-- **Predication / selection**: `TCMP`, `TCMPS`, `TSEL`, `TSELS`
-- **Gather/scatter**: `TGATHER`, `TSCATTER`, `MGATHER`, `MSCATTER`
-- **Synchronization**: `TSYNC` and event/flag primitives used by backends
+- observable instruction results in valid regions
+- required ordering and synchronization semantics
+- legality boundaries exposed to users and toolchains
 
-The authoritative index is `docs/isa/README.md`.
+The architecture does **not** define:
 
-## 1.3 Valid region and masks (the core semantic rule)
+- microarchitectural scheduling details
+- exact on-chip layout implementation
+- backend-specific optimization choices
 
-Many PTO operands include a **valid region** (mask) describing which elements are semantically meaningful. This manual uses:
+Backend-specific details MUST be documented as implementation-defined constraints.
 
-- `shape(T) = [R, C]` for the physical tile size
-- `valid(T) = [Rv, Cv]` for the valid region size (typically `Rv ≤ R`, `Cv ≤ C`)
+## 1.4 Source of truth
 
-Unless an instruction defines special behavior:
+Authoritative PTO sources:
 
-- elementwise operations are defined only for indices `(r, c)` within the valid region
-- behavior outside the valid region is backend-dependent (may preserve, may zero, may be undefined)
+- per-op semantics: `docs/isa/*.md`
+- public API signatures: `include/pto/common/pto_instr.hpp`
+- assembly grammar: `docs/grammar/PTO-AS.md` and `docs/grammar/PTO-AS.bnf`
 
-If you need a deterministic behavior for out-of-range elements, explicitly materialize it (e.g. `TFILLPAD`) or use a definition that specifies padding.
+This chaptered manual composes those sources into a complete Virtual ISA contract.
 
-## 1.4 Where this manual fits
+## 1.5 Instruction-family taxonomy
 
-- Architectural narrative and shared rules: **this manual**
-- Per-instruction semantics, operand constraints, examples: `docs/isa/*.md`
-- Assembly syntax / grammar: `docs/grammar/PTO-AS.md`
-- Execution/machine abstraction: `docs/machine/abstract-machine.md`
+PTO instruction families are organized as:
 
+- synchronization and resource binding
+- elementwise and scalar/tile operations
+- reduce/expand operations
+- memory movement (`GM <-> Tile`) and indexed memory operations
+- matrix and vector matrix operations
+- layout/data-movement transforms
+- irregular and complex operations
+
+Family-level contracts are defined in `manual/07-instructions.md`.
+Per-op semantics remain in `docs/isa/*.md`.
+
+## 1.6 Compatibility principles
+
+- Additive evolution SHOULD be preferred over breaking changes.
+- Breaking architectural behavior changes MUST include explicit versioning and migration notes.
+- Implementation-defined behavior MUST remain explicitly tagged in all layers (manual, IR, backend docs).

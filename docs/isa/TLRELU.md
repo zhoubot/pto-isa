@@ -1,5 +1,10 @@
 # TLRELU
 
+
+## Tile Operation Diagram
+
+![TLRELU tile operation](../figures/isa/TLRELU.svg)
+
 ## Introduction
 
 Leaky ReLU with a scalar slope.
@@ -19,20 +24,18 @@ Synchronous form:
 ```text
 tlrelu %dst, %src, %slope : (!pto.tile<...>, !pto.tile<...>, f32)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
+```text
 %dst = pto.tlrelu %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
+```text
 pto.tlrelu ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -58,5 +61,32 @@ void example() {
   TileT x, out;
   TLRELU(out, x, 0.1f);
 }
+```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.tlrelu %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.tlrelu %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = tlrelu %src, %slope : !pto.tile<...>, f32
+# IR Level 2 (DPS)
+pto.tlrelu ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
 ```
 

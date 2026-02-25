@@ -23,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,7 +36,8 @@ template <typename T, int dstTileH, int dstTileW, int src0TileH, int src0TileW, 
 void LaunchTShrS(T *out, T *src, T scalar, void *stream);
 
 template <typename T, int dstTileH, int dstTileW, int srcTileH, int srcTileW, int vRows, int vCols>
-void test_tshrs() {
+void test_tshrs()
+{
     size_t fileSizeDst = dstTileH * dstTileW * sizeof(T);
     size_t fileSizeSrc0 = srcTileH * srcTileW * sizeof(T);
     size_t fileSizeSrc1 = sizeof(T);
@@ -59,8 +61,7 @@ void test_tshrs() {
     ReadFile(GetGoldenDir() + "/input2.bin", fileSizeSrc1, (void *)&scalar, sizeof(T));
 
     aclrtMemcpy(src0Device, fileSizeSrc0, src0Host, fileSizeSrc0, ACL_MEMCPY_HOST_TO_DEVICE);
-    LaunchTShrS<T, dstTileH, dstTileW, srcTileH, srcTileW, vRows, vCols>
-        (dstDevice, src0Device, scalar, stream);
+    LaunchTShrS<T, dstTileH, dstTileW, srcTileH, srcTileW, vRows, vCols>(dstDevice, src0Device, scalar, stream);
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, fileSizeDst, dstDevice, fileSizeDst, ACL_MEMCPY_DEVICE_TO_HOST);
@@ -86,21 +87,27 @@ void test_tshrs() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TSHRSTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TSHRSTest, case_int16_64x64_64x64_64x64)
+{
     test_tshrs<int16_t, 64, 64, 64, 64, 64, 64>();
 }
-TEST_F(TSHRSTest, case_int16_32x128_32x128_32x128) {
+TEST_F(TSHRSTest, case_int16_32x128_32x128_32x128)
+{
     test_tshrs<int16_t, 32, 128, 32, 128, 32, 128>();
 }
-TEST_F(TSHRSTest, case_int16_32x112_32x128_32x111) {
+TEST_F(TSHRSTest, case_int16_32x112_32x128_32x111)
+{
     test_tshrs<int16_t, 32, 112, 32, 128, 32, 111>();
 }
-TEST_F(TSHRSTest, case_uint16_64x64_64x64_64x64) {
+TEST_F(TSHRSTest, case_uint16_64x64_64x64_64x64)
+{
     test_tshrs<uint16_t, 64, 64, 64, 64, 64, 64>();
 }
-TEST_F(TSHRSTest, case_uint16_32x128_32x128_32x128) {
+TEST_F(TSHRSTest, case_uint16_32x128_32x128_32x128)
+{
     test_tshrs<uint16_t, 32, 128, 32, 128, 32, 128>();
 }
-TEST_F(TSHRSTest, case_uint16_32x112_32x128_32x111) {
+TEST_F(TSHRSTest, case_uint16_32x112_32x128_32x111)
+{
     test_tshrs<uint16_t, 32, 112, 32, 128, 32, 111>();
 }

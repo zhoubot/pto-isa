@@ -222,7 +222,7 @@ template void launchTGATHER_demo<I32P1000>(uint8_t *out, uint8_t *src, void *str
 template void launchTGATHER_demo<I32P1111>(uint8_t *out, uint8_t *src, void *stream);
 
 template <typename Tsrc0, typename Tsrc1, int kGRows0_, int kGCols0_, int kGRows1_, int kGCols1_, int kTRows_,
-    int kTCols_>
+          int kTCols_>
 inline AICORE void runTGather1D(__gm__ Tsrc0 __out__ *out, __gm__ Tsrc0 __in__ *src0, __gm__ Tsrc1 __in__ *src1)
 {
     using DynShapeDim5_src0 = pto::Shape<1, 1, 1, kGRows0_, kGCols0_>;
@@ -273,20 +273,17 @@ extern "C" __global__ AICORE void test_tgather1D_float(__gm__ float *out, __gm__
     runTGather1D<float, int32_t, 32, 1024, 16, 64, 32, 1024>(out, src0, src1);
 }
 
-extern "C" __global__ AICORE void test_tgather1D_int32(
-    __gm__ int32_t *out, __gm__ int32_t *src0, __gm__ int32_t *src1)
+extern "C" __global__ AICORE void test_tgather1D_int32(__gm__ int32_t *out, __gm__ int32_t *src0, __gm__ int32_t *src1)
 {
     runTGather1D<int32_t, int32_t, 32, 512, 16, 256, 32, 512>(out, src0, src1);
 }
 
-extern "C" __global__ AICORE void test_tgather1D_half(
-    __gm__ int16_t *out, __gm__ int16_t *src0, __gm__ int32_t *src1)
+extern "C" __global__ AICORE void test_tgather1D_half(__gm__ int16_t *out, __gm__ int16_t *src0, __gm__ int32_t *src1)
 {
     runTGather1D<int16_t, int32_t, 16, 1024, 16, 128, 16, 1024>(out, src0, src1);
 }
 
-extern "C" __global__ AICORE void test_tgather1D_int16(
-    __gm__ int16_t *out, __gm__ int16_t *src0, __gm__ int32_t *src1)
+extern "C" __global__ AICORE void test_tgather1D_int16(__gm__ int16_t *out, __gm__ int16_t *src0, __gm__ int32_t *src1)
 {
     runTGather1D<int16_t, int32_t, 32, 256, 32, 64, 32, 256>(out, src0, src1);
 }

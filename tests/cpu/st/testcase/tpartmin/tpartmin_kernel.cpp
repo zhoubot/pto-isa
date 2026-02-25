@@ -54,4 +54,5 @@ void LaunchTPARTMIN(float *out, float *src0, float *src1, void *stream)
     runTPARTMIN<kRows, kCols, kValidRows1, kValidCols1>(out, src0, src1);
 }
 
-template void LaunchTPARTMIN<kRows, kCols, kValidRows1, kValidCols1>(float *out, float *src0, float *src1, void *stream);
+template void LaunchTPARTMIN<kRows, kCols, kValidRows1, kValidCols1>(float *out, float *src0, float *src1,
+                                                                     void *stream);

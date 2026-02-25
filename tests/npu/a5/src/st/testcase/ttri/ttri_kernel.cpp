@@ -17,7 +17,8 @@ using namespace pto;
 #define PTO_DIV_ROUNDUP(x, y) (((x) + (y)-1) / (y))
 
 template <typename T, int validRows, int validCols, int upperOrLower, int diagonal>
-__global__ AICORE void runTTri(__gm__ T __out__ *out) {
+__global__ AICORE void runTTri(__gm__ T __out__ *out)
+{
     constexpr uint16_t alignedCol = PTO_DIV_ROUNDUP(validCols, BLOCK_BYTE_SIZE) * BLOCK_BYTE_SIZE;
 
     using GlobalDataDst = GlobalTensor<T, Shape<1, 1, 1, validRows, validCols>, pto::Stride<1, 1, 1, validCols, 1>>;
@@ -26,7 +27,7 @@ __global__ AICORE void runTTri(__gm__ T __out__ *out) {
     GlobalDataDst dstGlobal(out);
 
     TASSIGN(dstTile, 0x0);
-    TTRI<TileDataDst, upperOrLower, diagonal>(dstTile);
+    TTRI<TileDataDst, upperOrLower>(dstTile, diagonal);
 
     set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
@@ -36,7 +37,8 @@ __global__ AICORE void runTTri(__gm__ T __out__ *out) {
 }
 
 template <typename T, int validRows, int validCols, int upperOrLower, int diagonal>
-void LaunchTTri(T *out, void *stream) {
+void LaunchTTri(T *out, void *stream)
+{
     if constexpr (std::is_same_v<T, aclFloat16>) {
         runTTri<half, validRows, validCols, upperOrLower, diagonal><<<1, nullptr, stream>>>((half *)(out));
     } else {
@@ -44,6 +46,8 @@ void LaunchTTri(T *out, void *stream) {
     }
 }
 
+template void LaunchTTri<aclFloat16, 20, 32, 0, 0>(aclFloat16 *out, void *stream);
+template void LaunchTTri<uint8_t, 20, 32, 0, 0>(uint8_t *out, void *stream);
 template void LaunchTTri<float, 32, 91, 0, 0>(float *out, void *stream);
 template void LaunchTTri<float, 128, 128, 0, 0>(float *out, void *stream);
 template void LaunchTTri<float, 32, 91, 0, 3>(float *out, void *stream);

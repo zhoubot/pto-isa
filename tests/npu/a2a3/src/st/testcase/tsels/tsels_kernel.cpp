@@ -14,54 +14,97 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 using namespace pto;
 
-template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-__global__ AICORE void runTSels(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1, uint8_t selectMode) {
-    using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
-    using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
-    using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
-    using TileData = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1>;
-    TileData src0Tile(kTRows_, kTCols_);
-    TileData src1Tile(kTRows_, kTCols_);
-    TileData dstTile(kTRows_, kTCols_);
-    TASSIGN(src0Tile, 0x0 + 0x400 * block_idx);
-    TASSIGN(src1Tile, 0x4000 + 0x400 * block_idx);
-    TASSIGN(dstTile, 0x8000 + 0x400 * block_idx);
+template <typename T, typename TMask, int dstTileH, int dstTileW, int maskTileH, int maskTileW, int srcTileH,
+          int srcTileW, int vRows, int vCols>
+__global__ AICORE void runTSELS(__gm__ T __out__ *out, __gm__ TMask *mask, __gm__ T __in__ *src, T __in__ scalar)
+{
+    using DynShape = pto::Shape<-1, -1, -1, -1, -1>;
+    using DynStride = pto::Stride<-1, -1, -1, -1, -1>;
+    using GlobalData = GlobalTensor<T, DynShape, DynStride>;
+    using GlobalDataMask = GlobalTensor<TMask, DynShape, DynStride>;
+    GlobalData dstGlobal(out, pto::Shape(1, 1, 1, vRows, vCols),
+                         pto::Stride(dstTileH * dstTileW, dstTileH * dstTileW, dstTileH * dstTileW, dstTileW, 1));
+    GlobalDataMask maskGlobal(
+        mask, pto::Shape(1, 1, 1, vRows, maskTileW),
+        pto::Stride(maskTileH * maskTileW, maskTileH * maskTileW, maskTileH * maskTileW, maskTileW, 1));
+    GlobalData srcGlobal(src, pto::Shape(1, 1, 1, vRows, vCols),
+                         pto::Stride(srcTileH * srcTileW, srcTileH * srcTileW, srcTileH * srcTileW, srcTileW, 1));
 
-    GlobalData src0Global(src0);
-    GlobalData src1Global(src1);
-    GlobalData dstGlobal(out);
+    using TileDataDst = Tile<TileType::Vec, T, dstTileH, dstTileW, BLayout::RowMajor, -1, -1>;
+    using TileDataMask = Tile<TileType::Vec, TMask, maskTileH, maskTileW, BLayout::RowMajor, -1, -1>;
+    using TileDataSrc = Tile<TileType::Vec, T, srcTileH, srcTileW, BLayout::RowMajor, -1, -1>;
+    TileDataDst dstTile(vRows, vCols);
+    TileDataMask maskTile(vRows, maskTileW);
+    TileDataSrc srcTile(vRows, vCols);
+    size_t dstSize = sizeof(T) * dstTileH * dstTileW;
+    size_t srcSize = sizeof(T) * srcTileH * srcTileW;
+    size_t maskSize = sizeof(TMask) * maskTileH * maskTileW;
+    size_t totalSize = dstSize + srcSize + maskSize;
+    size_t dstOffset = totalSize * block_idx;
+    size_t srcOffset = totalSize * block_idx + dstSize;
+    size_t maskOffset = totalSize * block_idx + dstSize + srcSize;
+    TASSIGN(dstTile, dstOffset);
+    TASSIGN(maskTile, maskOffset);
+    TASSIGN(srcTile, srcOffset);
 
-    TLOAD(src0Tile, src0Global);
-    TLOAD(src1Tile, src1Global);
+    TLOAD(maskTile, maskGlobal);
+    TLOAD(srcTile, srcGlobal);
     set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    TSELS(dstTile, src0Tile, src1Tile, selectMode);
+    TSELS(dstTile, maskTile, srcTile, scalar);
     set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     TSTORE(dstGlobal, dstTile);
     out = dstGlobal.data();
 }
 
-template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void LaunchTSels(T *out, T *src0, T *src1, uint8_t selectMode, void *stream)
+template <typename T, typename TMask, int dstTileH, int dstTileW, int maskTileH, int maskTileW, int srcTileH,
+          int srcTileW, int vRows, int vCols>
+void LaunchTSels(T *out, TMask *mask, T *src, T scalar, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> ) {
-        runTSels<half, kGRows_, kGCols_, kTRows_, kTCols_><<<1, nullptr, stream>>>((half*)(out),
-                                                                                  (half*)(src0),
-                                                                                  (half*)(src1),
-                                                                                  selectMode);
-    } else { 
-        runTSels<T, kGRows_, kGCols_, kTRows_, kTCols_><<<1, nullptr, stream>>>(out, src0, src1, selectMode);
-    }
+    runTSELS<T, TMask, dstTileH, dstTileW, maskTileH, maskTileW, srcTileH, srcTileW, vRows, vCols>
+        <<<1, nullptr, stream>>>(out, mask, src, scalar);
 }
 
-template void LaunchTSels<float, 64, 64, 64, 64>(float *out, float *src0, float *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<float, 16, 256, 16, 256>(float *out, float *src0, float *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<float, 2, 128, 2, 128>(float *out, float *src0, float *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<float, 2, 32, 2, 32>(float *out, float *src0, float *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<float, 2, 160, 2, 160>(float *out, float *src0, float *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<aclFloat16, 64, 64, 64, 64>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<aclFloat16, 16, 256, 16, 256>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<aclFloat16, 2, 128, 2, 128>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<aclFloat16, 2, 32, 2, 32>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, uint8_t selectMode, void *stream);
-template void LaunchTSels<aclFloat16, 2, 160, 2, 160>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, uint8_t selectMode, void *stream);
+template <typename TMask, int dstTileH, int dstTileW, int maskTileH, int maskTileW, int srcTileH, int srcTileW,
+          int vRows, int vCols>
+void LaunchTSelsHalf(aclFloat16 *out, TMask *mask, aclFloat16 *src, aclFloat16 scalar, void *stream)
+{
+    runTSELS<half, TMask, dstTileH, dstTileW, maskTileH, maskTileW, srcTileH, srcTileW, vRows, vCols>
+        <<<1, nullptr, stream>>>((half *)out, mask, (half *)src, *(half *)&scalar);
+}
+
+template void LaunchTSels<uint16_t, uint8_t, 2, 16, 2, 32, 2, 16, 2, 16>(uint16_t *out, uint8_t *mask, uint16_t *src,
+                                                                         uint16_t scalar, void *stream);
+template void LaunchTSels<uint16_t, uint16_t, 2, 16, 2, 16, 2, 16, 2, 16>(uint16_t *out, uint16_t *mask, uint16_t *src,
+                                                                          uint16_t scalar, void *stream);
+template void LaunchTSels<uint16_t, uint32_t, 2, 16, 2, 8, 2, 16, 2, 16>(uint16_t *out, uint32_t *mask, uint16_t *src,
+                                                                         uint16_t scalar, void *stream);
+
+template void LaunchTSels<uint32_t, uint8_t, 2, 8, 2, 32, 2, 8, 2, 8>(uint32_t *out, uint8_t *mask, uint32_t *src,
+                                                                      uint32_t scalar, void *stream);
+template void LaunchTSels<uint32_t, uint16_t, 2, 8, 2, 16, 2, 8, 2, 8>(uint32_t *out, uint16_t *mask, uint32_t *src,
+                                                                       uint32_t scalar, void *stream);
+template void LaunchTSels<uint32_t, uint32_t, 2, 8, 2, 8, 2, 8, 2, 8>(uint32_t *out, uint32_t *mask, uint32_t *src,
+                                                                      uint32_t scalar, void *stream);
+
+template void LaunchTSels<float, uint8_t, 2, 8, 2, 32, 2, 8, 2, 8>(float *out, uint8_t *mask, float *src, float scalar,
+                                                                   void *stream);
+template void LaunchTSels<float, uint16_t, 2, 8, 2, 16, 2, 8, 2, 8>(float *out, uint16_t *mask, float *src,
+                                                                    float scalar, void *stream);
+template void LaunchTSels<float, uint32_t, 2, 8, 2, 8, 2, 8, 2, 8>(float *out, uint32_t *mask, float *src, float scalar,
+                                                                   void *stream);
+
+template void LaunchTSels<uint16_t, uint8_t, 2, 32, 2, 64, 2, 128, 2, 31>(uint16_t *out, uint8_t *mask, uint16_t *src,
+                                                                          uint16_t scalar, void *stream);
+template void LaunchTSels<float, uint8_t, 2, 32, 2, 64, 2, 128, 2, 31>(float *out, uint8_t *mask, float *src,
+                                                                       float scalar, void *stream);
+
+template void LaunchTSelsHalf<uint8_t, 32, 672, 32, 96, 32, 672, 32, 666>(aclFloat16 *out, uint8_t *mask,
+                                                                          aclFloat16 *src, aclFloat16 scalar,
+                                                                          void *stream);
+template void LaunchTSels<float, uint8_t, 32, 672, 32, 96, 32, 672, 32, 666>(float *out, uint8_t *mask, float *src,
+                                                                             float scalar, void *stream);
+
+template void LaunchTSels<float, uint8_t, 1, 8192, 1, 4096, 1, 8192, 1, 8192>(float *out, uint8_t *mask, float *src,
+                                                                              float scalar, void *stream);

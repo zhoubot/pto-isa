@@ -15,7 +15,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace pto;
 
 template <typename T, int isUpperOrLower, int diagonal, int kTRows_, int kTCols_, int vRows, int vCols>
-__global__ AICORE void runTTri(__gm__ T __out__ *out) {
+__global__ AICORE void runTTri(__gm__ T __out__ *out)
+{
     using DynShapeDim5 = Shape<1, 1, 1, vRows, vCols>;
     using DynStridDim5 = Stride<1, 1, 1, vCols, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -25,7 +26,7 @@ __global__ AICORE void runTTri(__gm__ T __out__ *out) {
 
     GlobalData dstGlobal(out);
 
-    TTRI<TileData, isUpperOrLower, diagonal>(dstTile);
+    TTRI<TileData, isUpperOrLower>(dstTile, diagonal);
     set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     TSTORE(dstGlobal, dstTile);
@@ -33,7 +34,8 @@ __global__ AICORE void runTTri(__gm__ T __out__ *out) {
 }
 
 template <typename T, int isUpperOrLower, int diagonal, int kTRows_, int kTCols_, int vRows, int vCols>
-void LaunchTTri(T *out, void *stream) {
+void LaunchTTri(T *out, void *stream)
+{
     if constexpr (std::is_same_v<T, aclFloat16>)
         runTTri<half, isUpperOrLower, diagonal, kTRows_, kTCols_, vRows, vCols><<<1, nullptr, stream>>>((half *)(out));
     else

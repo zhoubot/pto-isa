@@ -66,8 +66,8 @@ struct VerifyStats {
     bool has_nan_or_inf = false;
 };
 
-VerifyStats verify_allclose(const std::vector<float> &actual, const std::vector<float> &ref, float abs_tol, float rel_tol,
-    float denom_eps)
+VerifyStats verify_allclose(const std::vector<float> &actual, const std::vector<float> &ref, float abs_tol,
+                            float rel_tol, float denom_eps)
 {
     VerifyStats stats;
     if (actual.size() != ref.size() || actual.empty()) {
@@ -115,8 +115,9 @@ VerifyStats verify_allclose(const std::vector<float> &actual, const std::vector<
 }
 
 void mla_reference(const std::vector<float> &q, const std::vector<float> &k, const std::vector<float> &v,
-    const std::vector<float> &wq, const std::vector<float> &wk, const std::vector<float> &wv, const std::vector<float> &wo,
-    std::vector<float> &out, int batch, int heads, int seq_len, int head_dim, int latent_dim)
+                   const std::vector<float> &wq, const std::vector<float> &wk, const std::vector<float> &wv,
+                   const std::vector<float> &wo, std::vector<float> &out, int batch, int heads, int seq_len,
+                   int head_dim, int latent_dim)
 {
     const double scale = 1.0 / std::sqrt(static_cast<double>(latent_dim));
 
@@ -198,7 +199,8 @@ void mla_reference(const std::vector<float> &q, const std::vector<float> &k, con
                 for (int d = 0; d < head_dim; ++d) {
                     double acc = 0.0;
                     for (int r = 0; r < latent_dim; ++r) {
-                        acc += ctx[static_cast<std::size_t>(i) * latent_dim + r] * static_cast<double>(wo[wo_idx(r, d)]);
+                        acc +=
+                            ctx[static_cast<std::size_t>(i) * latent_dim + r] * static_cast<double>(wo[wo_idx(r, d)]);
                     }
                     out[q_idx(b, h, i, d)] = static_cast<float>(acc);
                 }
@@ -208,8 +210,8 @@ void mla_reference(const std::vector<float> &q, const std::vector<float> &k, con
 }
 
 void mla_pto(const std::vector<float> &q, const std::vector<float> &k, const std::vector<float> &v,
-    const std::vector<float> &wq, const std::vector<float> &wk, const std::vector<float> &wv, const std::vector<float> &wo,
-    std::vector<float> &out)
+             const std::vector<float> &wq, const std::vector<float> &wk, const std::vector<float> &wv,
+             const std::vector<float> &wo, std::vector<float> &out)
 {
     // Multi-Latent Attention (MLA) in PTO instructions (per batch/head):
     //   Q_lat = Q * Wq   where Q:(S×D), Wq:(D×R) -> Q_lat:(S×R)
@@ -426,7 +428,7 @@ int main()
     const double matmul_flops =
         static_cast<double>(kBatch) * static_cast<double>(kHeads) *
         (8.0 * static_cast<double>(kSeqLen) * static_cast<double>(kHeadDim) * static_cast<double>(kLatentDim) +
-            4.0 * static_cast<double>(kSeqLen) * static_cast<double>(kSeqLen) * static_cast<double>(kLatentDim));
+         4.0 * static_cast<double>(kSeqLen) * static_cast<double>(kSeqLen) * static_cast<double>(kLatentDim));
     const double gflops = (elapsed_s > 0.0) ? (matmul_flops / elapsed_s / 1e9) : 0.0;
 
     const auto stats = verify_allclose(out_pto, out_ref, kAbsTol, kRelTol, kRelDenomEps);
@@ -444,7 +446,8 @@ int main()
         checksum += out_pto[i];
     }
     std::cout << "checksum(out) = " << checksum << "\n";
-    std::cout << "perf: avg_ms=" << (elapsed_s * 1e3) << " approx_matmul_flops=" << matmul_flops << " gflops=" << gflops;
+    std::cout << "perf: avg_ms=" << (elapsed_s * 1e3) << " approx_matmul_flops=" << matmul_flops
+              << " gflops=" << gflops;
     if (const char *peak_env = std::getenv("PTO_CPU_PEAK_GFLOPS")) {
         char *end = nullptr;
         const double peak = std::strtod(peak_env, &end);

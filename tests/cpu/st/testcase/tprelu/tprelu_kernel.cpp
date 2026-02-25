@@ -11,11 +11,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <pto/common/constants.hpp>
 
-
 using namespace pto;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-AICORE void runTPrelu( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T __in__ *src1) {
+AICORE void runTPrelu(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -23,6 +23,7 @@ AICORE void runTPrelu( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T _
     TileData src0Tile(kTRows_, kTCols_);
     TileData src1Tile(kTRows_, kTCols_);
     TileData dstTile(kTRows_, kTCols_);
+    TileData tmpTile(kTRows_, kTCols_);
 
     GlobalData src0Global(src0);
     GlobalData src1Global(src1);
@@ -30,7 +31,7 @@ AICORE void runTPrelu( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T _
 
     TLOAD(src0Tile, src0Global);
     TLOAD(src1Tile, src1Global);
-    TPRELU(dstTile, src0Tile, src1Tile);
+    TPRELU(dstTile, src0Tile, src1Tile, tmpTile);
     TSTORE(dstGlobal, dstTile);
     out = dstGlobal.data();
 }
@@ -38,9 +39,9 @@ AICORE void runTPrelu( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T _
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTPrelu(T *out, T *src0, T *src1, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTPrelu<half, kGRows_, kGCols_, kTRows_, kTCols_>((half*)(out), (half*)(src0), (half*)(src1));
-    else 
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTPrelu<half, kGRows_, kGCols_, kTRows_, kTCols_>((half *)(out), (half *)(src0), (half *)(src1));
+    else
         runTPrelu<T, kGRows_, kGCols_, kTRows_, kTCols_>(out, src0, src1);
 }
 const int NUM_16 = 16;
@@ -48,8 +49,8 @@ const int NUM_64 = 64;
 const int NUM_256 = 256;
 template void LaunchTPrelu<float, NUM_64, NUM_64, NUM_64, NUM_64>(float *out, float *src0, float *src1, void *stream);
 template void LaunchTPrelu<int32_t, NUM_64, NUM_64, NUM_64, NUM_64>(int32_t *out, int32_t *src0, int32_t *src1,
-                                                                  void *stream);
+                                                                    void *stream);
 template void LaunchTPrelu<aclFloat16, NUM_16, NUM_256, NUM_16, NUM_256>(aclFloat16 *out, aclFloat16 *src0,
-                                                                       aclFloat16 *src1, void *stream);
+                                                                         aclFloat16 *src1, void *stream);
 template void LaunchTPrelu<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>(int16_t *out, int16_t *src0, int16_t *src1,
-                                                                  void *stream);
+                                                                    void *stream);

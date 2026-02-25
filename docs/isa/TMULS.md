@@ -1,5 +1,10 @@
 # TMULS
 
+
+## Tile Operation Diagram
+
+![TMULS tile operation](../figures/isa/TMULS.svg)
+
 ## Introduction
 
 Elementwise multiply a tile by a scalar.
@@ -19,20 +24,18 @@ Synchronous form:
 ```text
 tmuls %dst, %src, %scalar : (!pto.tile<...>, !pto.tile<...>, f32)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
+```text
 %dst = pto.tmuls %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
+```text
 pto.tmuls ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -90,3 +93,31 @@ void example_manual() {
   TMULS(dst, src, 2.0f);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.tmuls %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.tmuls %src, %scalar : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = tmuls %src, %scalar : !pto.tile<...>, f32
+# IR Level 2 (DPS)
+pto.tmuls ins(%src, %scalar : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+```
+

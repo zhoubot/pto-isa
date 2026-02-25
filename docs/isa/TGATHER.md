@@ -1,5 +1,10 @@
 # TGATHER
 
+
+## Tile Operation Diagram
+
+![TGATHER tile operation](../figures/isa/TGATHER.svg)
+
 ## Introduction
 
 Gather/select elements using either an index tile or a compile-time mask pattern.
@@ -31,22 +36,20 @@ Mask-pattern gather:
 ```text
 tgather %dst, %src {maskPattern = #pto.mask_pattern<P0101>} : (!pto.tile<...>, !pto.tile<...>)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
+```text
 %dst = pto.tgather %src, %indices : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
-%dst = pto.tgather %src {maskPattern = #pto.mask_pattern<P0101>} : !pto.tile<...> -> !pto.tile<...>
+%dst = pto.tgather %src {maskPattern = #pto.mask_pattern<P0101>}: !pto.tile<...> -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
+```text
 pto.tgather ins(%src, %indices : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 pto.tgather ins(%src, {maskPattern = #pto.mask_pattern<P0101>} : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/type.hpp`:
@@ -123,3 +126,31 @@ void example_manual() {
   TGATHER<DstT, SrcT, MaskPattern::P0101>(dst, src);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.tgather %src, %indices : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.tgather %src, %indices : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = pto.tgather %src, %indices : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+# IR Level 2 (DPS)
+pto.tgather ins(%src, %indices : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+

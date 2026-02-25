@@ -12,12 +12,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
 template <int32_t tilingKey>
-void launchTNOT_demo(uint8_t *out, uint8_t *src,void *stream);
+void launchTNOT_demo(uint8_t *out, uint8_t *src, void *stream);
 
 class TNOTTest : public testing::Test {
 protected:
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTNot(T *out, T *src0, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tnot() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tnot()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -86,9 +86,11 @@ void test_tnot() {
     EXPECT_TRUE(ret);
 }
 const int NUM_64 = 64;
-TEST_F(TNOTTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TNOTTest, case_int32_64x64_64x64_64x64)
+{
     test_tnot<int32_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TNOTTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TNOTTest, case_int16_64x64_64x64_64x64)
+{
     test_tnot<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }

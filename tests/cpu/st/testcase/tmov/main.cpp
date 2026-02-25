@@ -17,30 +17,33 @@ using namespace std;
 using namespace pto;
 using namespace PtoTestCommon;
 
-template<typename T, int rows, int cols, int validRow, int validCol, TileType srcLoc, BLayout srcBL, SLayout srcSL, TileType dstLoc, BLayout dstBL, SLayout dstSL>
-void testMov(){
-    Tile<srcLoc,T,rows,cols,srcBL,validRow,validCol,srcSL> src;
-    Tile<dstLoc,T,rows,cols,dstBL,-1,-1,dstSL> dst(validRow,validCol);
+template <typename T, int rows, int cols, int validRow, int validCol, TileType srcLoc, BLayout srcBL, SLayout srcSL,
+          TileType dstLoc, BLayout dstBL, SLayout dstSL>
+void testMov()
+{
+    Tile<srcLoc, T, rows, cols, srcBL, validRow, validCol, srcSL> src;
+    Tile<dstLoc, T, rows, cols, dstBL, -1, -1, dstSL> dst(validRow, validCol);
 
-    std::fill(src.data(),src.data()+rows*cols,0);
-    std::fill(dst.data(),dst.data()+rows*cols,0);
+    std::fill(src.data(), src.data() + rows * cols, 0);
+    std::fill(dst.data(), dst.data() + rows * cols, 0);
 
-    std::vector<T> srcData(validCol*validRow,0);
-    std::vector<T> dstData(validCol*validRow,0);
-    
-    for(int i=0;i<srcData.size();i++) {
-        srcData[i]=std::rand()/1000.0;
+    std::vector<T> srcData(validCol * validRow, 0);
+    std::vector<T> dstData(validCol * validRow, 0);
+
+    for (int i = 0; i < srcData.size(); i++) {
+        srcData[i] = std::rand() / 1000.0;
     }
 
-    using TensorType = GlobalTensor<T,Shape<1,1,1,validRow,validCol>,Stride<validRow*validCol,validRow*validCol,validRow,validCol,1>>;
+    using TensorType = GlobalTensor<T, Shape<1, 1, 1, validRow, validCol>,
+                                    Stride<validRow * validCol, validRow * validCol, validRow, validCol, 1>>;
     TensorType srcTensor(srcData.data());
     TensorType dstTensor(dstData.data());
 
-    TLOAD(src,srcTensor);
-    TMOV(dst,src);
-    TSTORE(dstTensor,dst);
+    TLOAD(src, srcTensor);
+    TMOV(dst, src);
+    TSTORE(dstTensor, dst);
 
-    EXPECT_TRUE(ResultCmp(srcData,dstData.data(),0));
+    EXPECT_TRUE(ResultCmp(srcData, dstData.data(), 0));
 }
 
 class TMOVTest : public testing::Test {
@@ -51,24 +54,29 @@ protected:
     {}
 };
 
-#define TMOV_TEST(T, rows, cols, validRow, validCol, srcLoc, srcBL, srcSL, dstLoc, dstBL, dstSL) \
-    TEST_F(TMOVTest, T##_##rows##_##cols##_##validRow##_##validCol##_##srcLoc##_##srcBL##_##srcSL##_##dstLoc##_##dstBL##_##dstSL) { \
-    testMov<T, rows, cols, validRow, validCol, TileType::srcLoc, BLayout::srcBL, SLayout::srcSL, TileType::dstLoc, BLayout::dstBL, SLayout::dstSL>(); }
+#define TMOV_TEST(T, rows, cols, validRow, validCol, srcLoc, srcBL, srcSL, dstLoc, dstBL, dstSL)                       \
+    TEST_F(                                                                                                            \
+        TMOVTest,                                                                                                      \
+        T##_##rows##_##cols##_##validRow##_##validCol##_##srcLoc##_##srcBL##_##srcSL##_##dstLoc##_##dstBL##_##dstSL)   \
+    {                                                                                                                  \
+        testMov<T, rows, cols, validRow, validCol, TileType::srcLoc, BLayout::srcBL, SLayout::srcSL, TileType::dstLoc, \
+                BLayout::dstBL, SLayout::dstSL>();                                                                     \
+    }
 
-TMOV_TEST(float, 64,128,64,128,Vec,RowMajor,NoneBox,Vec,RowMajor,NoneBox)
-TMOV_TEST(float, 64,128,64,128,Vec,RowMajor,NoneBox,Vec,ColMajor,NoneBox)
-TMOV_TEST(float, 64,128,64,128,Vec,ColMajor,NoneBox,Vec,ColMajor,NoneBox)
-TMOV_TEST(float, 64,128,64,128,Vec,ColMajor,NoneBox,Vec,RowMajor,NoneBox)
-TMOV_TEST(float, 64,128,64,128,Vec,RowMajor,NoneBox,Vec,ColMajor,RowMajor)
-TMOV_TEST(float, 64,128,64,128,Vec,ColMajor,RowMajor,Vec,RowMajor,NoneBox)
-TMOV_TEST(float, 64,128,64,128,Vec,ColMajor,NoneBox,Vec,ColMajor,RowMajor)
-TMOV_TEST(float, 64,128,64,128,Vec,ColMajor,RowMajor,Vec,ColMajor,NoneBox)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, RowMajor, NoneBox, Vec, RowMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, RowMajor, NoneBox, Vec, ColMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, ColMajor, NoneBox, Vec, ColMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, ColMajor, NoneBox, Vec, RowMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, RowMajor, NoneBox, Vec, ColMajor, RowMajor)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, ColMajor, RowMajor, Vec, RowMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, ColMajor, NoneBox, Vec, ColMajor, RowMajor)
+TMOV_TEST(float, 64, 128, 64, 128, Vec, ColMajor, RowMajor, Vec, ColMajor, NoneBox)
 
-TMOV_TEST(float, 16,24,15,23,Vec,RowMajor,NoneBox,Vec,RowMajor,NoneBox)
-TMOV_TEST(float, 64,128,63,125,Vec,RowMajor,NoneBox,Vec,ColMajor,NoneBox)
-TMOV_TEST(float, 64,128,63,125,Vec,ColMajor,NoneBox,Vec,ColMajor,NoneBox)
-TMOV_TEST(float, 64,128,63,125,Vec,ColMajor,NoneBox,Vec,RowMajor,NoneBox)
-TMOV_TEST(float, 64,128,63,125,Vec,RowMajor,NoneBox,Vec,ColMajor,RowMajor)
-TMOV_TEST(float, 64,128,63,125,Vec,ColMajor,RowMajor,Vec,RowMajor,NoneBox)
-TMOV_TEST(float, 64,128,63,125,Vec,ColMajor,NoneBox,Vec,ColMajor,RowMajor)
-TMOV_TEST(float, 64,128,63,125,Vec,ColMajor,RowMajor,Vec,ColMajor,NoneBox)
+TMOV_TEST(float, 16, 24, 15, 23, Vec, RowMajor, NoneBox, Vec, RowMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, RowMajor, NoneBox, Vec, ColMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, ColMajor, NoneBox, Vec, ColMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, ColMajor, NoneBox, Vec, RowMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, RowMajor, NoneBox, Vec, ColMajor, RowMajor)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, ColMajor, RowMajor, Vec, RowMajor, NoneBox)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, ColMajor, NoneBox, Vec, ColMajor, RowMajor)
+TMOV_TEST(float, 64, 128, 63, 125, Vec, ColMajor, RowMajor, Vec, ColMajor, NoneBox)

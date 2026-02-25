@@ -1,61 +1,68 @@
-# 2. Execution model
+# 2. Machine model
 
-## 2.1 SPMD-style block execution
+## 2.1 Scope
 
-PTO kernels are typically executed in an SPMD style:
+This chapter defines the abstract execution model that Virtual ISA programs target.
+It specifies architecture-visible ordering and responsibility boundaries, not microarchitecture internals.
 
-- all participating cores run the same entry function
-- each core derives its work assignment from its runtime identity (e.g. `block_idx`)
+## 2.2 Execution agents
 
-The portable rule is:
+The abstract PTO machine has three conceptual agents:
 
-- `block_idx` identifies the **block** (core-level task)
-- `subblockid` (if present) identifies a **sub-block instance** within a core
+- **Host machine**: prepares workloads, submits execution, and manages global resources.
+- **Device machine**: schedules tile programs across execution resources.
+- **Core machine**: executes tile/scalar instructions and synchronization primitives.
 
-When sub-block decomposition exists, a stable “virtual id” can be constructed:
+A conforming implementation MAY map these agents differently internally, but MUST preserve architecture-visible behavior.
 
-```cpp
-auto cid = get_block_idx();
-auto vid = get_block_idx() * get_subblockdim() + get_subblockid();
-```
+## 2.3 Program granularity
 
-## 2.2 MPMD-style task execution
+PTO programs operate at tile granularity:
 
-PTO also supports an MPMD-style execution model.
+- A program is an ordered sequence of PTO operations over tile, scalar, memory, and event values.
+- Execution units MAY process independent tile programs concurrently.
+- Visible ordering MUST follow data dependencies and explicit synchronization semantics.
 
-In **MPMD**, different cores (or groups of cores) can execute **different tile programs** as part of the same overall
-tile graph. In the abstract model, the **Device Machine scheduler** assigns work by selecting a tile block and mapping
-it onto an available Core Machine.
+## 2.4 Dispatch and scheduling
 
-MPMD is useful when a workload naturally decomposes into multiple stages with different instruction mixes (for example
-producer/consumer pipelines or “control-heavy” coordination alongside compute-heavy kernels).
+Scheduling policy is implementation-defined, subject to architecture rules:
 
-A common portable representation is:
+- Independent work MAY execute out of order.
+- Dependence-ordered work MUST observe required happens-before relations.
+- Backend/runtime MAY use SPMD, MPMD, or hybrid dispatch models.
 
-- the scheduler provides a **task id** (or program id) per launched work item
-- a single kernel entry function dispatches based on that id, or separate entry points are used
+## 2.5 Architecture-visible ordering domains
 
-MPMD and SPMD are often combined: each task can still use `block_idx` tiling internally to process its assigned region.
+Ordering is defined across three domains:
 
-## 2.3 PTO machine abstraction
+1. **Program order domain**
+- In a single dependent chain, later operations MUST observe earlier committed effects.
 
-PTO documentation commonly uses a multi-level abstraction:
+2. **Event/synchronization domain**
+- Event operations and `TSYNC` MUST establish the architecture-defined ordering points.
 
-- **Core Machine**: executes a single instruction stream and manages on-chip tile state
-- **Device Machine**: schedules blocks across multiple cores and handles inter-core dependencies
-- **Host Machine**: higher-level orchestration (JIT, caches, graph scheduling), if applicable
+3. **Memory visibility domain**
+- `TLOAD`/`TSTORE` visibility rules apply according to memory-ordering constraints in chapter 11.
 
-The detailed description is in `docs/machine/abstract-machine.md`.
+## 2.6 Auto vs Manual responsibilities
 
-## 2.4 Implications for kernel writers
+PTO supports two architecture-level responsibility modes:
 
-From a kernel author’s perspective:
+- **Auto mode**
+  - Compiler/runtime SHOULD insert legal synchronization and placement decisions.
+  - User intent remains architecture-visible but operational details are tool-managed.
 
-- you must partition global tensors into block-local tiles using `block_idx` (and optionally `subblockid`)
-- you must respect synchronization requirements when overlapping data movement and compute
-- you should prefer regular, contiguous GM access patterns per block for performance
+- **Manual mode**
+  - Programmer is responsible for explicit placement, ordering, and pipeline-safe scheduling.
+  - Toolchain MUST preserve explicitly authored synchronization semantics.
 
-For concrete examples, see:
+## 2.7 Implementation-defined surface
 
-- `docs/coding/tutorial.md`
-- `docs/coding/tutorials/vec-add.md`
+The following remain implementation-defined and MUST be documented per backend profile:
+
+- scheduler heuristics
+- pipeline occupancy and issue details
+- internal buffering and transient placement
+- backend-specific legality subsets
+
+These details MUST NOT change architecture-defined instruction semantics.

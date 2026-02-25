@@ -23,8 +23,10 @@ constexpr int HALF_SIZE = 2;
 constexpr int QUARTER_SIZE = 4;
 class TGATHERTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()

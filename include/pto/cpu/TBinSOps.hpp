@@ -16,66 +16,58 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/tile_offsets.hpp"
 
 namespace pto {
-    template <typename TileData, typename Function>
-    void TBinSOp(typename TileData::TileDType dst, 
-                typename TileData::TileDType src, 
-                typename TileData::DType scalar,
-                unsigned validRow, 
-                unsigned validCol,
-                Function&& function) {
-        for(size_t c=0; c<validCol; c++) {
-            for(size_t r=0; r<validRow; r++) {
-                size_t idx = GetTileElementOffset<TileData>(r,c);
-                dst[idx] = function(src[idx], scalar);
-            }
+template <typename TileData, typename Function>
+void TBinSOp(typename TileData::TileDType dst, typename TileData::TileDType src, typename TileData::DType scalar,
+             unsigned validRow, unsigned validCol, Function &&function)
+{
+    for (size_t c = 0; c < validCol; c++) {
+        for (size_t r = 0; r < validRow; r++) {
+            size_t idx = GetTileElementOffset<TileData>(r, c);
+            dst[idx] = function(src[idx], scalar);
         }
-    }
-
-    template <typename TileData>
-    PTO_INTERNAL void TADDS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar) {
-        auto lambda = [](typename TileData::DType x, typename TileData::DType y) {
-            return x+y;
-        };
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
-    }
-    template <typename TileData>
-    PTO_INTERNAL void TMULS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar) {
-        auto lambda = [](typename TileData::DType x, typename TileData::DType y) {
-            return x*y;
-        };
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
-    }
-    template <typename TileData>
-    PTO_INTERNAL void TDIVS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar) {
-        auto lambda = [](typename TileData::DType x, typename TileData::DType y) {
-            return x / y;
-        };
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
-    }
-    template <typename TileData>
-    PTO_INTERNAL void TDIVS_IMPL(TileData &dst, typename TileData::DType scalar, TileData &src) {
-        auto lambda = [](typename TileData::DType x, typename TileData::DType y) {
-            return y / x;
-        };
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
-    }
-    template <typename TileData>
-    PTO_INTERNAL void TMINS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar) {
-        auto lambda = [](typename TileData::DType x, typename TileData::DType y) {
-            return std::min(x, y);
-        };
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
     }
 }
 
-#endif 
+template <typename TileData>
+PTO_INTERNAL void TADDS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar)
+{
+    auto lambda = [](typename TileData::DType x, typename TileData::DType y) { return x + y; };
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
+}
+template <typename TileData>
+PTO_INTERNAL void TMULS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar)
+{
+    auto lambda = [](typename TileData::DType x, typename TileData::DType y) { return x * y; };
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
+}
+template <typename TileData>
+PTO_INTERNAL void TDIVS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar)
+{
+    auto lambda = [](typename TileData::DType x, typename TileData::DType y) { return x / y; };
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
+}
+template <typename TileData>
+PTO_INTERNAL void TDIVS_IMPL(TileData &dst, typename TileData::DType scalar, TileData &src)
+{
+    auto lambda = [](typename TileData::DType x, typename TileData::DType y) { return y / x; };
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
+}
+template <typename TileData>
+PTO_INTERNAL void TMINS_IMPL(TileData &dst, TileData &src, typename TileData::DType scalar)
+{
+    auto lambda = [](typename TileData::DType x, typename TileData::DType y) { return std::min(x, y); };
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TBinSOp<TileData>(dst.data(), src.data(), scalar, row, col, lambda);
+}
+} // namespace pto
+
+#endif

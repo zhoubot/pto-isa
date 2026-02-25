@@ -12,8 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -25,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -39,7 +38,8 @@ void LaunchTMins(T *out, T *src0, T *src1, void *stream);
 
 template <typename T, int dstTileH, int dstTileW, int src0TileH, int src0TileW, int src1TileH, int src1TileW, int vRows,
           int vCols, int padValueType>
-void test_tmins() {
+void test_tmins()
+{
     size_t dstFileSize = dstTileH * dstTileW * sizeof(T);
     size_t src0FileSize = src0TileH * src0TileW * sizeof(T);
     size_t src1FileSize = src1TileH * src1TileW * sizeof(T);
@@ -93,27 +93,35 @@ void test_tmins() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TMINSTest, case_float_64x64_PAD_VALUE_NULL) {
+TEST_F(TMINSTest, case_float_64x64_PAD_VALUE_NULL)
+{
     test_tmins<float, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TMINSTest, case_int32_64x64_PAD_VALUE_NULL) {
+TEST_F(TMINSTest, case_int32_64x64_PAD_VALUE_NULL)
+{
     test_tmins<int32_t, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TMINSTest, case_half_64x64_PAD_VALUE_NULL) {
+TEST_F(TMINSTest, case_half_64x64_PAD_VALUE_NULL)
+{
     test_tmins<aclFloat16, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TMINSTest, case_int16_64x64_PAD_VALUE_NULL) {
+TEST_F(TMINSTest, case_int16_64x64_PAD_VALUE_NULL)
+{
     test_tmins<int16_t, 64, 64, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>();
 }
-TEST_F(TMINSTest, case_float_60x60_PAD_VALUE_MIN) {
+TEST_F(TMINSTest, case_float_60x60_PAD_VALUE_MIN)
+{
     test_tmins<float, 60, 128, 64, 64, 60, 128, 60, 60, PAD_VALUE_MIN>();
 }
-TEST_F(TMINSTest, case_int32_60x60_PAD_VALUE_MIN) {
+TEST_F(TMINSTest, case_int32_60x60_PAD_VALUE_MIN)
+{
     test_tmins<int32_t, 60, 128, 64, 64, 60, 128, 60, 60, PAD_VALUE_MIN>();
 }
-TEST_F(TMINSTest, case_half_1x3600_PAD_VALUE_MIN) {
+TEST_F(TMINSTest, case_half_1x3600_PAD_VALUE_MIN)
+{
     test_tmins<aclFloat16, 1, 3600, 2, 4096, 1, 3600, 1, 3600, PAD_VALUE_MIN>();
 }
-TEST_F(TMINSTest, case_int16_16x200_PAD_VALUE_MIN) {
+TEST_F(TMINSTest, case_int16_16x200_PAD_VALUE_MIN)
+{
     test_tmins<int16_t, 16, 256, 20, 512, 16, 256, 16, 200, PAD_VALUE_MIN>();
 }

@@ -27,8 +27,8 @@ def gen_golden_data(params):
     src1 = np.random.uniform(low=-10, high=10, size=(src1_row, src1_col)).astype(dtype)
     src1.tofile("input1.bin")
     
-    reps = (dst_col + src1_col - 1) // src1_col
-    src1_expand = np.tile(src1, (1, reps))[:, :dst_col]
+    reps = (dst_row + src1_row - 1) // src1_row
+    src1_expand = np.tile(src1, (reps, 1))[:, :dst_col]
     golden = src0 - src1_expand
     golden.tofile("golden.bin")
 

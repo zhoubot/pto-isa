@@ -16,9 +16,9 @@ using namespace std;
 using namespace PtoTestCommon;
 
 template <int32_t testKey>
-void launchTSORT32(uint64_t *out, uint64_t *src, uint32_t *idx, uint64_t *tmp, void* stream);
+void launchTSORT32(uint64_t *out, uint64_t *src, uint32_t *idx, uint64_t *tmp, void *stream);
 
-class TSort32Test : public testing::Test{
+class TSort32Test : public testing::Test {
 protected:
     void SetUp() override
     {}
@@ -26,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -52,15 +53,15 @@ void tsort32_test(int32_t rows, int32_t cols, int32_t colsAlign)
     uint64_t *dstDevice, *srcDevice, *tmpDevice;
     uint32_t *idxHost, *idxDevice;
 
-    aclrtMallocHost((void**)(&dstHost), dstByteSize);
-    aclrtMallocHost((void**)(&srcHost), srcByteSize);
-    aclrtMallocHost((void**)(&idxHost), idxByteSize);
-    aclrtMallocHost((void**)(&tmpHost), tmpByteSize);
-     
-    aclrtMalloc((void**)&dstDevice, dstByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc((void**)&srcDevice, srcByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc((void**)&idxDevice, idxByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc((void**)&tmpDevice, tmpByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMallocHost((void **)(&dstHost), dstByteSize);
+    aclrtMallocHost((void **)(&srcHost), srcByteSize);
+    aclrtMallocHost((void **)(&idxHost), idxByteSize);
+    aclrtMallocHost((void **)(&tmpHost), tmpByteSize);
+
+    aclrtMalloc((void **)&dstDevice, dstByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&srcDevice, srcByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&idxDevice, idxByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&tmpDevice, tmpByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
     ReadFile(GetGoldenDir() + "/input_arr.bin", srcByteSize, srcHost, srcByteSize);
     ReadFile(GetGoldenDir() + "/input_idx.bin", idxByteSize, idxHost, idxByteSize);
@@ -74,14 +75,14 @@ void tsort32_test(int32_t rows, int32_t cols, int32_t colsAlign)
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, dstByteSize, dstDevice, dstByteSize, ACL_MEMCPY_DEVICE_TO_HOST);
-    WriteFile(GetGoldenDir()+"/output.bin", dstHost, dstByteSize);
+    WriteFile(GetGoldenDir() + "/output.bin", dstHost, dstByteSize);
 
     aclrtFree(dstDevice);
     aclrtFree(srcDevice);
     aclrtFree(idxDevice);
     aclrtFree(tmpDevice);
     aclrtFreeHost(dstHost);
-    aclrtFreeHost(srcHost);    
+    aclrtFreeHost(srcHost);
     aclrtFreeHost(idxHost);
     aclrtFreeHost(tmpHost);
 

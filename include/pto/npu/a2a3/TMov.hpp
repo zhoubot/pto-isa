@@ -25,15 +25,15 @@ __tf__ AICORE void TMovToBt(typename DstTileData::TileDType __out__ dst, typenam
     constexpr const int BURST_LEN_UNIT = 64;
 
     if constexpr (std::is_same<SrcType, int32_t>::value || std::is_same<SrcType, float>::value) {
-        static_assert(
-            std::is_same<DstType, SrcType>::value, "TMov: Destination and Source tile data types must be the same.");
+        static_assert(std::is_same<DstType, SrcType>::value,
+                      "TMov: Destination and Source tile data types must be the same.");
     } else if constexpr (std::is_same<SrcType, half>::value) {
         static_assert(std::is_same<DstType, float>::value,
-            "TMov: When Source tile data types is half, dst tile data types must be float");
+                      "TMov: When Source tile data types is half, dst tile data types must be float");
     }
     static_assert(SrcTileData::Rows == 1, "TMov: When TileType is Bias, row must be 1");
     static_assert(SrcTileData::Cols * sizeof(SrcType) % BURST_LEN_UNIT == 0,
-        "TMov: When TileType is Bias, col * sizeof(srcDType) must be aligned to 64");
+                  "TMov: When TileType is Bias, col * sizeof(srcDType) must be aligned to 64");
 
     __cbuf__ SrcType *srcAddrP = (__cbuf__ SrcType *)(src);
     uint64_t dstAddrP = (uint64_t)dst;
@@ -57,12 +57,12 @@ __tf__ AICORE void TMovToFb(typename DstTileData::TileDType __out__ dst, typenam
     constexpr const int BURST_LEN_UNIT = 128;
     constexpr const int RELU_BIT = 16;
 
-    static_assert(
-        std::is_same<DstType, SrcType>::value, "TMov: Destination and Source tile data types must be the same.");
+    static_assert(std::is_same<DstType, SrcType>::value,
+                  "TMov: Destination and Source tile data types must be the same.");
     static_assert(std::is_same<DstType, uint64_t>::value, "TMov: Invalid data type.");
     static_assert(SrcTileData::Rows == 1, "TMov: When TileType is Scaling, row must be 1");
     static_assert(SrcTileData::Cols * sizeof(SrcType) % BURST_LEN_UNIT == 0,
-        "TMov: When TileType is Scaling, col * sizeof(srcType) must be aligned to 128");
+                  "TMov: When TileType is Scaling, col * sizeof(srcType) must be aligned to 128");
 
     __cbuf__ SrcType *srcAddrP = (__cbuf__ SrcType *)(src);
     __fbuf__ DstType *dstAddr = (__fbuf__ DstType *)(dst);
@@ -90,7 +90,7 @@ AICORE void TMovToVec(DstTileData &dst, SrcTileData &src)
 
 template <typename DstTileData, typename SrcTileData, QuantMode_t QuantPre, ReluPreMode reluMode>
 __tf__ AICORE void TMovCcToCb(typename DstTileData::TileDType __out__ dst, typename SrcTileData::TileDType __in__ src,
-    uint16_t validRow, uint16_t validCol)
+                              uint16_t validRow, uint16_t validCol)
 {
     using SrcType = typename SrcTileData::DType;
     using DstType = typename DstTileData::DType;
@@ -101,25 +101,26 @@ __tf__ AICORE void TMovCcToCb(typename DstTileData::TileDType __out__ dst, typen
     constexpr uint32_t dstStride_dst_D = DstTileData::Rows;
     constexpr uint16_t srcStride = SrcTileData::Rows;
     validCol = CeilDivision(validCol, c0Size) * c0Size;
-    copy_matrix_cc_to_cbuf(
-        dstAddr, srcAddr, 0, validCol, SrcTileData::Rows, dstStride_dst_D, 
-        srcStride, 0, QuantPre, reluMode, false, false);
+    copy_matrix_cc_to_cbuf(dstAddr, srcAddr, 0, validCol, SrcTileData::Rows, dstStride_dst_D, srcStride, 0, QuantPre,
+                           reluMode, false, false);
 }
 
 template <typename DstTileData, typename SrcTileData>
 PTO_INTERNAL void TMovToLeft(DstTileData &dst, SrcTileData &src)
 {
-    if constexpr (DstTileData::SFractal == SrcTileData::SFractal) {
+    if constexpr (SrcTileData::Rows == 1 && SrcTileData::isRowMajor) {
+        TExtractToAVector<DstTileData, SrcTileData>(dst.data(), src.data(), 0, 0, dst.GetValidCol());
+    } else if constexpr (DstTileData::SFractal == SrcTileData::SFractal) {
         if constexpr (DstTileData::Compact == CompactMode::Normal) {
-            TExtractToACompact<DstTileData, SrcTileData, false>(
-                dst.data(), src.data(), 0, 0, dst.GetValidRow(), dst.GetValidCol(), dst.GetKAligned());
+            TExtractToACompact<DstTileData, SrcTileData, false>(dst.data(), src.data(), 0, 0, dst.GetValidRow(),
+                                                                dst.GetValidCol(), dst.GetKAligned());
         } else {
             TExtractToA<DstTileData, SrcTileData, false>(dst.data(), src.data(), 0, 0);
         }
     } else {
         if constexpr (DstTileData::Compact == CompactMode::Normal || sizeof(typename SrcTileData::DType) == 1) {
-            TExtractToACompact<DstTileData, SrcTileData, true>(
-                dst.data(), src.data(), 0, 0, dst.GetValidRow(), dst.GetValidCol(), dst.GetKAligned());
+            TExtractToACompact<DstTileData, SrcTileData, true>(dst.data(), src.data(), 0, 0, dst.GetValidRow(),
+                                                               dst.GetValidCol(), dst.GetKAligned());
         } else {
             TExtractToA<DstTileData, SrcTileData, true>(dst.data(), src.data(), 0, 0);
         }
@@ -131,36 +132,43 @@ PTO_INTERNAL void TMovToRight(DstTileData &dst, SrcTileData &src)
 {
     if constexpr (DstTileData::SFractal == SrcTileData::SFractal) {
         if constexpr (DstTileData::Compact == CompactMode::Normal) {
-            TExtractToBCompact<DstTileData, SrcTileData, false>(
-                dst.data(), src.data(), 0, 0, dst.GetValidRow(), dst.GetValidCol());
+            TExtractToBCompact<DstTileData, SrcTileData, false>(dst.data(), src.data(), 0, 0, dst.GetValidRow(),
+                                                                dst.GetValidCol());
         } else {
             TExtractToB<DstTileData, SrcTileData, false>(dst.data(), src.data(), 0, 0);
         }
     } else {
         if constexpr (DstTileData::Compact == CompactMode::Normal || sizeof(typename SrcTileData::DType) == 1) {
-            TExtractToBCompact<DstTileData, SrcTileData, true>(
-                dst.data(), src.data(), 0, 0, dst.GetValidRow(), dst.GetValidCol());
+            TExtractToBCompact<DstTileData, SrcTileData, true>(dst.data(), src.data(), 0, 0, dst.GetValidRow(),
+                                                               dst.GetValidCol());
         } else {
             TExtractToB<DstTileData, SrcTileData, true>(dst.data(), src.data(), 0, 0);
         }
     }
 }
-
 template <typename DstTileData, typename SrcTileData>
-PTO_INTERNAL void TMOV_IMPL(DstTileData &dst, SrcTileData &src)
+PTO_INTERNAL void TMOV_CONVTILE_IMPL(DstTileData &dst, SrcTileData &src)
+{
+    if constexpr (SrcTileData::layout == pto::Layout::FRACTAL_Z) { // C1HWNC0, dst dim4 is c0Size
+        TExtractToBConv<DstTileData, SrcTileData>(dst.data(), src.data(), src.GetShape(3), dst.GetValidRow(),
+                                                  dst.GetValidCol(), 0, 0);
+    }
+}
+template <typename DstTileData, typename SrcTileData>
+PTO_INTERNAL void TMOV_TILE_IMPL(DstTileData &dst, SrcTileData &src)
 {
     static_assert((SrcTileData::Rows == DstTileData::Rows) && ((SrcTileData::Cols == DstTileData::Cols)),
-        "TMov: The shape of src needs to be the same as that of dst.");
+                  "TMov: The shape of src needs to be the same as that of dst.");
     static_assert((SrcTileData::Loc == TileType::Mat &&
-                      (DstTileData::Loc == TileType::Left || DstTileData::Loc == TileType::Right ||
-                          DstTileData::Loc == TileType::Bias || DstTileData::Loc == TileType::Scaling)) ||
+                   (DstTileData::Loc == TileType::Left || DstTileData::Loc == TileType::Right ||
+                    DstTileData::Loc == TileType::Bias || DstTileData::Loc == TileType::Scaling)) ||
                       (DstTileData::Loc == TileType::Vec && SrcTileData::Loc == TileType::Vec) ||
                       (DstTileData::Loc == TileType::Mat && SrcTileData::Loc == TileType::Acc),
-        "TMov: Invalid TileType.");
+                  "TMov: Invalid TileType.");
     if constexpr (SrcTileData::Loc == TileType::Mat && DstTileData::Loc == TileType::Left) {
-        TMovToLeft<DstTileData, SrcTileData>(dst,src);
+        TMovToLeft<DstTileData, SrcTileData>(dst, src);
     } else if constexpr (SrcTileData::Loc == TileType::Mat && DstTileData::Loc == TileType::Right) {
-        TMovToRight<DstTileData, SrcTileData>(dst,src);
+        TMovToRight<DstTileData, SrcTileData>(dst, src);
     } else if constexpr (SrcTileData::Loc == TileType::Mat && DstTileData::Loc == TileType::Bias) {
         TMovToBt<DstTileData, SrcTileData>(dst.data(), src.data());
     } else if constexpr (SrcTileData::Loc == TileType::Mat && DstTileData::Loc == TileType::Scaling) {
@@ -176,7 +184,15 @@ PTO_INTERNAL void TMOV_IMPL(DstTileData &dst, SrcTileData &src)
         TMovCcToCb<DstTileData, SrcTileData, quantPre, ReluPreMode::NoRelu>(dst.data(), src.data(), m, n);
     }
 }
-
+template <typename DstTileData, typename SrcTileData>
+PTO_INTERNAL void TMOV_IMPL(DstTileData &dst, SrcTileData &src)
+{
+    if constexpr (is_conv_tile_v<SrcTileData>) {
+        TMOV_CONVTILE_IMPL(dst, src);
+    } else {
+        TMOV_TILE_IMPL(dst, src);
+    }
+}
 // relu
 template <typename DstTileData, typename SrcTileData, ReluPreMode reluMode>
 PTO_INTERNAL void TMOV_IMPL(DstTileData &dst, SrcTileData &src)
@@ -206,7 +222,7 @@ __tf__ PTO_INTERNAL void SetFPC(typename FpTileData::TileDType __in__ fp)
 {
     __fbuf__ typename FpTileData::DType *dstAddrFp = (__fbuf__ typename FpTileData::DType *)__cce_get_tile_ptr(fp);
     uint64_t deqTensorAddr = ((uint64_t)dstAddrFp >> static_cast<uint64_t>(7))
-                             << 8;  // fpc[15:8] means Quant_PRE_ADDR, uint of 128(2^7)bytes
+                             << 8; // fpc[15:8] means Quant_PRE_ADDR, uint of 128(2^7)bytes
     set_fpc(deqTensorAddr);
 }
 
@@ -221,5 +237,5 @@ PTO_INTERNAL void TMOV_IMPL(DstTileData &dst, SrcTileData &src, FpTileData &fp)
     SetFPC<FpTileData>(fp.data());
     TMovCcToCb<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(), m, n);
 }
-}  // namespace pto
-#endif  // TMOV_HPP
+} // namespace pto
+#endif // TMOV_HPP

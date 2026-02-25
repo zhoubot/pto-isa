@@ -23,8 +23,7 @@ constexpr double CAST_ODD_THRESHHOLD = 0.5;
 
 template <typename T>
 constexpr bool is_float_like_v =
-    std::is_floating_point_v<T> || std::is_same_v<T, half> ||
-    std::is_same_v<T, aclFloat16>;
+    std::is_floating_point_v<T> || std::is_same_v<T, half> || std::is_same_v<T, aclFloat16>;
 
 inline double applyRoundingToIntegral(double v, RoundMode mode)
 {
@@ -48,8 +47,10 @@ inline double applyRoundingToIntegral(double v, RoundMode mode)
             const double f = std::floor(v);
             const double frac = v - f;
 
-            if (frac > CAST_ODD_THRESHHOLD) return f + 1;
-            if (frac < CAST_ODD_THRESHHOLD) return f;
+            if (frac > CAST_ODD_THRESHHOLD)
+                return f + 1;
+            if (frac < CAST_ODD_THRESHHOLD)
+                return f;
 
             // tie (.5) → round to odd
             const auto i = static_cast<long long>(f);
@@ -62,25 +63,25 @@ inline double applyRoundingToIntegral(double v, RoundMode mode)
 }
 
 template <typename TileDataD, typename TileDataS>
-PTO_INTERNAL void TCvt_Impl(typename TileDataD::TileDType dst,
-                            typename TileDataS::TileDType src, unsigned validRow, unsigned validCol, RoundMode mode
-                        ) {
-        for (int i = 0; i < validRow; ++i) {
-            for (int j = 0; j < validCol; ++j) {
-                size_t dstIdx = GetTileElementOffset<TileDataD>(i,j);
-                size_t srcIdx = GetTileElementOffset<TileDataS>(i,j);  
-                using D = typename TileDataD::DType;
-                using S = typename TileDataS::DType;
+PTO_INTERNAL void TCvt_Impl(typename TileDataD::TileDType dst, typename TileDataS::TileDType src, unsigned validRow,
+                            unsigned validCol, RoundMode mode)
+{
+    for (int i = 0; i < validRow; ++i) {
+        for (int j = 0; j < validCol; ++j) {
+            size_t dstIdx = GetTileElementOffset<TileDataD>(i, j);
+            size_t srcIdx = GetTileElementOffset<TileDataS>(i, j);
+            using D = typename TileDataD::DType;
+            using S = typename TileDataS::DType;
 
-                if constexpr (is_float_like_v<S> && std::is_integral_v<D>) {
-                    const double dv = static_cast<double>(src[srcIdx]);
-                    dst[dstIdx] = static_cast<D>(applyRoundingToIntegral(dv, mode));
-                } else {
-                    dst[dstIdx] = static_cast<D>(src[srcIdx]);
-                }
+            if constexpr (is_float_like_v<S> && std::is_integral_v<D>) {
+                const double dv = static_cast<double>(src[srcIdx]);
+                dst[dstIdx] = static_cast<D>(applyRoundingToIntegral(dv, mode));
+            } else {
+                dst[dstIdx] = static_cast<D>(src[srcIdx]);
             }
         }
     }
+}
 
 template <typename TileDataD, typename TileDataS>
 PTO_INTERNAL void TCVT_IMPL(TileDataD &dst, TileDataS &src, RoundMode mode)
@@ -90,5 +91,5 @@ PTO_INTERNAL void TCVT_IMPL(TileDataD &dst, TileDataS &src, RoundMode mode)
     TCvt_Impl<TileDataD, TileDataS>(dst.data(), src.data(), rows, cols, mode);
 }
 
-}  // namespace pto
+} // namespace pto
 #endif

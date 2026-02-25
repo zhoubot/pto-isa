@@ -17,11 +17,14 @@ using namespace PtoTestCommon;
 
 class MSCATTERTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -92,4 +95,7 @@ void test_mscatter()
     EXPECT_TRUE(ResultCmp<float>(golden, devFinal, 0.001f));
 }
 
-TEST_F(MSCATTERTest, case_float_dst512_src16x16) { test_mscatter<16, 16, 512>(); }
+TEST_F(MSCATTERTest, case_float_dst512_src16x16)
+{
+    test_mscatter<16, 16, 512>();
+}

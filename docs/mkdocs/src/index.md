@@ -1,15 +1,22 @@
-# PTO ISA Architectural Manual
+# PTO Virtual ISA Architectural Manual
 
-This site is the **PTO ISA Architectural Manual**, organized in a style similar to ISA manuals such as PTX: concise definitions, stable terminology, and cross-references to the per-instruction pages.
+This site is the **PTO Virtual ISA Architectural Manual**, organized in a PTX/Tile-IR-inspired style: concise contracts, stable terminology, and explicit architecture boundaries.
 
 ## Start here
 
-- Manual (recommended reading order): `manual/index.md`
+- Manual entry page (EN): `docs/PTO-Virtual-ISA-Manual.md`
+- Manual entry page (ZH): `docs/PTO-Virtual-ISA-Manual_zh.md`
+- Manual preface and reading order: `manual/index.md`
 - Instruction reference (one page per instruction): `docs/isa/README.md`
-- All instruction pages (generated list): `manual/isa-reference.md`
+- PTO IR non-ISA ops index: `docs/ir/README.md`
+- PTO IR non-ISA ops reference (L1/L2): `docs/ir/PTO-IR-ops.md`
 - Assembly syntax and grammar: `docs/grammar/PTO-AS.md`
 - Programming model (Tiles/GlobalTensor/Events): `docs/coding/ProgrammingModel.md`
 - Abstract machine model: `docs/machine/abstract-machine.md`
+- Virtual ISA / IR chapter: `manual/09-virtual-isa-and-ir.md`
+- Bytecode / toolchain chapter: `manual/10-bytecode-and-toolchain.md`
+- Memory ordering / consistency chapter: `manual/11-memory-ordering-and-consistency.md`
+- Backend profiles / conformance chapter: `manual/12-backend-profiles-and-conformance.md`
 
 ## Repository markdown browsing
 

@@ -18,53 +18,62 @@ See LICENSE in the root of the software repository for the full text of the Lice
 namespace pto {
 template <typename T>
 struct RowExpandSubOp {
-    PTO_INTERNAL static void RowExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats) {
+    PTO_INTERNAL static void RowExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats)
+    {
         vsub(dst, src0, src1, repeats, 1, 1, 0, 8, 8, 0);
     }
     PTO_INTERNAL static void RowExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats,
-        uint8_t dstRepeatStride, uint8_t src0RepeatStride) {
+                                               uint8_t dstRepeatStride, uint8_t src0RepeatStride)
+    {
         vsub(dst, src0, src1, repeats, 1, 1, 0, dstRepeatStride, src0RepeatStride, 1);
     }
 };
 
 template <typename T>
 struct RowExpandSubOp2 {
-    PTO_INTERNAL static void RowExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats) {
+    PTO_INTERNAL static void RowExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats)
+    {
         vsub(dst, src1, src0, repeats, 1, 0, 1, 8, 0, 8);
     }
     PTO_INTERNAL static void RowExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats,
-        uint8_t dstRepeatStride, uint8_t src0RepeatStride) {
+                                               uint8_t dstRepeatStride, uint8_t src0RepeatStride)
+    {
         vsub(dst, src1, src0, repeats, 1, 0, 1, dstRepeatStride, 1, src0RepeatStride);
     }
 };
 
 template <typename TileDataDst, typename TileDataSrc0, typename TileDataSrc1>
-PTO_INTERNAL void TROWEXPANDSUB_IMPL(TileDataDst &dst, TileDataSrc0 &src0, TileDataSrc1 &src1) {
+PTO_INTERNAL void TROWEXPANDSUB_IMPL(TileDataDst &dst, TileDataSrc0 &src0, TileDataSrc1 &src1)
+{
     using T = typename TileDataDst::DType;
-    static_assert(std::is_same_v<typename TileDataDst::DType, typename TileDataSrc0::DType> &&
-        std::is_same_v<typename TileDataDst::DType, typename TileDataSrc1::DType>,
-        "Fix: TROWEXPANDSUB src and dst data type is different!");
-    static_assert(
-        std::is_same_v<typename TileDataDst::DType, half> || std::is_same_v<typename TileDataDst::DType, float>,
-        "Fix: TROWEXPANDSUB Invalid data type.");
-    constexpr bool src0eqdst = std::is_same_v<TileDataDst, TileDataSrc0>;
-    constexpr bool src1eqdst = std::is_same_v<TileDataDst, TileDataSrc1>;
-    static_assert(TileDataDst::isRowMajor && (src0eqdst || src1eqdst), "Fix: TROWEXPANDSUB Invalid tile shape.");
-    constexpr unsigned rowStride = TileDataDst::RowStride;
+    static_assert(std::is_same_v<T, typename TileDataSrc0::DType> && std::is_same_v<T, typename TileDataSrc1::DType>,
+                  "Fix: TROWEXPANDSUB src and dst data type is different!");
+    static_assert(std::is_same_v<T, half> || std::is_same_v<T, float>, "Fix: TROWEXPANDSUB Invalid data type.");
+    static_assert(TileDataDst::isRowMajor, "Fix: TROWEXPANSUB Invalid tile shape.");
     unsigned validRow = dst.GetValidRow();
     unsigned validCol = dst.GetValidCol();
-    if constexpr (src0eqdst) {
-        unsigned src1ValidCol = src1.GetValidCol();
+    unsigned src0ValidRow = src0.GetValidRow();
+    unsigned src0ValidCol = src0.GetValidCol();
+    unsigned src1ValidRow = src1.GetValidRow();
+    unsigned src1ValidCol = src1.GetValidCol();
+    bool src0eqdst = (validRow == src0ValidRow) && (validCol == src0ValidCol);
+    bool src1eqdst = (validRow == src1ValidRow) && (validCol == src1ValidCol);
+    PTO_ASSERT((src0eqdst && TileDataSrc0::isRowMajor) || (src1eqdst && TileDataSrc1::isRowMajor),
+               "TROWEXPANSUB: the validShape of src0 or src1 should be equal to those of dst.");
+    if (src0eqdst) {
         PTO_ASSERT(((TileDataSrc1::isRowMajor && src1ValidCol == 32 / sizeof(T)) ||
                     (!TileDataSrc1::isRowMajor && src1ValidCol == 1)) &&
-                    src1.GetValidRow() == validRow, "TROWEXPANDSUB: invalid src1 shape.");
-        TRowExpandBin<RowExpandSubOp<T>, TileDataDst, TileDataSrc1, rowStride>(dst.data(), src0.data(), src1.data(), validRow, validCol);
-    } else  {
-        unsigned src0ValidCol = src0.GetValidCol();
+                       src1ValidRow == validRow,
+                   "TROWEXPANSUB: invalid src1 shape.");
+        TRowExpandBin<RowExpandSubOp<T>, TileDataDst, TileDataSrc0, TileDataSrc1>(dst.data(), src0.data(), src1.data(),
+                                                                                  validRow, validCol);
+    } else {
         PTO_ASSERT(((TileDataSrc0::isRowMajor && src0ValidCol == 32 / sizeof(T)) ||
                     (!TileDataSrc0::isRowMajor && src0ValidCol == 1)) &&
-                    src0.GetValidRow() == validRow, "TROWEXPANDSUB: invalid src0 shape.");
-        TRowExpandBin<RowExpandSubOp2<T>, TileDataDst, TileDataSrc0, rowStride>(dst.data(), src1.data(), src0.data(), validRow, validCol);
+                       src0ValidRow == validRow,
+                   "TROWEXPANSUB: invalid src0 shape.");
+        TRowExpandBin<RowExpandSubOp2<T>, TileDataDst, TileDataSrc1, TileDataSrc0>(dst.data(), src1.data(), src0.data(),
+                                                                                   validRow, validCol);
     }
 }
 } // namespace pto

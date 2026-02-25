@@ -117,6 +117,34 @@ AICORE void runTROWEXPANDSUB(__gm__ float __out__ *out, __gm__ float __in__ *src
 }
 
 template <int kRows, int kCols>
+AICORE void runTROWEXPANDADD(__gm__ float __out__ *out, __gm__ float __in__ *src0, __gm__ float __in__ *src1)
+{
+    using ShapeMat = Shape<1, 1, 1, kRows, kCols>;
+    using StrideMat = Stride<1, 1, 1, kCols, 1>;
+    using GlobalMat = GlobalTensor<float, ShapeMat, StrideMat>;
+
+    using ShapeVec = Shape<1, 1, 1, kRows, 1>;
+    using StrideVec = Stride<1, 1, 1, 1, 1>;
+    using GlobalVec = GlobalTensor<float, ShapeVec, StrideVec>;
+
+    using TileMat = Tile<TileType::Vec, float, kRows, kCols, BLayout::RowMajor, -1, -1>;
+    using TileVec = Tile<TileType::Vec, float, kRows, 1, BLayout::ColMajor, -1, -1>;
+    TileMat src0Tile(kRows, kCols);
+    TileVec src1Tile(kRows, 1);
+    TileMat dstTile(kRows, kCols);
+
+    GlobalMat src0Global(src0);
+    GlobalVec src1Global(src1);
+    GlobalMat dstGlobal(out);
+
+    TLOAD(src0Tile, src0Global);
+    TLOAD(src1Tile, src1Global);
+    TROWEXPANDADD(dstTile, src0Tile, src1Tile);
+    TSTORE(dstGlobal, dstTile);
+    out = dstGlobal.data();
+}
+
+template <int kRows, int kCols>
 void LaunchTROWEXPAND(float *out, float *src, void *stream)
 {
     (void)stream;
@@ -144,7 +172,15 @@ void LaunchTROWEXPANDSUB(float *out, float *src0, float *src1, void *stream)
     runTROWEXPANDSUB<kRows, kCols>(out, src0, src1);
 }
 
+template <int kRows, int kCols>
+void LaunchTROWEXPANDADD(float *out, float *src0, float *src1, void *stream)
+{
+    (void)stream;
+    runTROWEXPANDADD<kRows, kCols>(out, src0, src1);
+}
+
 template void LaunchTROWEXPAND<64, 64>(float *out, float *src, void *stream);
 template void LaunchTROWEXPANDDIV<64, 64>(float *out, float *src0, float *src1, void *stream);
 template void LaunchTROWEXPANDMUL<64, 64>(float *out, float *src0, float *src1, void *stream);
 template void LaunchTROWEXPANDSUB<64, 64>(float *out, float *src0, float *src1, void *stream);
+template void LaunchTROWEXPANDADD<64, 64>(float *out, float *src0, float *src1, void *stream);

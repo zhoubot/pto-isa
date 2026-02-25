@@ -1,5 +1,6 @@
+# coding=utf-8
 # --------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -8,96 +9,76 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # --------------------------------------------------------------------------------
 
+cmake_minimum_required(VERSION 3.16.0)
+project(PTO_GEMM_BASIC_TORCH)
 
-cmake_minimum_required(VERSION 3.16)
-project(pto_example)
-
+set(LINUX TRUE)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+message(STATUS "Determined _GLIBCXX_USE_CXX11_ABI=${GLIBCXX_USE_CXX11_ABI}")
+set(_GLIBCXX_USE_CXX11_ABI ${GLIBCXX_USE_CXX11_ABI})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=${GLIBCXX_USE_CXX11_ABI}")
 
-if(NOT DEFINED ENV{ASCEND_HOME_PATH})
-    message(FATAL_ERROR "Cannot find ASCEND_HOME_PATH, please run set_env.sh.")
+# user-defined configuration
+set(SOC_VERSION "ascend910b1" CACHE STRING "system on chip type")
+set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type Release/Debug (default Debug)" FORCE)
+set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/out" CACHE STRING "path for install()" FORCE)
+
+if(DEFINED ASCEND_CANN_PACKAGE_PATH)
+elseif(DEFINED ENV{ASCEND_HOME_PATH})
+    set(ASCEND_CANN_PACKAGE_PATH "$ENV{ASCEND_HOME_PATH}" CACHE PATH "ASCEND CANN package installation directory" FORCE)
+endif()
+
+set(PTO_LIB_PATH "$ENV{PTO_LIB_PATH}" CACHE STRING "PTO library path")
+
+if(EXISTS ${ASCEND_CANN_PACKAGE_PATH}/tools/tikcpp/ascendc_kernel_cmake)
+    set(ASCENDC_CMAKE_DIR ${ASCEND_CANN_PACKAGE_PATH}/tools/tikcpp/ascendc_kernel_cmake)
+elseif(EXISTS ${ASCEND_CANN_PACKAGE_PATH}/compiler/tikcpp/ascendc_kernel_cmake)
+    set(ASCENDC_CMAKE_DIR ${ASCEND_CANN_PACKAGE_PATH}/compiler/tikcpp/ascendc_kernel_cmake)
+elseif(EXISTS ${ASCEND_CANN_PACKAGE_PATH}/ascendc_devkit/tikcpp/samples/cmake)
+    set(ASCENDC_CMAKE_DIR ${ASCEND_CANN_PACKAGE_PATH}/ascendc_devkit/tikcpp/samples/cmake)
 else()
-    set(ASCEND_HOME_PATH $ENV{ASCEND_HOME_PATH})
+    message(FATAL_ERROR "ascendc_kernel_cmake does not exist, please check whether the cann package is installed.")
 endif()
 
-set(ASCEND_DRIVER_PATH /usr/local/Ascend/driver)
+include(${ASCENDC_CMAKE_DIR}/ascendc.cmake)
 
-set(CMAKE_COMPILER bisheng)
-set(CMAKE_C_COMPILER ${CMAKE_COMPILER})
-set(CMAKE_CXX_COMPILER ${CMAKE_COMPILER})
+file(GLOB _OPPLUGIN_PYBIND_OPS_SRCS csrc/host/*.cpp)
 
-add_compile_options(
-    -D_FORTIFY_SOURCE=2
-    -O2 -std=c++17
-    -Wno-macro-redefined -Wno-ignored-attributes
-    -fstack-protector-strong
+set(_OPPLUGIN_PYBIND_NAME op_extension)
+
+ascendc_library(gemm_basic_kernel STATIC
+    csrc/kernel/gemm_basic_custom.cpp
 )
 
-add_link_options(
-    -s
-    -Wl,-z,relro
-    -Wl,-z,now
-    )
-
-set(CMAKE_CCE_COMPILE_OPTIONS
-    -xcce
-    -Xhost-start -Xhost-end
-    "SHELL:-mllvm -cce-aicore-stack-size=0x8000"
-    "SHELL:-mllvm -cce-aicore-function-stack-size=0x8000"
-    "SHELL:-mllvm -cce-aicore-record-overflow=true"
-    "SHELL:-mllvm -cce-aicore-addr-transform"
-    "SHELL:-mllvm -cce-aicore-dcci-insert-for-scalar=false"
+ascendc_include_directories(gemm_basic_kernel PRIVATE
+  ${PTO_LIB_PATH}/include
+  ${PTO_LIB_PATH}/include/common
 )
 
-if(DEBUG_MODE)
-    message(STATUS "Debug Mode Enabled, Add Debug Options")
-    add_compile_definitions(_DEBUG)
-    set(CMAKE_CCE_COMPILE_OPTIONS "${CMAKE_CCE_COMPILE_OPTIONS} --cce-enable-print")
-endif()
+add_library(${_OPPLUGIN_PYBIND_NAME} SHARED ${_OPPLUGIN_PYBIND_OPS_SRCS})
 
-set(CMAKE_CPP_COMPILE_OPTIONS
-    -xc++
-    "SHELL:-include stdint.h"
-    "SHELL:-include stddef.h"
+target_link_libraries(${_OPPLUGIN_PYBIND_NAME} PRIVATE
+  gemm_basic_kernel
+  torch_npu
+  ascendcl
+  tiling_api
+  register
+  platform
+  ascendalog
+  dl
 )
 
-include_directories(
-    ${ASCEND_HOME_PATH}/include
-    ${ASCEND_DRIVER_PATH}/kernel/inc
+target_link_directories(${_OPPLUGIN_PYBIND_NAME} PRIVATE
+  ${TORCH_PATH}/lib
+  ${TORCH_NPU_PATH}/lib
 )
 
-function(pto_example_cube NAME)
-    add_library(${NAME}_kernel SHARED ${NAME}_kernel.cpp)
-    target_compile_options(${NAME}_kernel PRIVATE ${CMAKE_CCE_COMPILE_OPTIONS} --cce-aicore-arch=dav-c220-cube -DMEMORY_BASE -std=c++17)
-    target_include_directories(${NAME}_kernel PRIVATE
-        ${PROJECT_SOURCE_DIR}/../../../include/
-    )
-    target_link_options(${NAME}_kernel PRIVATE --cce-fatobj-link)
+target_include_directories(${_OPPLUGIN_PYBIND_NAME} PRIVATE
+  ${TORCH_NPU_PATH}/include
+  ${TORCH_PATH}/include
+  ${TORCH_PATH}/include/torch/csrc/api/include
+)
 
-    add_executable(${NAME} main.cpp)
-    target_compile_options(${NAME} PRIVATE ${CMAKE_CPP_COMPILE_OPTIONS})
-    target_include_directories(${NAME} PRIVATE
-        ${PROJECT_SOURCE_DIR}/../../../include/
-        ${PROJECT_SOURCE_DIR}/../../../tests/common
-    )
-
-    target_link_directories(${NAME} PUBLIC
-        ${ASCEND_HOME_PATH}/lib64
-        ${ASCEND_HOME_PATH}/simulator/${SOC_VERSION}/lib
-        ${ASCEND_HOME_PATH}/tools/simulator/${SOC_VERSION}/lib
-    )
-
-    target_link_libraries(${NAME} PRIVATE
-        ${NAME}_kernel
-        $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},sim>:runtime_camodel>>
-        $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},npu>:runtime>>
-        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase pthread
-    )
-endfunction()
-
-pto_example_cube(gemm_basic)

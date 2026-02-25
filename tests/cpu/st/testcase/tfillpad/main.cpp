@@ -25,20 +25,24 @@ int get_input_golden(uint8_t *input, uint8_t *golden);
 
 class TFILLPADTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-void CreateDirectory(const std::string& path){
+void CreateDirectory(const std::string &path)
+{
     try {
         std::filesystem::path dirPath(path);
         std::filesystem::create_directories(dirPath);
-    } catch (const std::filesystem::filesystem_error& e){
-        std::cerr<< e.what() << std::endl;
+    } catch (const std::filesystem::filesystem_error &e) {
+        std::cerr << e.what() << std::endl;
     }
-} 
+}
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_case_name();
@@ -50,16 +54,15 @@ std::string GetGoldenDir() {
 #define PRINTLOG 4
 #define MAXBLOCK 64
 
-template <typename T> constexpr auto getGoldenZero()
+template <typename T>
+constexpr auto getGoldenZero()
 {
-    if constexpr (sizeof(T)==4){
-        return (uint32_t) 0;
-    }
-    else if constexpr(sizeof(T)==2){
-        return (uint16_t) 0;
-    }
-    else if constexpr (sizeof(T)==1){
-        return (uint8_t) 0;
+    if constexpr (sizeof(T) == 4) {
+        return (uint32_t)0;
+    } else if constexpr (sizeof(T) == 2) {
+        return (uint16_t)0;
+    } else if constexpr (sizeof(T) == 1) {
+        return (uint8_t)0;
     }
 }
 
@@ -68,7 +71,7 @@ void tfillpad_test()
 {
     uint32_t M = 1024;
     uint32_t N = 1024;
-    
+
     aclInit(nullptr);
     aclrtSetDevice(0);
     aclrtStream stream;
@@ -81,24 +84,24 @@ void tfillpad_test()
     void *dstDevice, *srcDevice;
     void *logDevice;
 
-    aclrtMallocHost((void**)(&srcHost), in_byteSize);
-    aclrtMallocHost((void**)(&dstHost), out_byteSize);
-    aclrtMallocHost((void**)(&goldHost), out_byteSize);
+    aclrtMallocHost((void **)(&srcHost), in_byteSize);
+    aclrtMallocHost((void **)(&dstHost), out_byteSize);
+    aclrtMallocHost((void **)(&goldHost), out_byteSize);
 
-    aclrtMalloc((void**)&dstDevice, in_byteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc((void**)&srcDevice, out_byteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&dstDevice, in_byteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&srcDevice, out_byteSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
     int actual_out_byteSize = 0;
     actual_out_byteSize = get_input_golden<testKey>((uint8_t *)srcHost, (uint8_t *)(goldHost));
-    cout << "Golden size " << actual_out_byteSize << " B"<< endl;
-    std::fill((uint8_t*)dstHost, ((uint8_t*)(dstHost))+out_byteSize, 0);
+    cout << "Golden size " << actual_out_byteSize << " B" << endl;
+    std::fill((uint8_t *)dstHost, ((uint8_t *)(dstHost)) + out_byteSize, 0);
     aclrtMemcpy(srcDevice, in_byteSize, srcHost, in_byteSize, ACL_MEMCPY_HOST_TO_DEVICE);
     aclrtMemcpy(dstDevice, out_byteSize, dstHost, out_byteSize, ACL_MEMCPY_HOST_TO_DEVICE);
 
 #ifdef DEBUGLOG
     uint16_t logHost[MAXBLOCK][LOGSIZE];
-    std::fill((uint8_t*)logHost, ((uint8_t*)(logHost)) + sizeof(logHost), 0);
-    aclrtMalloc((void**)&logDevice, sizeof(logHost), ACL_MEM_MALLOC_HUGE_FIRST);
+    std::fill((uint8_t *)logHost, ((uint8_t *)(logHost)) + sizeof(logHost), 0);
+    aclrtMalloc((void **)&logDevice, sizeof(logHost), ACL_MEM_MALLOC_HUGE_FIRST);
     aclrtMemcpy(logDevice, sizeof(logHost), logHost, sizeof(logHost), ACL_MEMCPY_HOST_TO_DEVICE);
 #endif
     launchTFILLPAD<testKey>((uint8_t *)dstDevice, (uint8_t *)srcDevice, stream);
@@ -110,12 +113,12 @@ void tfillpad_test()
 #endif
     std::string goldenDir = GetGoldenDir();
     CreateDirectory(goldenDir);
-    std::ofstream inFile(goldenDir+"/input.bin", std::ios::binary | std::ios::out);
-    std::ofstream outFile(goldenDir+"/output.bin", std::ios::binary | std::ios::out);
-    std::ofstream goldFile(goldenDir+"/golden.bin", std::ios::binary | std::ios::out);
-    inFile.write((const char*)srcHost, actual_out_byteSize);
-    outFile.write((const char*)dstHost, actual_out_byteSize);
-    goldFile.write((const char*)goldHost, actual_out_byteSize);
+    std::ofstream inFile(goldenDir + "/input.bin", std::ios::binary | std::ios::out);
+    std::ofstream outFile(goldenDir + "/output.bin", std::ios::binary | std::ios::out);
+    std::ofstream goldFile(goldenDir + "/golden.bin", std::ios::binary | std::ios::out);
+    inFile.write((const char *)srcHost, actual_out_byteSize);
+    outFile.write((const char *)dstHost, actual_out_byteSize);
+    goldFile.write((const char *)goldHost, actual_out_byteSize);
     inFile.close();
     outFile.close();
     goldFile.close();
@@ -132,7 +135,7 @@ void tfillpad_test()
 #ifdef DEBUGLOG
     aclrtFree(logDevice);
 #endif
-    
+
     aclrtFreeHost(dstHost);
     aclrtFreeHost(srcHost);
     aclrtFreeHost(goldHost);
@@ -142,12 +145,10 @@ void tfillpad_test()
     aclFinalize();
 
 #ifdef DEBUGLOG
-    for (int b = 0; b < kBlock; b++)
-    {
+    for (int b = 0; b < kBlock; b++) {
         cout << "Block: " << setw(2) << b << " ";
-        for (int l = 0; l < sizeof(logHost[0])/sizeof(logHost[0][0]) && l < PRINTLOG; l++)
-        {
-            cout <<hex << setfill('0') << setw(16) << logHost[b][l] << " ";
+        for (int l = 0; l < sizeof(logHost[0]) / sizeof(logHost[0][0]) && l < PRINTLOG; l++) {
+            cout << hex << setfill('0') << setw(16) << logHost[b][l] << " ";
         }
         cout << dec << endl;
     }

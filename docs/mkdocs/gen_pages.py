@@ -55,6 +55,7 @@ ASSET_EXTS = {
     ".jpeg",
     ".gif",
     ".webp",
+    ".bnf",
 }
 
 
@@ -90,9 +91,10 @@ def main() -> None:
             f.write(text)
         copied_md.append(rel)
 
-    # Generate a per-instruction reference index for docs/isa/*.md.
+    # Generate per-instruction reference indexes for docs/isa/*.md.
     isa_dir = REPO_ROOT / "docs" / "isa"
-    isa_pages: list[tuple[str, str]] = []
+    isa_pages_en: list[tuple[str, str]] = []
+    isa_pages_zh: list[tuple[str, str]] = []
 
     def extract_first_heading(md_path: Path) -> str:
         try:
@@ -106,23 +108,41 @@ def main() -> None:
 
     if isa_dir.exists():
         for p in sorted(isa_dir.glob("*.md")):
-            if p.name in ("README.md", "conventions.md"):
+            if p.name in ("README.md", "README_zh.md", "conventions.md", "conventions_zh.md"):
                 continue
-            instr = p.stem
+            stem = p.stem
             title = extract_first_heading(p)
-            isa_pages.append((instr, title))
+            if stem.endswith("_zh"):
+                isa_pages_zh.append((stem, title))
+            else:
+                isa_pages_en.append((stem, title))
 
     with mkdocs_gen_files.open("manual/isa-reference.md", "w") as f:
         f.write("# Instruction Reference Pages\n\n")
         f.write("This page is generated at build time.\n\n")
         f.write("- Instruction index: `docs/isa/README.md`\n")
         f.write("- ISA conventions: `docs/isa/conventions.md`\n\n")
-        if not isa_pages:
-            f.write("No instruction pages were found under `docs/isa/`.\n")
+        if not isa_pages_en:
+            f.write("No English instruction pages were found under `docs/isa/`.\n")
         else:
             f.write("## All instructions\n\n")
-            for instr, title in isa_pages:
+            for instr, title in isa_pages_en:
                 # This page lives under `manual/`, so use `../` to link back to root-level docs.
+                link = f"../docs/isa/{instr}.md"
+                suffix = "" if title.strip() == instr else f" — {title}"
+                f.write(f"- [{instr}]({link}){suffix}\n")
+            f.write("\n")
+
+    with mkdocs_gen_files.open("manual/isa-reference_zh.md", "w") as f:
+        f.write("# 指令参考页面（全量）\n\n")
+        f.write("本页在构建站点时自动生成。\n\n")
+        f.write("- 指令索引：`docs/isa/README_zh.md`\n")
+        f.write("- ISA 通用约定：`docs/isa/conventions_zh.md`\n\n")
+        if not isa_pages_zh:
+            f.write("未在 `docs/isa/` 下发现中文指令页面。\n")
+        else:
+            f.write("## 全部指令\n\n")
+            for instr, title in isa_pages_zh:
                 link = f"../docs/isa/{instr}.md"
                 suffix = "" if title.strip() == instr else f" — {title}"
                 f.write(f"- [{instr}]({link}){suffix}\n")

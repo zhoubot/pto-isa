@@ -73,8 +73,9 @@ function(pack_built_in)
   set(CONF_FILES
       ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
   )
-  install(FILES ${CMAKE_SOURCE_DIR}/version.info
+  install(FILES ${CMAKE_BINARY_DIR}/version.pto-isa.info
       DESTINATION share/info/pto_isa
+      RENAME version.info
   )
   install(FILES ${CONF_FILES}
       DESTINATION share/info/pto_isa/conf

@@ -21,7 +21,6 @@ void launchTCOLEXPAND(T *out, T *src, void *stream);
 
 class TCOLEXPANDTest : public testing::Test {
 public:
-
 protected:
     void SetUp() override
     {}
@@ -30,7 +29,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -44,7 +44,7 @@ bool TCOLEXPANDTestFramework()
 {
     size_t dstByteSize = dst_row * dst_col * sizeof(T);
     size_t srcByteSize = src_row * src_col * sizeof(T);
-    
+
     aclInit(nullptr);
     aclrtSetDevice(0);
 
@@ -54,17 +54,17 @@ bool TCOLEXPANDTestFramework()
     T *dstHost, *srcHost;
     T *dstDevice, *srcDevice;
 
-    aclrtMallocHost((void**)(&dstHost), dstByteSize);
-    aclrtMallocHost((void**)(&srcHost), srcByteSize);
+    aclrtMallocHost((void **)(&dstHost), dstByteSize);
+    aclrtMallocHost((void **)(&srcHost), srcByteSize);
 
-    aclrtMalloc((void**)&dstDevice, dstByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc((void**)&srcDevice, srcByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&dstDevice, dstByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&srcDevice, srcByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
     ReadFile(GetGoldenDir() + "/input.bin", srcByteSize, srcHost, srcByteSize);
 
     aclrtMemcpy(srcDevice, srcByteSize, srcHost, srcByteSize, ACL_MEMCPY_HOST_TO_DEVICE);
-    launchTCOLEXPAND<T, src_row, src_col, src_validCol, dst_row, dst_col, dst_validRow, dst_validCol>
-        (dstDevice, srcDevice, stream);
+    launchTCOLEXPAND<T, src_row, src_col, src_validCol, dst_row, dst_col, dst_validRow, dst_validCol>(
+        dstDevice, srcDevice, stream);
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, dstByteSize, dstDevice, dstByteSize, ACL_MEMCPY_DEVICE_TO_HOST);

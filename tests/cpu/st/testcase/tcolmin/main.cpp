@@ -17,11 +17,14 @@ using namespace PtoTestCommon;
 
 class TCOLMINTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -31,8 +34,9 @@ std::string GetGoldenDir() {
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTCOLMIN(T *out, T *src, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tcolmin() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tcolmin()
+{
     size_t dstFileSize = kTCols_ * sizeof(T);
     size_t srcFileSize = kTRows_ * kTCols_ * sizeof(T);
 
@@ -78,7 +82,15 @@ void test_tcolmin() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TCOLMINTest, case_float_64x64_64x64_64x64) { test_tcolmin<float, 64, 64, 64, 64>(); }
-TEST_F(TCOLMINTest, case_half_64x64_64x64_64x64) { test_tcolmin<aclFloat16, 64, 64, 64, 64>(); }
-TEST_F(TCOLMINTest, case_float_32x32_32x16_32x32) { test_tcolmin<float, 32, 32, 32, 16>(); }
-
+TEST_F(TCOLMINTest, case_float_64x64_64x64_64x64)
+{
+    test_tcolmin<float, 64, 64, 64, 64>();
+}
+TEST_F(TCOLMINTest, case_half_64x64_64x64_64x64)
+{
+    test_tcolmin<aclFloat16, 64, 64, 64, 64>();
+}
+TEST_F(TCOLMINTest, case_float_32x32_32x16_32x32)
+{
+    test_tcolmin<float, 32, 32, 32, 16>();
+}

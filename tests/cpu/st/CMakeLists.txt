@@ -11,7 +11,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(pto_test_cpu_sim)
 
-set(CMAKE_CXX_STANDARD 23)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
+    set(CMAKE_CXX_STANDARD 23)
+else()
+    set(CMAKE_CXX_STANDARD 20)
+endif()
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -66,9 +71,11 @@ if (PTO_GLIBCXX_USE_CXX11_ABI STREQUAL "0")
     add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=0)
 endif()
 
+message("-- COMPILER: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}; Using standard C++${CMAKE_CXX_STANDARD}")
+
 add_compile_options(
     -D_FORTIFY_SOURCE=2
-    -std=c++23
+    -std=c++${CMAKE_CXX_STANDARD}
     -Wno-macro-redefined -Wno-ignored-attributes
     -fstack-protector-strong
 )

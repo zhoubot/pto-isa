@@ -1,66 +1,65 @@
-# 8. Programming guide
+# 8. Programming model contracts
 
-## 8.1 Two programming styles
+## 8.1 Scope
 
-PTO kernels are commonly written in two styles:
+This chapter defines architecture-safe programming contracts for Auto and Manual modes.
+It focuses on correctness and portability boundaries rather than backend-specific optimization tricks.
 
-### Auto style (productivity-first)
+## 8.2 Auto and Manual contract split
 
-Source code expresses a dataflow:
+### 8.2.1 Auto mode
 
-- declare tiles
-- `TLOAD → compute → TSTORE`
+- Toolchain SHOULD infer legal placement, ordering, and scheduling.
+- Generated code MUST preserve Virtual ISA semantics.
+- User-visible behavior MUST remain deterministic under equivalent source and options.
 
-The compiler manages:
+### 8.2.2 Manual mode
 
-- tile storage assignment
-- insertion of required synchronization
+- Programmers MAY explicitly control placement and synchronization.
+- User-authored dependencies and ordering points MUST be preserved.
+- Illegal manual configurations MUST fail with actionable diagnostics.
 
-### Manual style (performance-first)
+## 8.3 Portability-safe programming rules
 
-Source code explicitly manages:
+Programs intended for cross-backend portability SHOULD:
 
-- tile buffer assignment (`TASSIGN`)
-- pipeline ordering (events/flags and/or `TSYNC`)
-- double buffering and overlap
+- stay within documented family-level legality domains
+- avoid relying on implementation-defined side effects
+- use explicit synchronization when dependence is not guaranteed by dataflow
+- keep dtype/layout/location tuples within backend-intersection profiles
 
-## 8.2 Execution model (SPMD vs MPMD)
+## 8.4 Performance-aware but portable patterns
 
-PTO supports both SPMD and MPMD execution models:
+Portable patterns include:
 
-- **SPMD**: all cores run the same entry function and use `block_idx` (and optionally `subblockid`) to select which
-  region of the global tensor to process.
-- **MPMD**: different cores (or groups of cores) may execute different tile programs, selected by the Device Machine
-  scheduler (for example via a scheduler-provided `task_id`, or via separate entry points).
+- explicit domain-safe tiling and valid-region management
+- clear producer/consumer phase boundaries with events/`TSYNC`
+- backend-gated specialization with capability checks
+- deterministic fallback paths for unsupported tuples
 
-MPMD is typically used for multi-stage pipelines where each stage has different performance constraints (memory-bound
-producer, compute-bound consumer, etc.). Each stage can still use SPMD tiling internally.
+## 8.5 Anti-patterns
 
-## 8.3 Recommended workflow
+The following are non-portable and SHOULD be avoided:
 
-1. Write an Auto-style kernel and validate correctness on CPU.
-2. Profile (or reason) about bottlenecks.
-3. Convert the hotspot into a Manual-style pipelined version.
+- reading out-of-valid-domain values as meaningful data
+- depending on undocumented pipeline timing behavior
+- assuming implicit ordering where no dependency is specified
+- encoding backend-specific assumptions without explicit profile gating
 
-The tutorial guide is:
+## 8.6 Debug and validation workflow
 
-- `docs/coding/tutorial.md`
+Recommended workflow:
 
-## 8.4 Performance patterns
+1. structural correctness checks (types, arity, attributes)
+2. legal-domain checks (shape/layout/location tuple validity)
+3. synchronization checks (dependency completeness)
+4. backend conformance checks (profile-specific)
+5. differential behavior checks across representative targets
 
-Common performance patterns show up across kernels:
+## 8.7 Compatibility notes
 
-- 2D tiling by `block_idx` for bandwidth-friendly GM accesses
-- staged pipelines: `TLOAD → TEXTRACT/TMOV → TMATMUL → TSTORE`
-- overlapping via double buffering (warm-up / steady / drain)
+When code relies on implementation-defined behavior:
 
-Practical examples:
-
-- GEMM: `kernels/manual/a2a3/gemm_performance/README.md`
-- Flash Attention: `kernels/manual/a2a3/flash_atten/README.md`
-
-## 8.5 Debugging
-
-See:
-
-- `docs/coding/debug.md`
+- assumptions MUST be documented
+- backend profile constraints MUST be declared
+- fallback behavior SHOULD be provided where feasible

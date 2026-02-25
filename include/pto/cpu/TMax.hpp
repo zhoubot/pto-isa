@@ -15,58 +15,57 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/tile_offsets.hpp"
 #include "pto/cpu/parallel.hpp"
 
-namespace pto{
-    template<typename tile_shape, int stride>
-    void TMAX_Impl(typename tile_shape::TileDType dst,
-                            typename tile_shape::TileDType src0,
-                            typename tile_shape::TileDType src1,
-                            unsigned validRow, unsigned validCol
-                        ) {
-        if constexpr (tile_shape::SFractal == SLayout::NoneBox) {
-            if constexpr (tile_shape::isRowMajor) {
-                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
-                    const std::size_t base = r * tile_shape::Cols;
-                    PTO_CPU_VECTORIZE_LOOP
-                    for (std::size_t c = 0; c < validCol; ++c) {
-                        const std::size_t idx = base + c;
-                        dst[idx] = std::max(src0[idx], src1[idx]);
-                    }
-                });
-            } else {
-                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
-                    const std::size_t base = c * tile_shape::Rows;
-                    PTO_CPU_VECTORIZE_LOOP
-                    for (std::size_t r = 0; r < validRow; ++r) {
-                        const std::size_t idx = base + r;
-                        dst[idx] = std::max(src0[idx], src1[idx]);
-                    }
-                });
-            }
+namespace pto {
+template <typename tile_shape, int stride>
+void TMAX_Impl(typename tile_shape::TileDType dst, typename tile_shape::TileDType src0,
+               typename tile_shape::TileDType src1, unsigned validRow, unsigned validCol)
+{
+    if constexpr (tile_shape::SFractal == SLayout::NoneBox) {
+        if constexpr (tile_shape::isRowMajor) {
+            cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                const std::size_t base = r * tile_shape::Cols;
+                PTO_CPU_VECTORIZE_LOOP
+                for (std::size_t c = 0; c < validCol; ++c) {
+                    const std::size_t idx = base + c;
+                    dst[idx] = std::max(src0[idx], src1[idx]);
+                }
+            });
         } else {
-            if constexpr (tile_shape::isRowMajor) {
-                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
-                    for (std::size_t c = 0; c < validCol; ++c) {
-                        const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
-                        dst[idx] = std::max(src0[idx], src1[idx]);
-                    }
-                });
-            } else {
-                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
-                    for (std::size_t r = 0; r < validRow; ++r) {
-                        const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
-                        dst[idx] = std::max(src0[idx], src1[idx]);
-                    }
-                });
-            }
+            cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                const std::size_t base = c * tile_shape::Rows;
+                PTO_CPU_VECTORIZE_LOOP
+                for (std::size_t r = 0; r < validRow; ++r) {
+                    const std::size_t idx = base + r;
+                    dst[idx] = std::max(src0[idx], src1[idx]);
+                }
+            });
+        }
+    } else {
+        if constexpr (tile_shape::isRowMajor) {
+            cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                for (std::size_t c = 0; c < validCol; ++c) {
+                    const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                    dst[idx] = std::max(src0[idx], src1[idx]);
+                }
+            });
+        } else {
+            cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                for (std::size_t r = 0; r < validRow; ++r) {
+                    const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                    dst[idx] = std::max(src0[idx], src1[idx]);
+                }
+            });
         }
     }
-
-    template <typename tile_shape>
-    PTO_INTERNAL void TMAX_IMPL(tile_shape &dst, tile_shape &src0, tile_shape &src1) {
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        constexpr unsigned stride = tile_shape::RowStride;
-        TMAX_Impl<tile_shape, stride>(dst.data(), src0.data(), src1.data(), row, col);
-    }
 }
+
+template <typename tile_shape>
+PTO_INTERNAL void TMAX_IMPL(tile_shape &dst, tile_shape &src0, tile_shape &src1)
+{
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    constexpr unsigned stride = tile_shape::RowStride;
+    TMAX_Impl<tile_shape, stride>(dst.data(), src0.data(), src1.data(), row, col);
+}
+} // namespace pto
 #endif

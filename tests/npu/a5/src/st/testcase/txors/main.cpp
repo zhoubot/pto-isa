@@ -12,8 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -25,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
 void LaunchTXORS(T *out, T *src0, T src1, void *stream);
 
-template<typename T, int kTRows_, int kTCols_, int vRows, int vCols>
-void test_txors() {
+template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
+void test_txors()
+{
     size_t fileSize = kTRows_ * kTCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -59,7 +58,7 @@ void test_txors() {
     ReadFile(GetGoldenDir() + "/input1.bin", fileSize, src0Host, fileSize);
     std::string scalar_file = GetGoldenDir() + "/input2.bin";
     std::ifstream file(scalar_file, std::ios::binary);
-    file.read(reinterpret_cast<char*>(&src1), sizeof(T));
+    file.read(reinterpret_cast<char *>(&src1), sizeof(T));
     file.close();
 
     aclrtMemcpy(src0Device, fileSize, src0Host, fileSize, ACL_MEMCPY_HOST_TO_DEVICE);
@@ -90,38 +89,47 @@ void test_txors() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TXORSTest, case1) {
+TEST_F(TXORSTest, case1)
+{
     test_txors<uint16_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TXORSTest, case2) {
+TEST_F(TXORSTest, case2)
+{
     test_txors<uint16_t, 64, 64, 63, 63>();
 }
 
-TEST_F(TXORSTest, case3) {
+TEST_F(TXORSTest, case3)
+{
     test_txors<uint16_t, 1, 16384, 1, 16384>();
 }
 
-TEST_F(TXORSTest, case4) {
+TEST_F(TXORSTest, case4)
+{
     test_txors<uint16_t, 2048, 16, 2048, 16>();
 }
 
-TEST_F(TXORSTest, case5) {
+TEST_F(TXORSTest, case5)
+{
     test_txors<uint8_t, 32, 32, 32, 32>();
 }
 
-TEST_F(TXORSTest, case6) {
+TEST_F(TXORSTest, case6)
+{
     test_txors<uint32_t, 8, 8, 8, 8>();
 }
 
-TEST_F(TXORSTest, case7) {
+TEST_F(TXORSTest, case7)
+{
     test_txors<int8_t, 32, 32, 32, 32>();
 }
 
-TEST_F(TXORSTest, case8) {
+TEST_F(TXORSTest, case8)
+{
     test_txors<int16_t, 16, 16, 16, 16>();
 }
 
-TEST_F(TXORSTest, case9) {
+TEST_F(TXORSTest, case9)
+{
     test_txors<int32_t, 8, 8, 8, 8>();
 }

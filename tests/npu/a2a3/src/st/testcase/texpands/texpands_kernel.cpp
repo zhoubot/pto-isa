@@ -8,8 +8,8 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
+#include <type_traits>
 #include <pto/pto-inst.hpp>
-#include <pto/common/constants.hpp>
 #include "acl/acl.h"
 
 using namespace pto;
@@ -19,21 +19,26 @@ using namespace pto;
 #define PAD_VALUE_MIN (-1)
 #define SFRACTAL_SIZE (512)
 
+#ifdef __CCE_AICORE__
 template <typename T, int kTRows_, int kTCols_, int paddingValueType>
 struct TileDataSelector;
 
 template <typename T, int kTRows_, int kTCols_>
 struct TileDataSelector<T, kTRows_, kTCols_, PAD_VALUE_NULL> {
-    using Type = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, SFRACTAL_SIZE, PadValue::Null>;
+    using Type = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, SFRACTAL_SIZE,
+                      PadValue::Null>;
 };
 
 template <typename T, int kTRows_, int kTCols_>
 struct TileDataSelector<T, kTRows_, kTCols_, PAD_VALUE_MAX> {
-    using Type = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, SFRACTAL_SIZE, PadValue::Max>;
+    using Type = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, SFRACTAL_SIZE,
+                      PadValue::Max>;
 };
+#endif
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
-__global__ AICORE void runTEXPANDS( __gm__ T __out__ *out, float scalar) {
+__global__ AICORE void runTEXPANDS(__gm__ T __out__ *out, float scalar)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = pto::Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -55,10 +60,12 @@ __global__ AICORE void runTEXPANDS( __gm__ T __out__ *out, float scalar) {
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
 void LaunchTExpandS(void *out, float scalar, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTEXPANDS<half, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType><<<1, nullptr, stream>>>((half *) out, scalar);
-    else 
-        runTEXPANDS<T, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType><<<1, nullptr, stream>>>((T *) out, scalar);
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTEXPANDS<half, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType>
+            <<<1, nullptr, stream>>>((half *)out, scalar);
+    else
+        runTEXPANDS<T, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType>
+            <<<1, nullptr, stream>>>((T *)out, scalar);
 }
 
 template void LaunchTExpandS<float, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(void *out, float scalar, void *stream);
@@ -68,5 +75,6 @@ template void LaunchTExpandS<int16_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(vo
 
 template void LaunchTExpandS<float, 60, 60, 64, 64, 60, 60, PAD_VALUE_MAX>(void *out, float scalar, void *stream);
 template void LaunchTExpandS<int32_t, 60, 60, 64, 64, 60, 60, PAD_VALUE_MAX>(void *out, float scalar, void *stream);
-template void LaunchTExpandS<aclFloat16, 1, 3600, 2, 4096, 1, 3600, PAD_VALUE_MAX>(void *out, float scalar, void *stream);
+template void LaunchTExpandS<aclFloat16, 1, 3600, 2, 4096, 1, 3600, PAD_VALUE_MAX>(void *out, float scalar,
+                                                                                   void *stream);
 template void LaunchTExpandS<int16_t, 16, 200, 20, 512, 16, 200, PAD_VALUE_MAX>(void *out, float scalar, void *stream);

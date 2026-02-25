@@ -32,7 +32,6 @@ void launchTCI_demo_b16_case3(int16_t *out, void *stream);
 template <uint32_t descending>
 void launchTCI_demo_b16_case4(int16_t *out, void *stream);
 
-
 class TCITest : public testing::Test {
 protected:
     void SetUp() override
@@ -41,7 +40,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -50,8 +50,9 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-template<typename T, uint32_t ROW, uint32_t COL, uint32_t descending, uint32_t start>
-void test_vci_b32() {
+template <typename T, uint32_t ROW, uint32_t COL, uint32_t descending, uint32_t start>
+void test_vci_b32()
+{
     aclInit(nullptr);
     aclrtSetDevice(0);
     aclrtStream stream;
@@ -65,19 +66,16 @@ void test_vci_b32() {
     aclrtMallocHost((void **)(&dstHost), FileSize);
     aclrtMalloc((void **)&dstDevice, FileSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
-    if(COL == FLOAT_T1_COL){
+    if (COL == FLOAT_T1_COL) {
         launchTCI_demo_b32_case1<descending>(dstDevice, stream);
-    }
-    else if(COL == FLOAT_T2_COL){
+    } else if (COL == FLOAT_T2_COL) {
         launchTCI_demo_b32_case2<descending>(dstDevice, stream);
-    }
-    else if(COL == FLOAT_T3_COL){
+    } else if (COL == FLOAT_T3_COL) {
         launchTCI_demo_b32_case3<descending>(dstDevice, stream);
-    }
-    else{
+    } else {
         launchTCI_demo_b32_case4<descending>(dstDevice, stream);
     }
-    
+
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, FileSize, dstDevice, FileSize, ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -99,8 +97,9 @@ void test_vci_b32() {
     EXPECT_TRUE(ret);
 }
 
-template<typename T, uint32_t ROW, uint32_t COL, uint32_t descending, uint32_t start>
-void test_vci_b16() {
+template <typename T, uint32_t ROW, uint32_t COL, uint32_t descending, uint32_t start>
+void test_vci_b16()
+{
     aclInit(nullptr);
     aclrtSetDevice(0);
     aclrtStream stream;
@@ -114,19 +113,16 @@ void test_vci_b16() {
     aclrtMallocHost((void **)(&dstHost), FileSize);
     aclrtMalloc((void **)&dstDevice, FileSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
-    if(COL == HALF_T1_COL){
+    if (COL == HALF_T1_COL) {
         launchTCI_demo_b16_case1<descending>(dstDevice, stream);
-    }
-    else if(COL == HALF_T2_COL){
+    } else if (COL == HALF_T2_COL) {
         launchTCI_demo_b16_case2<descending>(dstDevice, stream);
-    }
-    else if(COL == HALF_T3_COL){
+    } else if (COL == HALF_T3_COL) {
         launchTCI_demo_b16_case3<descending>(dstDevice, stream);
-    }
-    else{
+    } else {
         launchTCI_demo_b16_case4<descending>(dstDevice, stream);
     }
-    
+
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, FileSize, dstDevice, FileSize, ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -148,42 +144,42 @@ void test_vci_b16() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TCITest, case1_int32) 
+TEST_F(TCITest, case1_int32)
 {
-    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T1_COL, ASCEND, START>(); 
+    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T1_COL, ASCEND, START>();
 }
 
-TEST_F(TCITest, case2_int32) 
+TEST_F(TCITest, case2_int32)
 {
-    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T2_COL, ASCEND, START>(); 
+    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T2_COL, ASCEND, START>();
 }
 
-TEST_F(TCITest, case3_int32) 
+TEST_F(TCITest, case3_int32)
 {
-    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T3_COL, DESCEND, START>(); 
+    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T3_COL, DESCEND, START>();
 }
 
 TEST_F(TCITest, case4_int32)
 {
-    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T4_COL, DESCEND, START>(); 
+    test_vci_b32<int32_t, FLOAT_ROW, FLOAT_T4_COL, DESCEND, START>();
 }
 
-TEST_F(TCITest, case5_int16) 
+TEST_F(TCITest, case5_int16)
 {
-    test_vci_b16<int16_t, HALF_ROW, HALF_T1_COL, ASCEND, START>(); 
+    test_vci_b16<int16_t, HALF_ROW, HALF_T1_COL, ASCEND, START>();
 }
 
 TEST_F(TCITest, case6_int16)
 {
-    test_vci_b16<int16_t, HALF_ROW, HALF_T2_COL, DESCEND, START>(); 
+    test_vci_b16<int16_t, HALF_ROW, HALF_T2_COL, DESCEND, START>();
 }
 
 TEST_F(TCITest, case7_int16)
 {
-    test_vci_b16<int16_t, HALF_ROW, HALF_T3_COL, ASCEND, START>(); 
+    test_vci_b16<int16_t, HALF_ROW, HALF_T3_COL, ASCEND, START>();
 }
 
 TEST_F(TCITest, case8_int16)
 {
-    test_vci_b16<int16_t, HALF_ROW, HALF_T4_COL, DESCEND, START>(); 
+    test_vci_b16<int16_t, HALF_ROW, HALF_T4_COL, DESCEND, START>();
 }

@@ -1,5 +1,10 @@
 # TMRGSORT
 
+
+## Tile Operation Diagram
+
+![TMRGSORT tile operation](../figures/isa/TMRGSORT.svg)
+
 ## Introduction
 
 Merge sort for multiple sorted lists (implementation-defined element format and layout).
@@ -20,21 +25,22 @@ Synchronous form (conceptual):
 tmrgsort %dst, %executed, %tmp, %src0, %src1 {exhausted = false}
     : (!pto.tile<...>, vector<4xi16>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
+```text
+%dst = pto.tmrgsort %src, %blockLen : (!pto.tile<...>, dtype) -> !pto.tile<...>
 %dst, %executed = pto.tmrgsort %src0, %src1, %src2, %src3 {exhausted = false}
  : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> (!pto.tile<...>, vector<4xi16>)
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-pto.mrgsort ins(%src0, %src1, %src2, %src3 : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst, %executed : !pto.tile_buf<...>, vector<4xi16>)
+```text
+pto.tmrgsort ins(%src, %blockLen : !pto.tile_buf<...>, dtype)  outs(%dst : !pto.tile_buf<...>)
+pto.tmrgsort ins(%src0, %src1, %src2, %src3 {exhausted = false} : !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>, !pto.tile_buf<...>)
+outs(%dst, %executed : !pto.tile_buf<...>, vector<4xi16>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -110,3 +116,31 @@ void example_manual() {
   TMRGSORT(dst, src, /*blockLen=*/64);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.tmrgsort %src, %blockLen : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.tmrgsort %src, %blockLen : (!pto.tile<...>, dtype) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = pto.tmrgsort %src, %blockLen : (!pto.tile<...>, dtype) -> !pto.tile<...>
+# IR Level 2 (DPS)
+pto.tmrgsort ins(%src, %blockLen : !pto.tile_buf<...>, dtype)  outs(%dst : !pto.tile_buf<...>)
+```
+

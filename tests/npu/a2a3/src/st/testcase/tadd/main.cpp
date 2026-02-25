@@ -12,8 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -25,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
 void LaunchTAdd(T *out, T *src0, T *src1, void *stream);
 
-template<typename T, int kTRows_, int kTCols_, int vRows, int vCols>
-void test_tadd() {
+template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
+void test_tadd()
+{
     size_t fileSize = kTRows_ * kTCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -90,15 +89,19 @@ void test_tadd() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TADDTest, case_float_64x64_64x64) {
+TEST_F(TADDTest, case_float_64x64_64x64)
+{
     test_tadd<float, 64, 64, 64, 64>();
 }
-TEST_F(TADDTest, case_int32_64x64_64x64) {
+TEST_F(TADDTest, case_int32_64x64_64x64)
+{
     test_tadd<int32_t, 64, 64, 64, 64>();
 }
-TEST_F(TADDTest, case_int16_64x64_64x64) {
+TEST_F(TADDTest, case_int16_64x64_64x64)
+{
     test_tadd<int16_t, 64, 64, 64, 64>();
 }
-TEST_F(TADDTest, case_half_16x256_16x256) {
+TEST_F(TADDTest, case_half_16x256_16x256)
+{
     test_tadd<aclFloat16, 16, 256, 16, 256>();
 }

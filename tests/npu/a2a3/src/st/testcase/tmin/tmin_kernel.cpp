@@ -8,8 +8,8 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
+#include <type_traits>
 #include <pto/pto-inst.hpp>
-#include <pto/common/constants.hpp>
 #include "acl/acl.h"
 
 using namespace pto;
@@ -18,21 +18,26 @@ using namespace pto;
 #define PAD_VALUE_MAX (1)
 #define PAD_VALUE_MIN (-1)
 
+#ifdef __CCE_AICORE__
 template <typename T, int kTRows_, int kTCols_, int paddingValueType>
 struct TileDataSelector;
 
 template <typename T, int kTRows_, int kTCols_>
 struct TileDataSelector<T, kTRows_, kTCols_, PAD_VALUE_NULL> {
-    using Type = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, 512, PadValue::Null>;
+    using Type =
+        Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, 512, PadValue::Null>;
 };
 
 template <typename T, int kTRows_, int kTCols_>
 struct TileDataSelector<T, kTRows_, kTCols_, PAD_VALUE_MIN> {
-    using Type = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, 512, PadValue::Min>;
+    using Type =
+        Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1, SLayout::NoneBox, 512, PadValue::Min>;
 };
+#endif
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
-__global__ AICORE void runTMIN( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T __in__ *src1) {
+__global__ AICORE void runTMIN(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = pto::Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -63,20 +68,28 @@ __global__ AICORE void runTMIN( __gm__ T __out__ *out, __gm__ T __in__ *src0,  _
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kVRows_, int kVCols_, int padValueType>
 void LaunchTMin(T *out, T *src0, T *src1, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTMIN<half, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType><<<1, nullptr, stream>>>((half*)(out),
-                                                                                  (half*)(src0),
-                                                                                  (half*)(src1));
-    else 
-        runTMIN<T, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType><<<1, nullptr, stream>>>(out, src0, src1);
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTMIN<half, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType>
+            <<<1, nullptr, stream>>>((half *)(out), (half *)(src0), (half *)(src1));
+    else
+        runTMIN<T, kGRows_, kGCols_, kTRows_, kTCols_, kVRows_, kVCols_, padValueType>
+            <<<1, nullptr, stream>>>(out, src0, src1);
 }
 
-template void LaunchTMin<float, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(float *out, float *src0, float *src1, void *stream);
-template void LaunchTMin<int32_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(int32_t *out, int32_t *src0, int32_t *src1, void *stream);
-template void LaunchTMin<aclFloat16, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
-template void LaunchTMin<int16_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(int16_t *out, int16_t *src0, int16_t *src1, void *stream);
+template void LaunchTMin<float, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(float *out, float *src0, float *src1,
+                                                                        void *stream);
+template void LaunchTMin<int32_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(int32_t *out, int32_t *src0, int32_t *src1,
+                                                                          void *stream);
+template void LaunchTMin<aclFloat16, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(aclFloat16 *out, aclFloat16 *src0,
+                                                                             aclFloat16 *src1, void *stream);
+template void LaunchTMin<int16_t, 64, 64, 64, 64, 64, 64, PAD_VALUE_NULL>(int16_t *out, int16_t *src0, int16_t *src1,
+                                                                          void *stream);
 
-template void LaunchTMin<float, 60, 60, 64, 64, 60, 60, PAD_VALUE_MIN>(float *out, float *src0, float *src1, void *stream);
-template void LaunchTMin<int32_t, 60, 60, 64, 64, 60, 60, PAD_VALUE_MIN>(int32_t *out, int32_t *src0, int32_t *src1, void *stream);
-template void LaunchTMin<aclFloat16, 1, 3600, 2, 4096, 1, 3600, PAD_VALUE_MIN>(aclFloat16 *out, aclFloat16 *src0, aclFloat16 *src1, void *stream);
-template void LaunchTMin<int16_t, 16, 200, 20, 512, 16, 200, PAD_VALUE_MIN>(int16_t *out, int16_t *src0, int16_t *src1, void *stream);
+template void LaunchTMin<float, 60, 60, 64, 64, 60, 60, PAD_VALUE_MIN>(float *out, float *src0, float *src1,
+                                                                       void *stream);
+template void LaunchTMin<int32_t, 60, 60, 64, 64, 60, 60, PAD_VALUE_MIN>(int32_t *out, int32_t *src0, int32_t *src1,
+                                                                         void *stream);
+template void LaunchTMin<aclFloat16, 1, 3600, 2, 4096, 1, 3600, PAD_VALUE_MIN>(aclFloat16 *out, aclFloat16 *src0,
+                                                                               aclFloat16 *src1, void *stream);
+template void LaunchTMin<int16_t, 16, 200, 20, 512, 16, 200, PAD_VALUE_MIN>(int16_t *out, int16_t *src0, int16_t *src1,
+                                                                            void *stream);

@@ -15,46 +15,43 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <cmath>
 
 namespace pto {
-    template <typename TileDst, typename TileSrc>
-    void TColSum(typename TileDst::TileDType dst, typename TileSrc::TileDType src, uint16_t M, uint16_t N)
-    {
-        for (uint16_t j = 0; j < N; j++) {
-            typename TileDst::DType sum = 0;
+template <typename TileDst, typename TileSrc>
+void TColSum(typename TileDst::TileDType dst, typename TileSrc::TileDType src, uint16_t M, uint16_t N)
+{
+    for (uint16_t j = 0; j < N; j++) {
+        typename TileDst::DType sum = 0;
 
-            for (uint16_t i = 0; i < M; i++) {
-               sum += src[GetTileElementOffset<TileSrc>(i,j)];
-            }
-            dst[GetTileElementOffset<TileDst>(0,j)] = sum;
+        for (uint16_t i = 0; i < M; i++) {
+            sum += src[GetTileElementOffset<TileSrc>(i, j)];
         }
-    }
-
-    template <typename TileDst, typename TileSrc>
-    PTO_INTERNAL void CheckCSValid()
-    {
-        using SrcNonDuplicateType = TileSrc::DType;
-        using DstNonDuplicateType = TileDst::DType;
-        static_assert(
-            (std::is_same_v<SrcNonDuplicateType, half> && std::is_same_v<DstNonDuplicateType, half>) ||  // f162f16
-                (std::is_same_v<SrcNonDuplicateType, half> && std::is_same_v<DstNonDuplicateType, float>) ||  // f162f32
-                (std::is_same_v<SrcNonDuplicateType, float> && std::is_same_v<DstNonDuplicateType, float>)  // f322f32
-            , "Not supported data type");
-        static_assert(
-            (TileSrc::Cols == TileDst::Cols),
-            "Assert: Inconsistent number of cols");
-        static_assert(
-            (TileDst::Rows == 1),
-            "Assert: Inconsistent number of dst tile rows");
-    }
-
-    template <typename TileDst, typename TileSrc>
-    PTO_INTERNAL void TCOLSUM_IMPL(TileDst &dstTile, TileSrc &srcTile)
-    {
-        CheckCSValid<TileDst, TileSrc>();
-
-        uint16_t m = srcTile.GetValidRow();
-        uint16_t n = srcTile.GetValidCol();
-
-        TColSum<TileDst, TileSrc>(dstTile.data(), srcTile.data(), m, n);
+        dst[GetTileElementOffset<TileDst>(0, j)] = sum;
     }
 }
+
+template <typename TileDst, typename TileSrc>
+PTO_INTERNAL void CheckCSValid()
+{
+    using SrcNonDuplicateType = typename TileSrc::DType;
+    using DstNonDuplicateType = typename TileDst::DType;
+    static_assert(
+        (std::is_same_v<SrcNonDuplicateType, half> && std::is_same_v<DstNonDuplicateType, half>) ||      // f162f16
+            (std::is_same_v<SrcNonDuplicateType, half> && std::is_same_v<DstNonDuplicateType, float>) || // f162f32
+            (std::is_same_v<SrcNonDuplicateType, float> && std::is_same_v<DstNonDuplicateType, float>)   // f322f32
+        ,
+        "Not supported data type");
+    static_assert((TileSrc::Cols == TileDst::Cols), "Assert: Inconsistent number of cols");
+    static_assert((TileDst::Rows == 1), "Assert: Inconsistent number of dst tile rows");
+}
+
+template <typename TileDst, typename TileSrc>
+PTO_INTERNAL void TCOLSUM_IMPL(TileDst &dstTile, TileSrc &srcTile)
+{
+    CheckCSValid<TileDst, TileSrc>();
+
+    uint16_t m = srcTile.GetValidRow();
+    uint16_t n = srcTile.GetValidCol();
+
+    TColSum<TileDst, TileSrc>(dstTile.data(), srcTile.data(), m, n);
+}
+} // namespace pto
 #endif

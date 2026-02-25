@@ -16,13 +16,15 @@ using namespace std;
 using namespace PtoTestCommon;
 
 template <typename AT, typename BT, typename L0CT, typename BiasT, typename GMT, typename ScalingT, int M, int N, int K,
-    int IsTransA, int IsTransB, int IsBias, int IsQuant, int ReluMode = 0, int Isdynamic = 0, int IsNd = 1>
+          int IsTransA, int IsTransB, int IsBias, int IsQuant, int ReluMode = 0, int Isdynamic = 0, int IsNd = 1>
 void LaunchTMOV(GMT *out, AT *src0, BT *src1, BiasT *src2, ScalingT *src3, void *stream);
 
 class TMOVTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -35,7 +37,7 @@ std::string GetGoldenDir()
 }
 
 template <typename AT, typename BT, typename L0CT, typename BiasT, typename GMT, typename ScalingT, int M, int N, int K,
-    int IsTransA, int IsTransB, int IsBias, int IsQuant, int ReluMode = 0, int Isdynamic = 0, int IsNd = 1>
+          int IsTransA, int IsTransB, int IsBias, int IsQuant, int ReluMode = 0, int Isdynamic = 0, int IsNd = 1>
 void test_tmov()
 {
     // The bias addr needs to be 64B aligned.
@@ -84,7 +86,7 @@ void test_tmov()
     aclrtMemcpy(src2Device, biasFileSize, src2Host, biasFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
     aclrtMemcpy(src3Device, fbFileSize, src3Host, fbFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
     LaunchTMOV<AT, BT, L0CT, BiasT, GMT, ScalingT, M, N, K, IsTransA, IsTransB, IsBias, IsQuant, ReluMode, Isdynamic,
-        IsNd>(dstDevice, src0Device, src1Device, src2Device, src3Device, stream);
+               IsNd>(dstDevice, src0Device, src1Device, src2Device, src3Device, stream);
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, cFileSize, dstDevice, cFileSize, ACL_MEMCPY_DEVICE_TO_HOST);

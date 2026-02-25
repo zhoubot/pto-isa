@@ -20,7 +20,7 @@ namespace pto {
 
 template <typename TileDataDst, typename TileDataSrc, typename TileDataOffset>
 PTO_INTERNAL void TGatherB(typename TileDataDst::TileDType dst, typename TileDataSrc::TileDType src,
-    typename TileDataOffset::TileDType offset, unsigned validRow, unsigned validCol)
+                           typename TileDataOffset::TileDType offset, unsigned validRow, unsigned validCol)
 {
     const auto *srcBytes = reinterpret_cast<const std::uint8_t *>(src);
     auto *dstBytes = reinterpret_cast<std::uint8_t *>(dst);

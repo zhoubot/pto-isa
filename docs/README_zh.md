@@ -15,13 +15,21 @@
 
 ## 从哪里开始
 
-- ISA 总览：[`docs/PTOISA.md`](PTOISA.md)
-- 指令索引：[`docs/isa/README.md`](isa/README.md)
-- 通用约定：[`docs/isa/conventions.md`](isa/conventions.md)
-- PTO 汇编语法（PTO-AS）：[`docs/grammar/PTO-AS.md`](grammar/PTO-AS.md)
-- 入门指南（建议先跑 CPU 仿真）：[`docs/getting-started.md`](getting-started.md)
-- 实现与扩展说明：[`docs/coding/README.md`](coding/README.md)
-- Kernel 示例（偏 NPU）：[`kernels/README.md`](../kernels/README.md)
+- 虚拟 ISA 手册入口：`docs/PTO-Virtual-ISA-Manual_zh.md`
+- ISA 总览：`docs/PTOISA_zh.md`
+- 指令索引：`docs/isa/README_zh.md`
+- PTO IR 非 ISA 运算索引：`docs/ir/README_zh.md`
+- PTO IR 非 ISA 运算参考（L1/L2）：`docs/ir/PTO-IR-ops_zh.md`
+- 通用约定：`docs/isa/conventions_zh.md`
+- PTO 汇编语法（PTO-AS）：`docs/grammar/PTO-AS_zh.md`
+- 虚拟 ISA / IR 指南：`docs/mkdocs/src/manual/09-virtual-isa-and-ir_zh.md`
+- 字节码 / 工具链指南：`docs/mkdocs/src/manual/10-bytecode-and-toolchain_zh.md`
+- 内存顺序 / 一致性指南：`docs/mkdocs/src/manual/11-memory-ordering-and-consistency_zh.md`
+- 后端画像 / 一致性指南：`docs/mkdocs/src/manual/12-backend-profiles-and-conformance_zh.md`
+- 入门指南（建议先跑 CPU 仿真）：`docs/getting-started_zh.md`
+- 实现与扩展说明：`docs/coding/README_zh.md`
+- Kernel 示例（偏 NPU）：`kernels/README_zh.md`
+- 文档工具（manifest/index/svg/一致性检查）：`docs/tools/`
 
 ## 文档组织
 

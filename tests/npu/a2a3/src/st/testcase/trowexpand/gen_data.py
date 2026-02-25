@@ -24,15 +24,20 @@ def gen_golden_data(param):
     dst_col = param.dst_col
     dst_valid_col = param.dst_valid_col
 
+    if np.issubdtype(data_type, np.integer):
+        value_max = np.iinfo(data_type).max
+        value_min = np.iinfo(data_type).min
+    else:
+        value_max = np.finfo(data_type).max
+        value_min = np.finfo(data_type).min
     if param.is_brcb:
-        input_arr = np.random.uniform(low=0, high=100, size=(row * src_col)).astype(data_type)
+        input_arr = np.random.uniform(low=value_min, high=value_max, size=(row * src_col)).astype(data_type)
         golden = np.zeros((row * src_col, dst_col))
         for i in range(row * src_col):
             for j in range(dst_col):
                 golden[i][j] = input_arr[i]
     else:
-        input_arr = np.random.rand(row, src_col) * 100
-        input_arr = input_arr.astype(data_type)
+        input_arr = np.random.uniform(low=value_min, high=value_max, size=(row, src_col)).astype(data_type)
         golden = np.zeros((row, dst_col))
         for i in range(row):
             for j in range(dst_valid_col):
@@ -64,7 +69,7 @@ if __name__ == "__main__":
         TRowExpand("TROWEXPANDTest.case4", np.uint16, 16, 16, 1, 256, 255),
         TRowExpand("TROWEXPANDTest.case5", np.uint8, 16, 32, 1, 512, 511),
         TRowExpand("TROWEXPANDTest.case6", np.uint32, 16, 8, 1, 128, 127),
-        TRowExpand("TROWEXPANDTest.case7", np.uint16, 16, 8, 1, 128, 127),
+        TRowExpand("TROWEXPANDTest.case7", np.uint16, 16, 16, 1, 128, 127),
         TRowExpand("TROWEXPANDTest.case8", np.uint8, 2, 32, 1, 64, 63),
         TRowExpand("TROWEXPANDTest.case9", np.uint16, 4080, 1, 1, 16, 16, True),
         TRowExpand("TROWEXPANDTest.case10", np.uint16, 16, 1, 1, 16, 16, True),
@@ -72,6 +77,14 @@ if __name__ == "__main__":
         TRowExpand("TROWEXPANDTest.case12", np.uint32, 16, 1, 1, 8, 8, True),
         TRowExpand("TROWEXPANDTest.case13", np.float32, 4080, 1, 1, 8, 8, True),
         TRowExpand("TROWEXPANDTest.case14", np.float32, 16, 1, 1, 8, 8, True),
+        TRowExpand("TROWEXPANDTest.case15", np.int16, 16, 16, 16, 512, 512),
+        TRowExpand("TROWEXPANDTest.case16", np.int8, 16, 32, 32, 256, 256),
+        TRowExpand("TROWEXPANDTest.case17", np.int32, 16, 8, 8, 128, 128),
+        TRowExpand("TROWEXPANDTest.case18", np.int16, 16, 16, 1, 256, 255),
+        TRowExpand("TROWEXPANDTest.case19", np.int8, 16, 32, 1, 512, 511),
+        TRowExpand("TROWEXPANDTest.case20", np.int32, 16, 8, 1, 128, 127),
+        TRowExpand("TROWEXPANDTest.case21", np.int16, 16, 16, 1, 128, 127),
+        TRowExpand("TROWEXPANDTest.case22", np.int8, 2, 32, 1, 64, 63),
     ]
 
     for _, param in enumerate(case_params_list):

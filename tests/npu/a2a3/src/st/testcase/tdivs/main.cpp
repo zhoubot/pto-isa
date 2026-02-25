@@ -15,24 +15,21 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace PtoTestCommon;
 
-
 template <uint32_t caseId>
 void launchTDIVSTestCase(void *out, void *src, float scalar, aclrtStream stream);
 
 class TDIVSTest : public testing::Test {
-public: 
-
+public:
 protected:
     void SetUp() override
-    { 
-    }
+    {}
 
     void TearDown() override
-    {
-    }
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -45,7 +42,7 @@ bool TDivSTestFramework()
 {
     aclInit(nullptr);
     aclrtSetDevice(0);
-    
+
     aclrtStream stream;
     aclrtCreateStream(&stream);
 
@@ -66,8 +63,8 @@ bool TDivSTestFramework()
     ReadFile(GetGoldenDir() + "/input.bin", srcByteSize, srcHost, srcByteSize);
     std::string scalar_file = GetGoldenDir() + "/divider.bin";
     std::ifstream file(scalar_file, std::ios::binary);
-    
-    file.read(reinterpret_cast<char*>(&scalar), 4);
+
+    file.read(reinterpret_cast<char *>(&scalar), 4);
     file.close();
     aclrtMemcpy(srcDevice, srcByteSize, srcHost, srcByteSize, ACL_MEMCPY_HOST_TO_DEVICE);
     launchTDIVSTestCase<caseId>(dstDevice, srcDevice, scalar, stream);

@@ -24,17 +24,17 @@ template <typename DstTileData, typename Src0TileData, typename Src1TileData>
 PTO_INTERNAL void CheckValid()
 {
     static_assert((sizeof(typename DstTileData::DType) == 1) || (sizeof(typename DstTileData::DType) == 2) ||
-        (sizeof(typename DstTileData::DType) == 4), "Fix: TGATHER expect b8/b16/b32");
+                      (sizeof(typename DstTileData::DType) == 4),
+                  "Fix: TGATHER expect b8/b16/b32");
     static_assert((sizeof(typename Src1TileData::DType) == 2) || (sizeof(typename Src1TileData::DType) == 4),
-        "Fix: TGATHER expect b16/b32");
+                  "Fix: TGATHER expect b16/b32");
     static_assert((std::is_same<typename DstTileData::DType, typename Src0TileData::DType>::value),
-        "Fix: TGATHER expect same size for indice and dst");
+                  "Fix: TGATHER expect same size for indice and dst");
 }
 
 template <typename TileDataD, typename TileDataS0, typename TileDataS1>
-__tf__ AICORE void TGather_b32(typename TileDataD::TileDType __out__ dst,
-    typename TileDataS0::TileDType __in__ src0, typename TileDataS1::TileDType __in__ src1, unsigned validCol,
-    unsigned validRow)
+__tf__ AICORE void TGather_b32(typename TileDataD::TileDType __out__ dst, typename TileDataS0::TileDType __in__ src0,
+                               typename TileDataS1::TileDType __in__ src1, unsigned validCol, unsigned validRow)
 {
     __ubuf__ typename TileDataD::DType *dstPtr = (__ubuf__ typename TileDataD::DType *)__cce_get_tile_ptr(dst);
     __ubuf__ typename TileDataS0::DType *src0Ptr = (__ubuf__ typename TileDataS0::DType *)__cce_get_tile_ptr(src0);
@@ -61,9 +61,8 @@ __tf__ AICORE void TGather_b32(typename TileDataD::TileDType __out__ dst,
 }
 
 template <typename TileDataD, typename TileDataS0, typename TileDataS1>
-__tf__ AICORE void TGather_b16(typename TileDataD::TileDType __out__ dst,
-    typename TileDataS0::TileDType __in__ src0, typename TileDataS1::TileDType __in__ src1, unsigned validCol,
-    unsigned validRow)
+__tf__ AICORE void TGather_b16(typename TileDataD::TileDType __out__ dst, typename TileDataS0::TileDType __in__ src0,
+                               typename TileDataS1::TileDType __in__ src1, unsigned validCol, unsigned validRow)
 {
     __ubuf__ typename TileDataS0::DType *src0Ptr = (__ubuf__ typename TileDataS0::DType *)__cce_get_tile_ptr(src0);
     __ubuf__ typename TileDataS1::DType *src1Ptr = (__ubuf__ typename TileDataS1::DType *)__cce_get_tile_ptr(src1);
@@ -90,9 +89,8 @@ __tf__ AICORE void TGather_b16(typename TileDataD::TileDType __out__ dst,
 }
 
 template <typename TileDataD, typename TileDataS0, typename TileDataS1>
-__tf__ AICORE void TGather_b16_bc(typename TileDataD::TileDType __out__ dst,
-    typename TileDataS0::TileDType __in__ src0, typename TileDataS1::TileDType __in__ src1, unsigned validCol,
-    unsigned validRow)
+__tf__ AICORE void TGather_b16_bc(typename TileDataD::TileDType __out__ dst, typename TileDataS0::TileDType __in__ src0,
+                                  typename TileDataS1::TileDType __in__ src1, unsigned validCol, unsigned validRow)
 {
     __ubuf__ typename TileDataD::DType *dstPtr = (__ubuf__ typename TileDataD::DType *)__cce_get_tile_ptr(dst);
     __ubuf__ typename TileDataS0::DType *src0Ptr = (__ubuf__ typename TileDataS0::DType *)__cce_get_tile_ptr(src0);
@@ -121,8 +119,8 @@ __tf__ AICORE void TGather_b16_bc(typename TileDataD::TileDType __out__ dst,
 
 template <typename TileDataD, typename TileDataS0, typename TileDataS1>
 __tf__ AICORE void TGather_fp8_e4m3(typename TileDataD::TileDType __out__ dst,
-    typename TileDataS0::TileDType __in__ src0, typename TileDataS1::TileDType __in__ src1, unsigned validCol,
-    unsigned validRow)
+                                    typename TileDataS0::TileDType __in__ src0,
+                                    typename TileDataS1::TileDType __in__ src1, unsigned validCol, unsigned validRow)
 {
     __ubuf__ typename TileDataS0::DType *src0Ptr = (__ubuf__ typename TileDataS0::DType *)__cce_get_tile_ptr(src0);
     __ubuf__ typename TileDataS1::DType *src1Ptr = (__ubuf__ typename TileDataS1::DType *)__cce_get_tile_ptr(src1);
@@ -150,8 +148,8 @@ __tf__ AICORE void TGather_fp8_e4m3(typename TileDataD::TileDType __out__ dst,
 
 template <typename TileDataD, typename TileDataS0, typename TileDataS1>
 __tf__ AICORE void TGather_fp8_e5m2(typename TileDataD::TileDType __out__ dst,
-    typename TileDataS0::TileDType __in__ src0, typename TileDataS1::TileDType __in__ src1, unsigned validCol,
-    unsigned validRow)
+                                    typename TileDataS0::TileDType __in__ src0,
+                                    typename TileDataS1::TileDType __in__ src1, unsigned validCol, unsigned validRow)
 {
     __ubuf__ typename TileDataD::DType *dstPtr = (__ubuf__ typename TileDataD::DType *)__cce_get_tile_ptr(dst);
     __ubuf__ typename TileDataS0::DType *src0Ptr = (__ubuf__ typename TileDataS0::DType *)__cce_get_tile_ptr(src0);
@@ -178,8 +176,8 @@ __tf__ AICORE void TGather_fp8_e5m2(typename TileDataD::TileDType __out__ dst,
 }
 
 template <typename TileDataD, typename TileDataS0, typename TileDataS1>
-AICORE void TGather(typename TileDataD::TileDType __out__ dst, typename TileDataS0::TileDType __in__ src0,
-    typename TileDataS1::TileDType __in__ src1, unsigned validCol, unsigned validRow)
+AICORE void TGather(__ubuf__ typename TileDataD::DType *dst, __ubuf__ typename TileDataS0::DType *src0,
+                    __ubuf__ typename TileDataS1::DType *src1, unsigned validCol, unsigned validRow)
 {
     if constexpr (sizeof(typename TileDataS0::DType) == 4) {
         TGather_b32<TileDataD, TileDataS0, TileDataS1>(dst, src0, src1, validCol, validRow);
@@ -260,7 +258,7 @@ PTO_INTERNAL MaskReg GetMaskVal()
 
 template <typename DstTileData, typename SrcTileData, MaskPattern maskPattern>
 __tf__ AICORE void TGather(typename DstTileData::TileDType __out__ dst, typename SrcTileData::TileDType __in__ src,
-    uint16_t validRow, uint16_t validCol)
+                           uint16_t validRow, uint16_t validCol)
 {
     using T = typename DstTileData::DType;
     constexpr unsigned rowStride = SrcTileData::RowStride;
@@ -279,7 +277,7 @@ __tf__ AICORE void TGather(typename DstTileData::TileDType __out__ dst, typename
         MaskReg executeMask;
         UnalignReg ureg;
 
-        constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(T);
+        constexpr unsigned elementsPerRepeat = CCE_VL / sizeof(T);
         uint16_t innerRepeatTimes = CeilDivision(validCol, elementsPerRepeat);
 
         for (uint16_t i = 0; i < validRow; ++i) {
@@ -302,20 +300,22 @@ PTO_INTERNAL void TGATHER_IMPL(DstTileData &dst, SrcTileData &src)
     using T = typename SrcTileData::DType;
     using U = typename DstTileData::DType;
     static_assert(std::is_same_v<T, int8_t> || std::is_same_v<T, uint8_t> || std::is_same_v<T, int16_t> ||
-        std::is_same_v<T, uint16_t> || std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> ||
-        std::is_same_v<T, half> || std::is_same_v<T, bfloat16_t> || std::is_same_v<T, float> ||
-        std::is_same_v<T, float8_e4m3_t> || std::is_same_v<T, float8_e5m2_t> || std::is_same_v<T, hifloat8_t>,
-        "Fix: TGATHER Src data type must be int8_t/uint8_t/int16_t/uint16_t/int32_t/uint32_t/"
-        "half/bfloat16_t/float/float8_e4m3_t/float8_e5m2_t/hifloat8_t.");
+                      std::is_same_v<T, uint16_t> || std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> ||
+                      std::is_same_v<T, half> || std::is_same_v<T, bfloat16_t> || std::is_same_v<T, float> ||
+                      std::is_same_v<T, float8_e4m3_t> || std::is_same_v<T, float8_e5m2_t> ||
+                      std::is_same_v<T, hifloat8_t>,
+                  "Fix: TGATHER Src data type must be int8_t/uint8_t/int16_t/uint16_t/int32_t/uint32_t/"
+                  "half/bfloat16_t/float/float8_e4m3_t/float8_e5m2_t/hifloat8_t.");
     static_assert(std::is_same_v<U, int8_t> || std::is_same_v<U, uint8_t> || std::is_same_v<U, int16_t> ||
-        std::is_same_v<U, uint16_t> || std::is_same_v<U, int32_t> || std::is_same_v<U, uint32_t> ||
-        std::is_same_v<U, half> || std::is_same_v<U, bfloat16_t> || std::is_same_v<U, float> ||
-        std::is_same_v<U, float8_e4m3_t> || std::is_same_v<U, float8_e5m2_t> || std::is_same_v<U, hifloat8_t>,
-        "Fix: TGATHER Dst data type must be int8_t/uint8_t/int16_t/uint16_t/int32_t/uint32_t/"
-        "half/bfloat16_t/float/float8_e4m3_t/float8_e5m2_t/hifloat8_t.");
+                      std::is_same_v<U, uint16_t> || std::is_same_v<U, int32_t> || std::is_same_v<U, uint32_t> ||
+                      std::is_same_v<U, half> || std::is_same_v<U, bfloat16_t> || std::is_same_v<U, float> ||
+                      std::is_same_v<U, float8_e4m3_t> || std::is_same_v<U, float8_e5m2_t> ||
+                      std::is_same_v<U, hifloat8_t>,
+                  "Fix: TGATHER Dst data type must be int8_t/uint8_t/int16_t/uint16_t/int32_t/uint32_t/"
+                  "half/bfloat16_t/float/float8_e4m3_t/float8_e5m2_t/hifloat8_t.");
     static_assert((sizeof(U) == sizeof(T)), "Fix: TGATHER expect same type size for dst and src");
     static_assert((DstTileData::Loc == TileType::Vec) && (SrcTileData::Loc == TileType::Vec),
-        "Fix: TGATHER expect vec TileType");
+                  "Fix: TGATHER expect vec TileType");
     static_assert((DstTileData::isRowMajor && SrcTileData::isRowMajor), "Fix: TGATHER expect row major");
     uint16_t rows = src.GetValidRow();
     uint16_t cols = src.GetValidCol();

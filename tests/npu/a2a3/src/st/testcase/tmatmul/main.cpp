@@ -23,14 +23,18 @@ void LaunchTMATMULBIAS(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2
 
 class TMATMULTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 class TMATMULBIASTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -102,7 +106,7 @@ void TmatmulTest(uint32_t M, uint32_t K, uint32_t N)
     ReadFile(GetGoldenDir() + "/golden.bin", cFileSize, golden.data(), cFileSize);
     ReadFile(GetGoldenDir() + "/output_z.bin", cFileSize, devFinal.data(), cFileSize);
 
-    bool ret = ResultCmp(golden, devFinal, 0.001f);
+    bool ret = ResultCmp(golden, devFinal, 0.0001f);
 
     EXPECT_TRUE(ret);
 }
@@ -141,6 +145,34 @@ TEST_F(TMATMULTest, case4)
     uint32_t K = 256;
 
     TmatmulTest<float, uint16_t, uint16_t, 4>(M, K, N);
+}
+
+TEST_F(TMATMULTest, case5)
+{
+    uint32_t M = 1;
+    uint32_t N = 32;
+    uint32_t K = 16;
+
+    TmatmulTest<float, uint16_t, uint16_t, 5>(M, K, N);
+}
+
+TEST_F(TMATMULTest, case6)
+{
+    uint32_t M = 1;
+    uint32_t N = 32;
+    uint32_t K = 200;
+
+    TmatmulTest<float, uint16_t, uint16_t, 6>(M, K, N);
+}
+
+TEST_F(TMATMULTest, case7)
+{
+    TmatmulTest<float, float, float, 7>(16, 32, 64);
+}
+
+TEST_F(TMATMULTest, case8)
+{
+    TmatmulTest<float, float, float, 8>(5, 75, 11);
 }
 
 template <typename T, typename U, typename S, typename biasType, int32_t key>
@@ -269,4 +301,9 @@ TEST_F(TMATMULBIASTest, case7)
     uint32_t N = 88;
 
     TmatmulBiasTest<int32_t, int8_t, int8_t, int32_t, 7>(M, K, N);
+}
+
+TEST_F(TMATMULBIASTest, case8)
+{
+    TmatmulBiasTest<float, uint16_t, uint16_t, float, 8>(1, 512, 32);
 }

@@ -23,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -31,11 +32,14 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-template <typename T, uint64_t dstS1, uint64_t dstS0, uint64_t offsetS1, uint64_t offsetS0, uint64_t srcS1, uint64_t srcS0>
-void LaunchTGatherB(T* out, T* src, uint32_t* offset, void* stream);
+template <typename T, uint64_t dstS1, uint64_t dstS0, uint64_t offsetS1, uint64_t offsetS0, uint64_t srcS1,
+          uint64_t srcS0>
+void LaunchTGatherB(T *out, T *src, uint32_t *offset, void *stream);
 
-template <typename T, uint64_t dstS1, uint64_t dstS0, uint64_t offsetS1, uint64_t offsetS0, uint64_t srcS1, uint64_t srcS0>
-void test_tgatherb() {
+template <typename T, uint64_t dstS1, uint64_t dstS0, uint64_t offsetS1, uint64_t offsetS0, uint64_t srcS1,
+          uint64_t srcS0>
+void test_tgatherb()
+{
     size_t dstFileSize = dstS1 * dstS0 * sizeof(T);
     size_t srcFileSize = srcS1 * srcS0 * sizeof(T);
     size_t offsetFileSize = offsetS1 * offsetS0 * 4;
@@ -89,27 +93,35 @@ void test_tgatherb() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TGATHERBTest, case_float_2x128_2x16_2x128) {
+TEST_F(TGATHERBTest, case_float_2x128_2x16_2x128)
+{
     test_tgatherb<float, 2, 128, 2, 16, 2, 128>();
 }
-TEST_F(TGATHERBTest, case_int32_2x128_2x16_2x128) {
+TEST_F(TGATHERBTest, case_int32_2x128_2x16_2x128)
+{
     test_tgatherb<int32_t, 2, 128, 2, 16, 2, 128>();
 }
-TEST_F(TGATHERBTest, case_uint32_2x128_2x16_2x128) {
+TEST_F(TGATHERBTest, case_uint32_2x128_2x16_2x128)
+{
     test_tgatherb<uint32_t, 2, 128, 2, 16, 2, 128>();
 }
-TEST_F(TGATHERBTest, case_int16_1x32768_1x2048_1x32768) {
+TEST_F(TGATHERBTest, case_int16_1x32768_1x2048_1x32768)
+{
     test_tgatherb<int16_t, 1, 32768, 1, 2048, 1, 32768>();
 }
-TEST_F(TGATHERBTest, case_uint16_257x128_257x8_257x128) {
+TEST_F(TGATHERBTest, case_uint16_257x128_257x8_257x128)
+{
     test_tgatherb<uint16_t, 257, 128, 257, 8, 257, 128>();
 }
-TEST_F(TGATHERBTest, case_int8_2x256_2x8_2x256) {
+TEST_F(TGATHERBTest, case_int8_2x256_2x8_2x256)
+{
     test_tgatherb<int8_t, 2, 256, 2, 8, 2, 256>();
 }
-TEST_F(TGATHERBTest, case_int8_2x32768_2x1024_2x32768) {
+TEST_F(TGATHERBTest, case_int8_2x32768_2x1024_2x32768)
+{
     test_tgatherb<int8_t, 2, 32768, 2, 1024, 2, 32768>();
 }
-TEST_F(TGATHERBTest, case_uint8_2x32768_2x1024_2x32768) {
+TEST_F(TGATHERBTest, case_uint8_2x32768_2x1024_2x32768)
+{
     test_tgatherb<uint8_t, 2, 32768, 2, 1024, 2, 32768>();
 }

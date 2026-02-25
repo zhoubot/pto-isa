@@ -15,7 +15,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace pto;
 
 template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
-__global__ AICORE void runTAnd( __gm__ T __out__ *out, __gm__ T __in__ *src0,  __gm__ T __in__ *src1) {
+__global__ AICORE void runTAnd(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *src1)
+{
     using DynShapeDim5 = Shape<1, 1, 1, vRows, vCols>;
     using DynStridDim5 = Stride<1, 1, 1, vCols, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -26,7 +27,7 @@ __global__ AICORE void runTAnd( __gm__ T __out__ *out, __gm__ T __in__ *src0,  _
     TASSIGN(src0Tile, 0x0);
     TASSIGN(src1Tile, 0x10000);
     TASSIGN(dstTile, 0x20000);
-    
+
     GlobalData src0Global(src0);
     GlobalData src1Global(src1);
     GlobalData dstGlobal(out);
@@ -47,8 +48,17 @@ void LaunchTAnd(T *out, T *src0, T *src1, void *stream)
     runTAnd<T, kTRows_, kTCols_, vRows, vCols><<<1, nullptr, stream>>>(out, src0, src1);
 }
 
+template <typename T, int kTRows_, int kTCols_, int vRows, int vCols>
+void LaunchTAnd2(T *out, T *src0, T *src1, void *stream)
+{
+    runTAnd<half, kTRows_, kTCols_, vRows, vCols><<<1, nullptr, stream>>>((half *)out, (half *)src0, (half *)src1);
+}
+
 template void LaunchTAnd<uint16_t, 64, 64, 64, 64>(uint16_t *out, uint16_t *src0, uint16_t *src1, void *stream);
 template void LaunchTAnd<uint16_t, 64, 64, 63, 63>(uint16_t *out, uint16_t *src0, uint16_t *src1, void *stream);
 template void LaunchTAnd<uint16_t, 1, 16384, 1, 16384>(uint16_t *out, uint16_t *src0, uint16_t *src1, void *stream);
 template void LaunchTAnd<uint16_t, 2048, 16, 2048, 16>(uint16_t *out, uint16_t *src0, uint16_t *src1, void *stream);
 template void LaunchTAnd<int16_t, 64, 64, 64, 64>(int16_t *out, int16_t *src0, int16_t *src1, void *stream);
+template void LaunchTAnd2<uint16_t, 64, 64, 64, 64>(uint16_t *out, uint16_t *src0, uint16_t *src1, void *stream);
+template void LaunchTAnd<uint8_t, 64, 64, 63, 63>(uint8_t *out, uint8_t *src0, uint8_t *src1, void *stream);
+template void LaunchTAnd<int8_t, 64, 64, 63, 63>(int8_t *out, int8_t *src0, int8_t *src1, void *stream);

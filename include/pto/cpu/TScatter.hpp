@@ -43,4 +43,3 @@ PTO_INTERNAL void TSCATTER_IMPL(TileData &dst, TileData &src, TileInd &indexes)
 } // namespace pto
 
 #endif
-

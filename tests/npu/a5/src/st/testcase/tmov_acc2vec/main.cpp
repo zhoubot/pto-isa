@@ -44,8 +44,10 @@ void LaunchTMOVAcc2VecSCQuantNZ2DN(uint8_t *out, uint8_t *src0, uint8_t *src1, v
 
 class TMOVTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()

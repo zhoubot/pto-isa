@@ -17,8 +17,10 @@ using namespace PtoTestCommon;
 
 class HASHFINDTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -93,5 +95,7 @@ void test_hashfind()
     EXPECT_TRUE(ResultCmp<int32_t>(golden, devFinal.data(), 0.0f));
 }
 
-TEST_F(HASHFINDTest, case_int32_16x16_cap512) { test_hashfind<16, 16, 512, 64>(); }
-
+TEST_F(HASHFINDTest, case_int32_16x16_cap512)
+{
+    test_hashfind<16, 16, 512, 64>();
+}

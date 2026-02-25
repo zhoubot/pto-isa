@@ -15,104 +15,102 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/parallel.hpp"
 
 namespace pto {
-    template <typename TileAcc, typename TileLeft, typename TileRight>
-    void TMatmulNzZn(typename TileAcc::TileDType dst,
-                       typename TileAcc::TileDType acc,
-                       typename TileLeft::TileDType src0,
-                       typename TileRight::TileDType src1,
-                       uint16_t M, uint16_t N, uint16_t K)
-    {
-        cpu::parallel_for_1d(0, M, static_cast<std::size_t>(M) * N * K, [&](std::size_t i) {
-            for (uint16_t j = 0; j < N; j++) {
-                typename TileAcc::DType mul_acc = 0;
+template <typename TileAcc, typename TileLeft, typename TileRight>
+void TMatmulNzZn(typename TileAcc::TileDType dst, typename TileAcc::TileDType acc, typename TileLeft::TileDType src0,
+                 typename TileRight::TileDType src1, uint16_t M, uint16_t N, uint16_t K)
+{
+    cpu::parallel_for_1d(0, M, static_cast<std::size_t>(M) * N * K, [&](std::size_t i) {
+        for (uint16_t j = 0; j < N; j++) {
+            typename TileAcc::DType mul_acc = 0;
 
-                PTO_CPU_VECTORIZE_LOOP
-                for (uint16_t k = 0; k < K; k++) {
-                    size_t src0Idx = GetTileElementOffset<TileLeft>(i, k);
-                    size_t src1Idx = GetTileElementOffset<TileRight>(k, j);
-                    mul_acc += static_cast<typename TileAcc::DType>(src0[src0Idx]) *
-                               static_cast<typename TileAcc::DType>(src1[src1Idx]);
-                }
-
-                size_t dstIdx = GetTileElementOffset<TileAcc>(i, j);
-                dst[dstIdx] = acc ? acc[dstIdx] + mul_acc : mul_acc;
+            PTO_CPU_VECTORIZE_LOOP
+            for (uint16_t k = 0; k < K; k++) {
+                size_t src0Idx = GetTileElementOffset<TileLeft>(i, k);
+                size_t src1Idx = GetTileElementOffset<TileRight>(k, j);
+                mul_acc += static_cast<typename TileAcc::DType>(src0[src0Idx]) *
+                           static_cast<typename TileAcc::DType>(src1[src1Idx]);
             }
-        });
-    }
 
-    template <typename TileAcc, typename TileLeft, typename TileRight>
-    PTO_INTERNAL void CheckMadValid()
-    {
-        using AType = typename TileLeft::DType;
-        using BType = typename TileRight::DType;
-        using CType = typename TileAcc::DType;
-        static_assert(
-            (std::is_same_v<AType, int8_t> && std::is_same_v<BType, int8_t> && std::is_same_v<CType, int32_t>) ||  // s8
-                (std::is_same_v<AType, half> && std::is_same_v<BType, half> && std::is_same_v<CType, float>) ||  // f162f32
-                (std::is_same_v<AType, float> && std::is_same_v<BType, float> &&
-                    std::is_same_v<CType, float>)  // f322f32
-            , "Not supported data type");
-        static_assert(
-            (TileLeft::Rows == TileAcc::Rows) && (TileLeft::Cols == TileRight::Rows) && (TileRight::Cols == TileAcc::Cols),
-            "Inconsistent number of m, k, n");
-        static_assert(
-            (TileLeft::Loc == TileType::Left) && (TileRight::Loc == TileType::Right) && (TileAcc::Loc == TileType::Acc),
-            "Non-conforming matrix loc");
-        // CPU reference implements TMATMUL via element-wise offsets, so we intentionally accept
-        // a broader set of tile layouts than the strict NPU hardware constraints.
-    }
+            size_t dstIdx = GetTileElementOffset<TileAcc>(i, j);
+            dst[dstIdx] = acc ? acc[dstIdx] + mul_acc : mul_acc;
+        }
+    });
+}
 
-    template <typename TileAcc, typename TileBias>
-    PTO_INTERNAL void CheckBiasValid()
-    {
-        using CType = typename TileAcc::DType;
-        using BiasType = typename TileBias::DType;
-        static_assert(std::is_same_v<CType, BiasType>, "No supported bias data type");
-        static_assert((TileBias::Loc == TileType::Bias) && (TileBias::Rows == 1) && (TileBias::isRowMajor),
-            "Non-conforming bias fractal");
-    }
+template <typename TileAcc, typename TileLeft, typename TileRight>
+PTO_INTERNAL void CheckMadValid()
+{
+    using AType = typename TileLeft::DType;
+    using BType = typename TileRight::DType;
+    using CType = typename TileAcc::DType;
+    static_assert(
+        (std::is_same_v<AType, int8_t> && std::is_same_v<BType, int8_t> && std::is_same_v<CType, int32_t>) || // s8
+            (std::is_same_v<AType, half> && std::is_same_v<BType, half> && std::is_same_v<CType, float>) ||   // f162f32
+            (std::is_same_v<AType, float> && std::is_same_v<BType, float> && std::is_same_v<CType, float>)    // f322f32
+        ,
+        "Not supported data type");
+    static_assert(
+        (TileLeft::Rows == TileAcc::Rows) && (TileLeft::Cols == TileRight::Rows) && (TileRight::Cols == TileAcc::Cols),
+        "Inconsistent number of m, k, n");
+    // CPU simulator: be permissive on BLayout (row/col major) as long as the tile offsets are well-defined.
+    // The actual element addressing is handled by `GetTileElementOffset<...>`.
+    static_assert((TileLeft::Loc == TileType::Left) && (TileLeft::SFractal == SLayout::RowMajor) &&
+                      (TileRight::Loc == TileType::Right) && (TileRight::SFractal == SLayout::ColMajor) &&
+                      (TileAcc::Loc == TileType::Acc) && (TileAcc::SFractal == SLayout::RowMajor),
+                  "Non-conforming matrix fractal");
+}
 
-    template <typename TileAcc, typename TileLeft, typename TileRight>
-    PTO_INTERNAL void TMATMUL_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileRight &bMatrix)
-    {
-        CheckMadValid<TileAcc, TileLeft, TileRight>();
+template <typename TileAcc, typename TileBias>
+PTO_INTERNAL void CheckBiasValid()
+{
+    using CType = typename TileAcc::DType;
+    using BiasType = typename TileBias::DType;
+    static_assert(std::is_same_v<CType, BiasType>, "No supported bias data type");
+    static_assert((TileBias::Loc == TileType::Bias) && (TileBias::Rows == 1) && (TileBias::isRowMajor),
+                  "Non-conforming bias fractal");
+}
 
-        uint16_t m = aMatrix.GetValidRow();
-        uint16_t k = aMatrix.GetValidCol();
-        uint16_t n = bMatrix.GetValidCol();
+template <typename TileAcc, typename TileLeft, typename TileRight>
+PTO_INTERNAL void TMATMUL_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileRight &bMatrix)
+{
+    CheckMadValid<TileAcc, TileLeft, TileRight>();
 
-        TMatmulNzZn<TileAcc, TileLeft, TileRight>(cMatrix.data(), nullptr, aMatrix.data(), bMatrix.data(), m, n, k);
-    }
+    uint16_t m = aMatrix.GetValidRow();
+    uint16_t k = aMatrix.GetValidCol();
+    uint16_t n = bMatrix.GetValidCol();
 
-    template <typename TileAcc, typename TileLeft, typename TileRight>
-    PTO_INTERNAL void TMATMUL_ACC_IMPL(TileAcc &cOutMatrix, TileAcc &cInMatrix, TileLeft &aMatrix, TileRight &bMatrix)
-    {
-        CheckMadValid<TileAcc, TileLeft, TileRight>();
+    TMatmulNzZn<TileAcc, TileLeft, TileRight>(cMatrix.data(), nullptr, aMatrix.data(), bMatrix.data(), m, n, k);
+}
 
-        uint16_t m = aMatrix.GetValidRow();
-        uint16_t k = aMatrix.GetValidCol();
-        uint16_t n = bMatrix.GetValidCol();
+template <typename TileAcc, typename TileLeft, typename TileRight>
+PTO_INTERNAL void TMATMUL_ACC_IMPL(TileAcc &cOutMatrix, TileAcc &cInMatrix, TileLeft &aMatrix, TileRight &bMatrix)
+{
+    CheckMadValid<TileAcc, TileLeft, TileRight>();
 
-        TMatmulNzZn<TileAcc, TileLeft, TileRight>(cOutMatrix.data(), cInMatrix.data(), aMatrix.data(), bMatrix.data(), m, n, k);
-    }
+    uint16_t m = aMatrix.GetValidRow();
+    uint16_t k = aMatrix.GetValidCol();
+    uint16_t n = bMatrix.GetValidCol();
 
-    template <typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
-    PTO_INTERNAL void TMATMUL_BIAS_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileRight &bMatrix, TileBias &biasMatrix)
-    {
-        CheckMadValid<TileAcc, TileLeft, TileRight>();
-        CheckBiasValid<TileAcc, TileBias>();
+    TMatmulNzZn<TileAcc, TileLeft, TileRight>(cOutMatrix.data(), cInMatrix.data(), aMatrix.data(), bMatrix.data(), m, n,
+                                              k);
+}
 
-        uint16_t m = aMatrix.GetValidRow();
-        uint16_t k = aMatrix.GetValidCol();
-        uint16_t n = bMatrix.GetValidCol();
+template <typename TileAcc, typename TileLeft, typename TileRight, typename TileBias>
+PTO_INTERNAL void TMATMUL_BIAS_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileRight &bMatrix, TileBias &biasMatrix)
+{
+    CheckMadValid<TileAcc, TileLeft, TileRight>();
+    CheckBiasValid<TileAcc, TileBias>();
 
-        TMatmulNzZn<TileAcc, TileLeft, TileRight>(cMatrix.data(), nullptr, aMatrix.data(), bMatrix.data(), m, n, k);
-        for(size_t c=0; c<n; c++) {
-            for(size_t r=0; r<m; r++) {
-                size_t out_idx = GetTileElementOffset<TileAcc>(r,c);
-                size_t bias_idx = GetTileElementOffset<TileBias>(0,c);
-                cMatrix.data()[out_idx] += biasMatrix.data()[bias_idx];
-            }
+    uint16_t m = aMatrix.GetValidRow();
+    uint16_t k = aMatrix.GetValidCol();
+    uint16_t n = bMatrix.GetValidCol();
+
+    TMatmulNzZn<TileAcc, TileLeft, TileRight>(cMatrix.data(), nullptr, aMatrix.data(), bMatrix.data(), m, n, k);
+    for (size_t c = 0; c < n; c++) {
+        for (size_t r = 0; r < m; r++) {
+            size_t out_idx = GetTileElementOffset<TileAcc>(r, c);
+            size_t bias_idx = GetTileElementOffset<TileBias>(0, c);
+            cMatrix.data()[out_idx] += biasMatrix.data()[bias_idx];
         }
     }
 
@@ -147,4 +145,5 @@ namespace pto {
         TMATMUL_BIAS_IMPL(cMatrix, aMatrix, bMatrix, biasMatrix);
     }
 }
+} // namespace pto
 #endif

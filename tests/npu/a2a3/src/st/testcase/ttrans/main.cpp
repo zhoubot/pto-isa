@@ -20,11 +20,14 @@ void LaunchTTRANS(T *out, T *src, void *stream);
 
 class TTRANSTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -33,7 +36,8 @@ std::string GetGoldenDir() {
 }
 
 template <typename T, int tRows, int tCols, int vRows, int vCols>
-void test_ttrans() {
+void test_ttrans()
+{
     uint32_t M = tRows;
     uint32_t N = tCols;
     size_t srcFileSize = M * N * sizeof(T);
@@ -84,57 +88,75 @@ void test_ttrans() {
 
 // tile shape of dst and src can be different
 // here we just test the same cases
-TEST_F(TTRANSTest, case1_float_16_8_16_8) {
+TEST_F(TTRANSTest, case1_float_16_8_16_8)
+{
     test_ttrans<float, 16, 8, 16, 8>();
 }
-TEST_F(TTRANSTest, case2_half_16_16_16_16) {
+TEST_F(TTRANSTest, case2_half_16_16_16_16)
+{
     test_ttrans<aclFloat16, 16, 16, 16, 16>();
 }
-TEST_F(TTRANSTest, case3_float_32_16_31_15) {
+TEST_F(TTRANSTest, case3_float_32_16_31_15)
+{
     test_ttrans<float, 32, 16, 31, 15>();
 }
-TEST_F(TTRANSTest, case4_half_32_32_31_31) {
+TEST_F(TTRANSTest, case4_half_32_32_31_31)
+{
     test_ttrans<aclFloat16, 32, 32, 31, 31>();
 }
-TEST_F(TTRANSTest, case5_float_2_512_2_512) {
+TEST_F(TTRANSTest, case5_float_2_512_2_512)
+{
     test_ttrans<float, 2, 512, 2, 512>();
 }
-TEST_F(TTRANSTest, case6_float_9_512_9_512) {
+TEST_F(TTRANSTest, case6_float_9_512_9_512)
+{
     test_ttrans<float, 9, 512, 9, 512>();
 }
-TEST_F(TTRANSTest, case7_float_32_16_23_15) {
+TEST_F(TTRANSTest, case7_float_32_16_23_15)
+{
     test_ttrans<float, 32, 16, 23, 15>();
 }
-TEST_F(TTRANSTest, case8_float_64_128_27_77) {
+TEST_F(TTRANSTest, case8_float_64_128_27_77)
+{
     test_ttrans<float, 64, 128, 27, 77>();
 }
-TEST_F(TTRANSTest, case9_half_100_64_64_64) {
+TEST_F(TTRANSTest, case9_half_100_64_64_64)
+{
     test_ttrans<aclFloat16, 100, 64, 64, 64>();
 }
-TEST_F(TTRANSTest, case10_half_128_64_64_64) {
+TEST_F(TTRANSTest, case10_half_128_64_64_64)
+{
     test_ttrans<aclFloat16, 128, 64, 64, 64>();
 }
-TEST_F(TTRANSTest, case11_half_128_64_100_64) {
+TEST_F(TTRANSTest, case11_half_128_64_100_64)
+{
     test_ttrans<aclFloat16, 128, 64, 100, 64>();
 }
-TEST_F(TTRANSTest, case12_float_512_32_512_2) {
+TEST_F(TTRANSTest, case12_float_512_32_512_2)
+{
     test_ttrans<float, 512, 32, 512, 2>();
 }
-TEST_F(TTRANSTest, case13_float_64_64_64_64) {
+TEST_F(TTRANSTest, case13_float_64_64_64_64)
+{
     test_ttrans<float, 64, 64, 64, 64>();
 }
-TEST_F(TTRANSTest, case14_float_64_32_64_32) {
+TEST_F(TTRANSTest, case14_float_64_32_64_32)
+{
     test_ttrans<float, 64, 32, 64, 32>();
 }
-TEST_F(TTRANSTest, case15_float_64_64_36_64) {
+TEST_F(TTRANSTest, case15_float_64_64_36_64)
+{
     test_ttrans<float, 64, 64, 36, 64>();
 }
-TEST_F(TTRANSTest, case16_float_2_16_2_16) {
+TEST_F(TTRANSTest, case16_float_2_16_2_16)
+{
     test_ttrans<float, 2, 16, 2, 16>();
 }
-TEST_F(TTRANSTest, case17_int8_32_32_32_32) {
+TEST_F(TTRANSTest, case17_int8_32_32_32_32)
+{
     test_ttrans<uint8_t, 32, 32, 32, 32>();
 }
-TEST_F(TTRANSTest, case18_int8_64_64_22_63) {
+TEST_F(TTRANSTest, case18_int8_64_64_22_63)
+{
     test_ttrans<uint8_t, 64, 64, 22, 63>();
 }

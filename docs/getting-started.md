@@ -13,8 +13,8 @@ This guide covers prerequisites and setup on **macOS / Linux / Windows**, and sh
 - Git
 - Python `>= 3.8` (3.10+ recommended)
 - CMake `>= 3.16`
-- A C++ compiler with C++23 support:
-  - Linux: GCC 14+ or Clang 16+
+- A C++ compiler with C++20 support:
+  - Linux: GCC 13+ or Clang 15+ (bfloat16 support will be enabled only for GCC>=14)
   - macOS: Xcode/AppleClang (or Homebrew LLVM)
   - Windows: Visual Studio 2022 Build Tools (MSVC)
 - Python packages: `numpy` (the CPU test data generators use it)
@@ -168,6 +168,70 @@ Common options:
   export LD_LIBRARY_PATH=/path_to_compiler/lib64:$LD_LIBRARY_PATH
   ```
 
+## End-to-end: PTODSL → PTOAS → CPU simulator (optional)
+
+This repository includes two toolchain submodules:
+
+- `PTODSL/`: Python builder DSL to generate PTO MLIR (`.pto`)
+- `PTOAS/`: PTO compiler / lowering tool that can emit C++ from `.pto`
+
+End-to-end **CPU-only** examples are provided under:
+
+- `examples/ptodsl_ptoas_cpu/add_static/`
+- `examples/ptodsl_ptoas_cpu/add_dynamic_multicore/`
+- `examples/ptodsl_ptoas_cpu/relu_dynamic_multicore/`
+- `examples/ptodsl_ptoas_cpu/matmul_static_singlecore/`
+- `examples/ptodsl_ptoas_cpu/matmul_dynbatch_multicore/`
+
+To run all CPU-only examples:
+
+- `bash examples/ptodsl_ptoas_cpu/run_all.sh`
+
+### 1) Initialize submodules
+
+```bash
+git submodule update --init --recursive
+```
+
+### 2) Make `ptoas` available
+
+- Recommended: build the `PTOAS` submodule and use the local binary:
+
+```bash
+export PTOAS_BIN=$PWD/PTOAS/build/tools/ptoas/ptoas
+```
+
+### 3) Set `PYTHONPATH` for PTODSL
+
+PTODSL uses MLIR python bindings and the PTO dialect python package. Make sure your environment can import:
+
+- `mlir.ir`
+- `mlir.dialects.pto`
+
+Typically this means you built LLVM/MLIR with python bindings and built PTOAS python packages, then:
+
+```bash
+export PYTHONPATH="$LLVM_BUILD_DIR/tools/mlir/python_packages/mlir_core:$PWD/PTOAS/install:$PYTHONPATH"
+```
+
+### 4) Install PTODSL (Python)
+
+```bash
+python3 -m pip install -e PTODSL/ptodsl
+```
+
+### 5) Run the example
+
+```bash
+bash examples/ptodsl_ptoas_cpu/add_static/run.sh
+```
+
+Expected output:
+
+```text
+PASS: CPU-sim vec_add_kernel_2d_dynamic
+```
+
 ## Run NPU Tests
 
 Set environment variables according to [Environment_Variables](./getting-started.md#environment-variables) first;
@@ -220,8 +284,8 @@ Set environment variables according to [Environment_Variables](./getting-started
 
   Note: if you have not installed toolkit,you should download toolkit package first.
   ```bash
-  chmod +x ./script/install_pto.sh
-  ./install_pto.sh <toolkit_install_path> [toolkit_package_path]
+  chmod +x ./scripts/install_pto.sh
+  ./scripts/install_pto.sh <toolkit_install_path> [toolkit_package_path]
   ```
 
 # Environment Setup (Ascend 910B/910C, Linux)
@@ -263,7 +327,7 @@ Before using this project, make sure the following basic dependencies and the NP
 
    The driver and firmware are required to run operators. If you only need to build, you can skip this step.
    For installation guidance, see:
-   [NPU Driver and Firmware Installation Guide](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/850alpha002/softwareinst/instg/instg_0005.html?Mode=VmIns&OS=Ubuntu&Software=cannToolKit).
+   [NPU Driver and Firmware Installation Guide](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/850alpha002/softwareinst/instg/instg_0001.html?Mode=VmIns&OS=Ubuntu&Software=cannToolKit).
 
 ## Install Software Packages
 
@@ -271,8 +335,9 @@ This project supports building from source. Before building, prepare the environ
 
 1. **Install the community edition CANN toolkit**
 
-    Download the appropriate `Ascend-cann-toolkit_${cann_version}_linux-${arch}.run` installer for your environment.
-    This installer is **Linux-only** (typically `aarch64` or `x86_64`). On macOS, use the CPU simulator, or install CANN inside a Linux VM / on a remote Linux host.
+    Download the appropriate `Ascend-cann-toolkit_${cann_version}_linux-${arch}.run` installer for your environment.[download](https://www.hiascend.com/developer/download/community/result?module=cann).
+   
+    The version of CANN we required is 8.5.0 or later.
     
     ```bash
     # Ensure the installer is executable

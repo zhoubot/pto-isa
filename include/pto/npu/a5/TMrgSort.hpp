@@ -47,16 +47,16 @@ PTO_INTERNAL uint64_t InitConfig()
 }
 
 template <typename DstTileData>
-PTO_INTERNAL void MovUb2Ub(
-    __ubuf__ typename DstTileData::DType *dstPtr, __ubuf__ typename DstTileData::DType *tmpPtr, unsigned dstCol)
+PTO_INTERNAL void MovUb2Ub(__ubuf__ typename DstTileData::DType *dstPtr, __ubuf__ typename DstTileData::DType *tmpPtr,
+                           unsigned dstCol)
 {
     unsigned lenBurst = (dstCol * sizeof(typename DstTileData::DType) + BLOCK_BYTE_SIZE - 1) / BLOCK_BYTE_SIZE;
     copy_ubuf_to_ubuf((__ubuf__ void *)dstPtr, (__ubuf__ void *)tmpPtr, 0, 1, lenBurst, 0, 0);
 }
 
 template <bool exhausted>
-PTO_INTERNAL void GetExhaustedData(
-    uint16_t &mrgSortList0, uint16_t &mrgSortList1, uint16_t &mrgSortList2, uint16_t &mrgSortList3)
+PTO_INTERNAL void GetExhaustedData(uint16_t &mrgSortList0, uint16_t &mrgSortList1, uint16_t &mrgSortList2,
+                                   uint16_t &mrgSortList3)
 {
     if constexpr (exhausted) {
         PtoSetWaitFlag<PIPE_V, PIPE_S>();
@@ -74,13 +74,13 @@ PTO_INTERNAL void GetExhaustedData(
 }
 
 template <typename DstTileData, typename TmpTileData, typename Src0TileData, typename Src1TileData,
-    typename Src2TileData, typename Src3TileData, bool exhausted, unsigned listNum>
-__tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst,
-    typename TmpTileData::TileDType __out__ tmp, typename Src0TileData::TileDType __in__ src0,
-    typename Src1TileData::TileDType __in__ src1, typename Src2TileData::TileDType __in__ src2,
-    typename Src3TileData::TileDType __in__ src3, uint16_t &mrgSortList0, uint16_t &mrgSortList1,
-    uint16_t &mrgSortList2, uint16_t &mrgSortList3, unsigned dstCol, unsigned src0Col, unsigned src1Col,
-    unsigned src2Col, unsigned src3Col)
+          typename Src2TileData, typename Src3TileData, bool exhausted, unsigned listNum>
+__tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst, typename TmpTileData::TileDType __out__ tmp,
+                            typename Src0TileData::TileDType __in__ src0, typename Src1TileData::TileDType __in__ src1,
+                            typename Src2TileData::TileDType __in__ src2, typename Src3TileData::TileDType __in__ src3,
+                            uint16_t &mrgSortList0, uint16_t &mrgSortList1, uint16_t &mrgSortList2,
+                            uint16_t &mrgSortList3, unsigned dstCol, unsigned src0Col, unsigned src1Col,
+                            unsigned src2Col, unsigned src3Col)
 {
     __ubuf__ typename DstTileData::DType *tmpPtr = (__ubuf__ typename DstTileData::DType *)__cce_get_tile_ptr(tmp);
     __ubuf__ typename DstTileData::DType *dstPtr = (__ubuf__ typename DstTileData::DType *)__cce_get_tile_ptr(dst);
@@ -88,7 +88,7 @@ __tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst,
     __ubuf__ typename DstTileData::DType *src1Ptr = (__ubuf__ typename DstTileData::DType *)__cce_get_tile_ptr(src1);
 
     uint64_t count = uint64_t(src0Col); // VMS4_SR[15:0], number of finished region proposals in list0
-    count |= (uint64_t(src1Col) << 16);   // VMS4_SR[31:16], number of finished region proposals in list1
+    count |= (uint64_t(src1Col) << 16); // VMS4_SR[31:16], number of finished region proposals in list1
 
     uint64_t config = InitConfig<exhausted>();
 
@@ -105,9 +105,9 @@ __tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst,
 
         count |= (uint64_t(src2Col) << 32); // VMS4_SR[47:32], number of finished region proposals in list2
 
-        __ubuf__
-            typename DstTileData::DType *addrArray[LIST_NUM_3] = {(__ubuf__ typename DstTileData::DType *)(src0Ptr),
-                (__ubuf__ typename DstTileData::DType *)(src1Ptr), (__ubuf__ typename DstTileData::DType *)(src2Ptr)};
+        __ubuf__ typename DstTileData::DType *addrArray[LIST_NUM_3] = {
+            (__ubuf__ typename DstTileData::DType *)(src0Ptr), (__ubuf__ typename DstTileData::DType *)(src1Ptr),
+            (__ubuf__ typename DstTileData::DType *)(src2Ptr)};
 
         config |= (uint64_t(0b0111) << 8); // Xt[11:8]: 4-bit mask signal
 
@@ -136,22 +136,22 @@ __tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst,
 
 template <typename DstTileData, typename SrcTileData>
 __tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst, typename SrcTileData::TileDType __in__ src,
-    uint32_t numStrcutures, uint8_t repeatTimes)
+                            uint32_t numStrcutures, uint8_t repeatTimes)
 {
     __ubuf__ typename SrcTileData::DType *srcPtr = (__ubuf__ typename SrcTileData::DType *)__cce_get_tile_ptr(src);
     __ubuf__ typename DstTileData::DType *dstPtr = (__ubuf__ typename DstTileData::DType *)__cce_get_tile_ptr(dst);
 
-    uint64_t count = (uint64_t(numStrcutures));  // VMS4_SR[15:0], length of block0 in the list
-    count |= (uint64_t(numStrcutures) << 16);    // VMS4_SR[31:16], length of block1 in the list
-    count |= (uint64_t(numStrcutures) << 32);    // VMS4_SR[47:32], length of block2 in the list
-    count |= (uint64_t(numStrcutures) << 48);    // VMS4_SR[63:48], length of block3 in the list
+    uint64_t count = (uint64_t(numStrcutures)); // VMS4_SR[15:0], length of block0 in the list
+    count |= (uint64_t(numStrcutures) << 16);   // VMS4_SR[31:16], length of block1 in the list
+    count |= (uint64_t(numStrcutures) << 32);   // VMS4_SR[47:32], length of block2 in the list
+    count |= (uint64_t(numStrcutures) << 48);   // VMS4_SR[63:48], length of block3 in the list
 
     unsigned offset = numStrcutures * STRUCT_SIZE / sizeof(typename DstTileData::DType);
 
     constexpr const int BLOCK3_INDEX = 2;
     constexpr const int BLOCK4_INDEX = 3;
-    __ubuf__ typename SrcTileData::DType *addrArray[BLOCK_NUM] = {(__ubuf__ typename SrcTileData::DType *)(srcPtr),
-        (__ubuf__ typename SrcTileData::DType *)(srcPtr + offset),
+    __ubuf__ typename SrcTileData::DType *addrArray[BLOCK_NUM] = {
+        (__ubuf__ typename SrcTileData::DType *)(srcPtr), (__ubuf__ typename SrcTileData::DType *)(srcPtr + offset),
         (__ubuf__ typename SrcTileData::DType *)(srcPtr + offset * BLOCK3_INDEX),
         (__ubuf__ typename SrcTileData::DType *)(srcPtr + offset * BLOCK4_INDEX)};
 
@@ -163,7 +163,7 @@ __tf__ AICORE void TMrgsort(typename DstTileData::TileDType __out__ dst, typenam
 }
 
 template <typename DstTileData, typename TmpTileData, typename Src0TileData, typename Src1TileData,
-    typename Src2TileData, typename Src3TileData, unsigned listNum>
+          typename Src2TileData, typename Src3TileData, unsigned listNum>
 PTO_INTERNAL void CheckOverMemory()
 {
     constexpr size_t elemSize = sizeof(typename DstTileData::DType);
@@ -177,12 +177,11 @@ PTO_INTERNAL void CheckOverMemory()
     if constexpr (listNum >= LIST_NUM_4) {
         static_assert(Src3TileData::Cols * elemSize <= UB_SIZE, "ERROR: src3 memory usage exceeds UB limit!");
     }
-    static_assert((tmpSize + Src0TileData::Cols * elemSize) <= UB_SIZE,
-        "ERROR: memory usage exceeds UB limit!");
+    static_assert((tmpSize + Src0TileData::Cols * elemSize) <= UB_SIZE, "ERROR: memory usage exceeds UB limit!");
 }
 
 template <typename DstTileData, typename TmpTileData, typename Src0TileData, typename Src1TileData,
-    typename Src2TileData, typename Src3TileData>
+          typename Src2TileData, typename Src3TileData>
 PTO_INTERNAL void CheckStatic()
 {
     using DstType = typename DstTileData::DType;
@@ -191,25 +190,25 @@ PTO_INTERNAL void CheckStatic()
                       (std::is_same<DstType, typename Src1TileData::DType>::value) &&
                       (std::is_same<DstType, typename Src2TileData::DType>::value) &&
                       (std::is_same<DstType, typename Src3TileData::DType>::value),
-        "TMrgsort: Destination and Source tile data types must be the same.");
+                  "TMrgsort: Destination and Source tile data types must be the same.");
     static_assert((std::is_same<DstType, half>::value) || (std::is_same<DstType, float>::value),
-        "TMrgsort: Unsupported data type! Supported types is half/float");
+                  "TMrgsort: Unsupported data type! Supported types is half/float");
     static_assert((DstTileData::isRowMajor && TmpTileData::isRowMajor && Src0TileData::isRowMajor &&
-                      Src1TileData::isRowMajor && Src2TileData::isRowMajor && Src3TileData::isRowMajor),
-        "TMrgsort: the BLayout of Destination and Source tile must be RowMajor.");
+                   Src1TileData::isRowMajor && Src2TileData::isRowMajor && Src3TileData::isRowMajor),
+                  "TMrgsort: the BLayout of Destination and Source tile must be RowMajor.");
     static_assert((DstTileData::Loc == TileType::Vec) && (TmpTileData::Loc == TileType::Vec) &&
                       (Src0TileData::Loc == TileType::Vec) && (Src1TileData::Loc == TileType::Vec) &&
                       (Src2TileData::Loc == TileType::Vec) && (Src3TileData::Loc == TileType::Vec),
-        "TMrgsort: the TileType of Destination and Source tile must be Vec.");
+                  "TMrgsort: the TileType of Destination and Source tile must be Vec.");
     static_assert((DstTileData::Rows == ONE_ROW) && (TmpTileData::Rows == ONE_ROW) && (Src0TileData::Rows == ONE_ROW) &&
                       (Src1TileData::Rows == ONE_ROW) && (Src2TileData::Rows == ONE_ROW),
-        "TMrgsort: the row of Destination and Source tile must be 1.");
+                  "TMrgsort: the row of Destination and Source tile must be 1.");
 }
 
 template <typename DstTileData, typename TmpTileData, typename Src0TileData, typename Src1TileData,
-    typename Src2TileData, typename Src3TileData, bool exhausted>
+          typename Src2TileData, typename Src3TileData, bool exhausted>
 PTO_INTERNAL void TMRGSORT_IMPL(DstTileData &dst, MrgSortExecutedNumList &executedNumList, TmpTileData &tmp,
-    Src0TileData &src0, Src1TileData &src1, Src2TileData &src2, Src3TileData &src3)
+                                Src0TileData &src0, Src1TileData &src1, Src2TileData &src2, Src3TileData &src3)
 {
     CheckStatic<DstTileData, TmpTileData, Src0TileData, Src1TileData, Src2TileData, Src3TileData>();
     CheckOverMemory<DstTileData, TmpTileData, Src0TileData, Src1TileData, Src2TileData, Src3TileData, LIST_NUM_4>();
@@ -226,9 +225,9 @@ PTO_INTERNAL void TMRGSORT_IMPL(DstTileData &dst, MrgSortExecutedNumList &execut
 }
 
 template <typename DstTileData, typename TmpTileData, typename Src0TileData, typename Src1TileData,
-    typename Src2TileData, bool exhausted>
+          typename Src2TileData, bool exhausted>
 PTO_INTERNAL void TMRGSORT_IMPL(DstTileData &dst, MrgSortExecutedNumList &executedNumList, TmpTileData &tmp,
-    Src0TileData &src0, Src1TileData &src1, Src2TileData &src2)
+                                Src0TileData &src0, Src1TileData &src1, Src2TileData &src2)
 {
     CheckStatic<DstTileData, TmpTileData, Src0TileData, Src1TileData, Src2TileData, Src0TileData>();
     CheckOverMemory<DstTileData, TmpTileData, Src0TileData, Src1TileData, Src2TileData, Src0TileData, LIST_NUM_3>();
@@ -244,8 +243,8 @@ PTO_INTERNAL void TMRGSORT_IMPL(DstTileData &dst, MrgSortExecutedNumList &execut
 }
 
 template <typename DstTileData, typename TmpTileData, typename Src0TileData, typename Src1TileData, bool exhausted>
-PTO_INTERNAL void TMRGSORT_IMPL(
-    DstTileData &dst, MrgSortExecutedNumList &executedNumList, TmpTileData &tmp, Src0TileData &src0, Src1TileData &src1)
+PTO_INTERNAL void TMRGSORT_IMPL(DstTileData &dst, MrgSortExecutedNumList &executedNumList, TmpTileData &tmp,
+                                Src0TileData &src0, Src1TileData &src1)
 {
     CheckStatic<DstTileData, TmpTileData, Src0TileData, Src1TileData, Src0TileData, Src0TileData>();
     CheckOverMemory<DstTileData, TmpTileData, Src0TileData, Src1TileData, Src0TileData, Src0TileData, LIST_NUM_2>();

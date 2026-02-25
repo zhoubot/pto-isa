@@ -1,5 +1,10 @@
 # TRSQRT
 
+
+## Tile Operation Diagram
+
+![TRSQRT tile operation](../figures/isa/TRSQRT.svg)
+
 ## Introduction
 
 Elementwise reciprocal square root.
@@ -19,20 +24,18 @@ Synchronous form:
 ```text
 trsqrt %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
+```text
 %dst = pto.trsqrt %src : !pto.tile<...> -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
+```text
 pto.trsqrt ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -86,3 +89,31 @@ void example_manual() {
   TRSQRT(dst, src);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.trsqrt %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.trsqrt %src : !pto.tile<...> -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = trsqrt %src : !pto.tile<...>
+# IR Level 2 (DPS)
+pto.trsqrt ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+

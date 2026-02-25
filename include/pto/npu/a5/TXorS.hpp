@@ -25,5 +25,5 @@ PTO_INTERNAL void TXORS_IMPL(TileDataDst &dst, TileDataSrc &src0, typename TileD
     TEXPANDS_IMPL(dst, src1);
     TXOR_IMPL(dst, src0, dst, tmp);
 }
-}  // namespace pto
+} // namespace pto
 #endif

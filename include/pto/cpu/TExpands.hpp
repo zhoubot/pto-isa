@@ -15,47 +15,47 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/parallel.hpp"
 #include <cmath>
 
-namespace pto{
+namespace pto {
 
-    template <typename tile_shape>
-    void TExpands_Impl(typename tile_shape::TileDType dst,
-                            typename tile_shape::DType src,
-                            unsigned validRow, unsigned validCol
-                        ) {
-        if constexpr (tile_shape::SFractal == SLayout::NoneBox) {
-            if constexpr (tile_shape::isRowMajor) {
-                cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
-                    const std::size_t base = r * tile_shape::Cols;
-                    PTO_CPU_VECTORIZE_LOOP
-                    for (std::size_t c = 0; c < validCol; ++c) {
-                        dst[base + c] = src;
-                    }
-                });
-            } else {
-                cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
-                    const std::size_t base = c * tile_shape::Rows;
-                    PTO_CPU_VECTORIZE_LOOP
-                    for (std::size_t r = 0; r < validRow; ++r) {
-                        dst[base + r] = src;
-                    }
-                });
-            }
-        } else {
+template <typename tile_shape>
+void TExpands_Impl(typename tile_shape::TileDType dst, typename tile_shape::DType src, unsigned validRow,
+                   unsigned validCol)
+{
+    if constexpr (tile_shape::SFractal == SLayout::NoneBox) {
+        if constexpr (tile_shape::isRowMajor) {
             cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+                const std::size_t base = r * tile_shape::Cols;
+                PTO_CPU_VECTORIZE_LOOP
                 for (std::size_t c = 0; c < validCol; ++c) {
-                    const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
-                    dst[idx] = src;
+                    dst[base + c] = src;
+                }
+            });
+        } else {
+            cpu::parallel_for_rows(validCol, validRow, [&](std::size_t c) {
+                const std::size_t base = c * tile_shape::Rows;
+                PTO_CPU_VECTORIZE_LOOP
+                for (std::size_t r = 0; r < validRow; ++r) {
+                    dst[base + r] = src;
                 }
             });
         }
-    }
-
-    template <typename tile_shape>
-    PTO_INTERNAL void TEXPANDS_IMPL(tile_shape &dst, typename tile_shape::DType &src) {
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TExpands_Impl<tile_shape>(dst.data(), src, row, col);
+    } else {
+        cpu::parallel_for_rows(validRow, validCol, [&](std::size_t r) {
+            for (std::size_t c = 0; c < validCol; ++c) {
+                const std::size_t idx = GetTileElementOffset<tile_shape>(r, c);
+                dst[idx] = src;
+            }
+        });
     }
 }
+
+template <typename tile_shape>
+PTO_INTERNAL void TEXPANDS_IMPL(tile_shape &dst, typename tile_shape::DType &src)
+{
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TExpands_Impl<tile_shape>(dst.data(), src, row, col);
+}
+} // namespace pto
 
 #endif

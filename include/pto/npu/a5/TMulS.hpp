@@ -19,40 +19,38 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 
-template <typename T> struct MulSOp {
+template <typename T>
+struct MulSOp {
     PTO_INTERNAL static void BinSInstr(RegTensor<T> &reg_dst, RegTensor<T> &reg_src0, T src1, MaskReg &preg)
     {
         vmuls(reg_dst, reg_src0, src1, preg, MODE_ZEROING);
     }
 };
 
-template <typename TileDataDst, typename TileDataSrc, unsigned elementsPerRepeat, unsigned blockSizeElem, unsigned dstRowStride, unsigned srcRowStride>
-__tf__ PTO_INTERNAL OP_NAME(TMULS) OP_TYPE(element_wise)
-void TMulS(typename TileDataDst::TileDType __out__ dst, 
-           typename TileDataSrc::TileDType __in__ src0, 
-           typename TileDataSrc::DType src1,
-           unsigned kValidRows,
-           unsigned kValidCols,
-           VFImplKind version = VFImplKind::VFIMPL_DEFAULT) {
+template <typename TileDataDst, typename TileDataSrc, unsigned elementsPerRepeat, unsigned blockSizeElem,
+          unsigned dstRowStride, unsigned srcRowStride>
+__tf__ PTO_INTERNAL OP_NAME(TMULS)
+    OP_TYPE(element_wise) void TMulS(typename TileDataDst::TileDType __out__ dst,
+                                     typename TileDataSrc::TileDType __in__ src0, typename TileDataSrc::DType src1,
+                                     unsigned kValidRows, unsigned kValidCols,
+                                     VFImplKind version = VFImplKind::VFIMPL_DEFAULT)
+{
     using T = typename TileDataDst::DType;
     __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
     __ubuf__ T *src0Ptr = (__ubuf__ T *)__cce_get_tile_ptr(src0);
     BinaryInstr<MulSOp<T>, TileDataDst, TileDataSrc, T, elementsPerRepeat, blockSizeElem, dstRowStride, srcRowStride>(
-                dstPtr, src0Ptr, src1, kValidRows, kValidCols, version);
+        dstPtr, src0Ptr, src1, kValidRows, kValidCols, version);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
 PTO_INTERNAL void TMULS_IMPL(TileDataDst &dst, TileDataSrc &src0, typename TileDataSrc::DType src1)
 {
     using T = typename TileDataDst::DType;
-    static_assert(std::is_same<T, int32_t>::value ||
-                      std::is_same<T, int>::value ||
-                      std::is_same<T, int16_t>::value ||
-                      std::is_same<T, half>::value ||
-                      std::is_same<T, float16_t>::value ||
-                      std::is_same<T, float>::value ||
-                      std::is_same<T, float32_t>::value,
-                      "TMULS: Invalid data type");
+    static_assert(std::is_same<T, int32_t>::value || std::is_same<T, int>::value || std::is_same<T, int16_t>::value ||
+                      std::is_same<T, half>::value || std::is_same<T, float16_t>::value ||
+                      std::is_same<T, float>::value || std::is_same<T, float32_t>::value ||
+                      std::is_same<T, bfloat16_t>::value,
+                  "TMULS: Invalid data type");
     static_assert(TileDataDst::Loc == TileType::Vec, "TileType of dst tiles must be TileType::Vec.");
     static_assert(TileDataDst::ValidCol <= TileDataDst::Cols,
                   "Number of valid columns must not be greater than number of tile columns.");
@@ -73,8 +71,8 @@ PTO_INTERNAL void TMULS_IMPL(TileDataDst &dst, TileDataSrc &src0, typename TileD
 
     PTO_ASSERT(src0.GetValidCol() == dst.GetValidCol(), "Number of columns of src and dst must be the same.");
 
-    TMulS<TileDataDst, TileDataSrc, elementsPerRepeat, blockSizeElem, dstRowStride, srcRowStride>
-        (dst.data(), src0.data(), src1, validRow, validCol);
+    TMulS<TileDataDst, TileDataSrc, elementsPerRepeat, blockSizeElem, dstRowStride, srcRowStride>(
+        dst.data(), src0.data(), src1, validRow, validCol);
 }
-}  // namespace pto
+} // namespace pto
 #endif

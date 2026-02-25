@@ -1,5 +1,10 @@
 # TEXTRACT
 
+
+## Tile Operation Diagram
+
+![TEXTRACT tile operation](../figures/isa/TEXTRACT.svg)
+
 ## Introduction
 
 Extract a sub-tile from a source tile.
@@ -21,20 +26,18 @@ Synchronous form:
 ```text
 textract %dst, %src[%r0, %r1] : (!pto.tile<...>, !pto.tile<...>)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
-%dst = pto.textract %src, %idxrow, %idxcol : (!pto.tile<...>, <int32>) -> !pto.tile<...>
+```text
+%dst = pto.textract %src, %idxrow, %idxcol : (!pto.tile<...>, dtype, dtype) -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-pto.textract ins(%src, %idxrow, %idxcol : !pto.tile_buf<...>, dtype) outs(%dst : !pto.tile_buf<...>)
+```text
+pto.textract ins(%src, %idxrow, %idxcol : !pto.tile_buf<...>, dtype, dtype) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -94,3 +97,31 @@ void example_manual() {
   TEXTRACT(dst, src, /*indexRow=*/0, /*indexCol=*/0);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.textract %src, %idxrow, %idxcol : (!pto.tile<...>, dtype, dtype) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.textract %src, %idxrow, %idxcol : (!pto.tile<...>, dtype, dtype) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = textract %src[%r0, %r1] : !pto.tile<...> -> !pto.tile<...>
+# IR Level 2 (DPS)
+pto.textract ins(%src, %idxrow, %idxcol : !pto.tile_buf<...>, dtype, dtype) outs(%dst : !pto.tile_buf<...>)
+```
+

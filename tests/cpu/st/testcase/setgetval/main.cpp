@@ -16,18 +16,17 @@ using namespace std;
 using namespace PtoTestCommon;
 
 class SETGETVALTest : public testing::Test {
-public: 
+public:
 protected:
     void SetUp() override
-    { 
-    }
+    {}
 
     void TearDown() override
-    {
-    }
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -37,12 +36,12 @@ std::string GetGoldenDir() {
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchSetGetVal(T *src0, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void test_setgetval()
 {
     aclInit(nullptr);
     aclrtSetDevice(0);
-    
+
     aclrtStream stream;
     aclrtCreateStream(&stream);
 
@@ -74,6 +73,7 @@ void test_setgetval()
     EXPECT_TRUE(res);
 }
 
-TEST_F(SETGETVALTest, case1) {
+TEST_F(SETGETVALTest, case1)
+{
     test_setgetval<float, 32, 32, 32, 32>();
 }

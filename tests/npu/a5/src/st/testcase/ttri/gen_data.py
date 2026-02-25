@@ -42,7 +42,7 @@ class TTRIParams:
 def generate_case_name(param):
     dtype_str = {
         np.float32: 'float',
-        np.float16: 'half',
+        np.float16: 'fp16',
         np.int16:   'int16',
         np.int32:   'int32',
         np.uint16:  'uint16',
@@ -65,6 +65,8 @@ if __name__ == "__main__":
         os.makedirs(testcases_dir)
 
     case_params_list = [
+        TTRIParams(np.float16, 20, 32, 0, 0),
+        TTRIParams(np.uint8, 20, 32, 0, 0),
         TTRIParams(np.float32,  32,   91, 0, 0),
         TTRIParams(np.float32, 128,  128, 0, 0),
         TTRIParams(np.float32,  32,   91, 0, 3),

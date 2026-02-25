@@ -15,8 +15,9 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace pto;
 
-template<typename T, int dstTileRow, int dstTileCol, int row, int validRow, int col, int validCol>
-PTO_INTERNAL void runTLRELU(__gm__ T *out, __gm__  T *src, T scalar) {
+template <typename T, int dstTileRow, int dstTileCol, int row, int validRow, int col, int validCol>
+PTO_INTERNAL void runTLRELU(__gm__ T *out, __gm__ T *src, T scalar)
+{
     using DynDim2Shape = Shape<1, 1, 1, -1, -1>;
     using DynDim2Stride = pto::Stride<1, 1, -1, -1, 1>;
     using GlobalData = GlobalTensor<T, DynDim2Shape, DynDim2Stride>;
@@ -49,7 +50,7 @@ extern "C" __global__ AICORE void launchTLRELUCase1(__gm__ float *out, __gm__ fl
 }
 extern "C" __global__ AICORE void launchTLRELUCase2(__gm__ aclFloat16 *out, __gm__ aclFloat16 *src, float scalar)
 {
-    runTLRELU<half, 63, 64, 63, 63, 64, 64>((__gm__ half*)out, (__gm__ half*)src, (half)scalar);
+    runTLRELU<half, 63, 64, 63, 63, 64, 64>((__gm__ half *)out, (__gm__ half *)src, (half)scalar);
 }
 extern "C" __global__ AICORE void launchTLRELUCase3(__gm__ float *out, __gm__ float *src, float scalar)
 {
@@ -57,7 +58,7 @@ extern "C" __global__ AICORE void launchTLRELUCase3(__gm__ float *out, __gm__ fl
 }
 extern "C" __global__ AICORE void launchTLRELUCase4(__gm__ aclFloat16 *out, __gm__ aclFloat16 *src, float scalar)
 {
-    runTLRELU<half, 15, 192, 15, 15, 192, 192>((__gm__ half*)out, (__gm__ half*)src, (half)scalar);
+    runTLRELU<half, 15, 192, 15, 15, 192, 192>((__gm__ half *)out, (__gm__ half *)src, (half)scalar);
 }
 extern "C" __global__ AICORE void launchTLRELUCase5(__gm__ float *out, __gm__ float *src, float scalar)
 {
@@ -73,7 +74,7 @@ extern "C" __global__ AICORE void launchTLRELUCase7(__gm__ float *out, __gm__ fl
 }
 extern "C" __global__ AICORE void launchTLRELUCase8(__gm__ aclFloat16 *out, __gm__ aclFloat16 *src, float scalar)
 {
-    runTLRELU<half, 63, 128, 63, 63, 64, 64>((__gm__ half*)out, (__gm__ half*)src, (half)scalar);
+    runTLRELU<half, 63, 128, 63, 63, 64, 64>((__gm__ half *)out, (__gm__ half *)src, (half)scalar);
 }
 extern "C" __global__ AICORE void launchTLRELUCase9(__gm__ float *out, __gm__ float *src, float scalar)
 {
@@ -81,7 +82,7 @@ extern "C" __global__ AICORE void launchTLRELUCase9(__gm__ float *out, __gm__ fl
 }
 extern "C" __global__ AICORE void launchTLRELUCase10(__gm__ aclFloat16 *out, __gm__ aclFloat16 *src, float scalar)
 {
-    runTLRELU<half, 15, 192, 15, 15, 192, 192>((__gm__ half*)out, (__gm__ half*)src, (half)scalar);
+    runTLRELU<half, 15, 192, 15, 15, 192, 192>((__gm__ half *)out, (__gm__ half *)src, (half)scalar);
 }
 extern "C" __global__ AICORE void launchTLRELUCase11(__gm__ float *out, __gm__ float *src, float scalar)
 {
@@ -93,8 +94,9 @@ extern "C" __global__ AICORE void launchTLRELUCase12(__gm__ float *out, __gm__ f
 }
 
 template <uint32_t caseId>
-void launchTLRELUTestCase(void *out, void *src, float scalar, aclrtStream stream) {
-    switch(caseId) {
+void launchTLRELUTestCase(void *out, void *src, float scalar, aclrtStream stream)
+{
+    switch (caseId) {
         case 1: {
             launchTLRELUCase1<<<1, nullptr, stream>>>((float *)out, (float *)src, scalar);
             break;
@@ -147,7 +149,6 @@ void launchTLRELUTestCase(void *out, void *src, float scalar, aclrtStream stream
         }
     }
 }
-
 
 template void launchTLRELUTestCase<1>(void *out, void *src, float scalar, aclrtStream stream);
 template void launchTLRELUTestCase<2>(void *out, void *src, float scalar, aclrtStream stream);

@@ -76,8 +76,8 @@ struct VerifyStats {
     bool has_nan_or_inf = false;
 };
 
-VerifyStats verify_allclose(const std::vector<float> &actual, const std::vector<float> &ref, float abs_tol, float rel_tol,
-    float denom_eps)
+VerifyStats verify_allclose(const std::vector<float> &actual, const std::vector<float> &ref, float abs_tol,
+                            float rel_tol, float denom_eps)
 {
     VerifyStats stats;
     if (actual.size() != ref.size() || actual.empty()) {
@@ -125,7 +125,7 @@ VerifyStats verify_allclose(const std::vector<float> &actual, const std::vector<
 }
 
 void flash_attention_reference(const std::vector<float> &q, const std::vector<float> &k, const std::vector<float> &v,
-    std::vector<float> &out, int batch, int heads, int seq_len, int head_dim, bool causal)
+                               std::vector<float> &out, int batch, int heads, int seq_len, int head_dim, bool causal)
 {
     const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
 
@@ -168,7 +168,7 @@ void flash_attention_reference(const std::vector<float> &q, const std::vector<fl
 }
 
 void flash_attention_pto(const std::vector<float> &q, const std::vector<float> &k, const std::vector<float> &v,
-    std::vector<float> &out)
+                         std::vector<float> &out)
 {
     constexpr int kB = kBatch;
     constexpr int kH = kHeads;
@@ -293,9 +293,9 @@ int main(int argc, char **argv)
 
     const double elapsed_s =
         std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0).count() / static_cast<double>(kIters);
-    const double matmul_flops =
-        4.0 * static_cast<double>(kBatch) * static_cast<double>(kHeads) * static_cast<double>(kSeqLen) *
-        static_cast<double>(kSeqLen) * static_cast<double>(kHeadDim);
+    const double matmul_flops = 4.0 * static_cast<double>(kBatch) * static_cast<double>(kHeads) *
+                                static_cast<double>(kSeqLen) * static_cast<double>(kSeqLen) *
+                                static_cast<double>(kHeadDim);
     const double gflops = (elapsed_s > 0.0) ? (matmul_flops / elapsed_s / 1e9) : 0.0;
 
     const float diff = max_abs_diff(out_fused, out_ref);
@@ -323,7 +323,8 @@ int main(int argc, char **argv)
         checksum += out_fused[i];
     }
     std::cout << "checksum(out) = " << checksum << "\n";
-    std::cout << "perf: avg_ms=" << (elapsed_s * 1e3) << " approx_matmul_flops=" << matmul_flops << " gflops=" << gflops;
+    std::cout << "perf: avg_ms=" << (elapsed_s * 1e3) << " approx_matmul_flops=" << matmul_flops
+              << " gflops=" << gflops;
     if (const char *peak_env = std::getenv("PTO_CPU_PEAK_GFLOPS")) {
         char *end = nullptr;
         const double peak = std::strtod(peak_env, &end);

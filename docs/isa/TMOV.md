@@ -1,5 +1,10 @@
 # TMOV
 
+
+## Tile Operation Diagram
+
+![TMOV tile operation](../figures/isa/TMOV.svg)
+
 ## Introduction
 
 Move/copy between tiles, optionally applying implementation-defined conversion modes selected by template parameters and overloads.
@@ -32,20 +37,18 @@ tmov.m2s %scale, %mat : (!pto.tile<...>, !pto.tile<...>)
 tmov.a2v %vec, %acc : (!pto.tile<...>, !pto.tile<...>)
 tmov.v2v %v1, %v0 : (!pto.tile<...>, !pto.tile<...>)
 ```
-## IR Syntax
 
-### IR-level1 (SSA)
+### IR Level 1 (SSA)
 
-```mlir
+```text
 %dst = pto.tmov.s2d %src  : !pto.tile<...> -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-pto.tmov.s2d ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```text
+pto.tmov ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp` and `include/pto/common/constants.hpp`:
@@ -130,3 +133,31 @@ void example_manual() {
   TMOV(left, mat);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.tmov.s2d %src  : !pto.tile<...> -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.tmov.s2d %src  : !pto.tile<...> -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = pto.tmov.s2d %src  : !pto.tile<...> -> !pto.tile<...>
+# IR Level 2 (DPS)
+pto.tmov ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+

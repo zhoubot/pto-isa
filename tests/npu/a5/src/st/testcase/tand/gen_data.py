@@ -66,6 +66,8 @@ if __name__ == "__main__":
         TAndParams("TANDTest.case7", np.int8, 32, 32, 32, 32),
         TAndParams("TANDTest.case8", np.int16, 16, 16, 16, 16),
         TAndParams("TANDTest.case9", np.int32, 8, 8, 8, 8),
+        TAndParams("TANDTest.case10", np.int16, 16, 16, 16, 16), # half
+        TAndParams("TANDTest.case11", np.int32, 8, 8, 8, 8), # float
     ]
 
     for param in case_params_list:

@@ -1,0 +1,1464 @@
+{
+  "instructions": [
+    {
+      "instruction": "TSYNC",
+      "category": "Synchronization",
+      "summary_en": "Synchronize PTO execution (wait on events or insert a per-op pipeline barrier).",
+      "summary_zh": "同步 PTO 执行（等待事件或插入每操作流水线屏障）。",
+      "diagram_template": "sync",
+      "operands": [
+        "producer",
+        "consumer"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TASSIGN",
+      "category": "Manual / Resource Binding",
+      "summary_en": "Bind a Tile object to an implementation-defined on-chip address (manual placement).",
+      "summary_zh": "将 Tile 对象绑定到实现定义的片上地址（手动放置）。",
+      "diagram_template": "config",
+      "operands": [
+        "config",
+        "state"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSETHF32MODE",
+      "category": "Manual / Resource Binding",
+      "summary_en": "Configure HF32 transform mode (implementation-defined).",
+      "summary_zh": "设置 HF32 变换模式（实现定义）。",
+      "diagram_template": "config",
+      "operands": [
+        "config",
+        "state"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSETTF32MODE",
+      "category": "Manual / Resource Binding",
+      "summary_en": "Configure TF32 transform mode (implementation-defined).",
+      "summary_zh": "设置 TF32 变换模式（实现定义）。",
+      "diagram_template": "config",
+      "operands": [
+        "config",
+        "state"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSETFMATRIX",
+      "category": "Manual / Resource Binding",
+      "summary_en": "Set FMATRIX register(s) for IMG2COL-like ops.",
+      "summary_zh": "为类 IMG2COL 操作设置 FMATRIX 寄存器。",
+      "diagram_template": "config",
+      "operands": [
+        "config",
+        "state"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSET_IMG2COL_RPT",
+      "category": "Manual / Resource Binding",
+      "summary_en": "Set IMG2COL repeat metadata from an IMG2COL configuration tile.",
+      "summary_zh": "从 IMG2COL 配置 Tile 设置 IMG2COL 重复次数元数据。",
+      "diagram_template": "config",
+      "operands": [
+        "config",
+        "state"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSET_IMG2COL_PADDING",
+      "category": "Manual / Resource Binding",
+      "summary_en": "Set IMG2COL padding metadata from an IMG2COL configuration tile.",
+      "summary_zh": "从 IMG2COL 配置 Tile 设置 IMG2COL 填充元数据。",
+      "diagram_template": "config",
+      "operands": [
+        "config",
+        "state"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TADD",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise add of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素加法。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TABS",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise absolute value of a tile.",
+      "summary_zh": "Tile 的逐元素绝对值。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TAND",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise bitwise AND of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素按位与。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TOR",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise bitwise OR of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素按位或。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSUB",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise subtract of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素减法。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMUL",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise multiply of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素乘法。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMIN",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise minimum of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素最小值。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMAX",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise maximum of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素最大值。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCMP",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Compare two tiles and write a packed predicate mask.",
+      "summary_zh": "比较两个 Tile 并写入一个打包的谓词掩码。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TDIV",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise division of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素除法。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSHL",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise shift-left of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素左移。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSHR",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise shift-right of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素右移。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TXOR",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise bitwise XOR of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素按位异或。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TLOG",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise natural logarithm of a tile.",
+      "summary_zh": "Tile 的逐元素自然对数。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TRECIP",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise reciprocal of a tile.",
+      "summary_zh": "Tile 的逐元素倒数。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPRELU",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise PReLU (parametric ReLU) with a per-element slope tile.",
+      "summary_zh": "带逐元素斜率 Tile 的逐元素参数化 ReLU (PReLU)。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TADDC",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise ternary add: `src0 + src1 + src2`.",
+      "summary_zh": "三元逐元素加法：`src0 + src1 + src2`。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSUBC",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise ternary op: `src0 - src1 + src2`.",
+      "summary_zh": "三元逐元素运算：`src0 - src1 + src2`。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCVT",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise type conversion with a specified rounding mode.",
+      "summary_zh": "带指定舍入模式的逐元素类型转换。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSEL",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Select between two tiles using a mask tile (per-element selection).",
+      "summary_zh": "使用掩码 Tile 在两个 Tile 之间进行选择（逐元素选择）。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TRSQRT",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise reciprocal square root.",
+      "summary_zh": "逐元素倒数平方根。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSQRT",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise square root.",
+      "summary_zh": "逐元素平方根。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TEXP",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise exponential.",
+      "summary_zh": "逐元素指数运算。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TNOT",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise bitwise NOT of a tile.",
+      "summary_zh": "Tile 的逐元素按位取反。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TRELU",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise ReLU of a tile.",
+      "summary_zh": "Tile 的逐元素 ReLU。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TNEG",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise negation of a tile.",
+      "summary_zh": "Tile 的逐元素取负。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TREM",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise remainder of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素余数，余数符号与除数相同。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TFMOD",
+      "category": "Elementwise (Tile-Tile)",
+      "summary_en": "Elementwise fmod of two tiles.",
+      "summary_zh": "两个 Tile 的逐元素余数，余数符号与被除数相同。",
+      "diagram_template": "elementwise",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TEXPANDS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Broadcast a scalar into a destination tile.",
+      "summary_zh": "将标量广播到目标 Tile 中。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCMPS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Compare a tile against a scalar and write per-element comparison results.",
+      "summary_zh": "将 Tile 与标量比较并写入逐元素比较结果。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSELS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Select one of two source tiles using a scalar `selectMode` (global select).",
+      "summary_zh": "使用标量 `selectMode` 在两个源 Tile 中选择一个（全局选择）。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMINS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise minimum of a tile and a scalar.",
+      "summary_zh": "Tile 与标量的逐元素最小值。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TADDS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise add a scalar to a tile.",
+      "summary_zh": "Tile 与标量的逐元素加法。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSUBS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise subtract a scalar from a tile.",
+      "summary_zh": "从 Tile 中逐元素减去一个标量。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TDIVS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise division with a scalar (tile/scalar or scalar/tile).",
+      "summary_zh": "与标量的逐元素除法（Tile/标量 或 标量/Tile）。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMULS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise multiply a tile by a scalar.",
+      "summary_zh": "Tile 与标量的逐元素乘法。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TFMODS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise remainder with a scalar: `fmod(src, scalar)`.",
+      "summary_zh": "与标量的逐元素余数：`fmod(src, scalar)`。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TREMS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise remainder with a scalar: `remainder(src, scalar)`.",
+      "summary_zh": "与标量的逐元素余数：`remainder(src, scalar)`。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMAXS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise max of a tile and a scalar: `max(src, scalar)`.",
+      "summary_zh": "Tile 与标量的逐元素最大值：`max(src, scalar)`。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TANDS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise bitwise AND of a tile and a scalar.",
+      "summary_zh": "Tile 与标量的逐元素按位与。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TORS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise bitwise OR of a tile and a scalar.",
+      "summary_zh": "Tile 与标量的逐元素按位或。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSHLS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise shift-left a tile by a scalar.",
+      "summary_zh": "Tile 按标量逐元素左移。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSHRS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise shift-right a tile by a scalar.",
+      "summary_zh": "Tile 按标量逐元素右移。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TXORS",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise bitwise XOR of a tile and a scalar.",
+      "summary_zh": "Tile 与标量的逐元素按位异或。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TLRELU",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Leaky ReLU with a scalar slope.",
+      "summary_zh": "带标量斜率的 Leaky ReLU。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TADDSC",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise fused add with scalar and a second tile: `src0 + scalar + src1`.",
+      "summary_zh": "与标量和第二个 Tile 的融合逐元素加法：`src0 + scalar + src1`。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSUBSC",
+      "category": "Tile-Scalar / Tile-Immediate",
+      "summary_en": "Elementwise fused op: `src0 - scalar + src1`.",
+      "summary_zh": "融合逐元素运算：`src0 - scalar + src1`。",
+      "diagram_template": "scalar",
+      "operands": [
+        "dst",
+        "src",
+        "scalar"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWSUM",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each row by summing across columns.",
+      "summary_zh": "通过对列求和来归约每一行。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLSUM",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each column by summing across rows.",
+      "summary_zh": "通过对行求和来归约每一列。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLPROD",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each column by multiplying across rows.",
+      "summary_zh": "通过跨行乘积来归约每一列。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLMAX",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each column by taking the maximum across rows.",
+      "summary_zh": "通过取行间最大值来归约每一列。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWMAX",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each row by taking the maximum across columns.",
+      "summary_zh": "通过取列间最大值来归约每一行。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWMIN",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each row by taking the minimum across columns.",
+      "summary_zh": "通过取列间最小值来归约每一行。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPAND",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Broadcast the first element of each source row across the destination row.",
+      "summary_zh": "将每个源行的第一个元素广播到目标行中。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDDIV",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise broadcast divide: divide each row of `src0` by a per-row scalar vector `src1`.",
+      "summary_zh": "行广播除法：将 `src0` 的每一行除以一个每行标量向量 `src1`。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDMUL",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise broadcast multiply: multiply each row of `src0` by a per-row scalar vector `src1`.",
+      "summary_zh": "行广播乘法：将 `src0` 的每一行乘以一个每行标量向量 `src1`。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDSUB",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise broadcast subtract: subtract a per-row scalar vector `src1` from each row of `src0`.",
+      "summary_zh": "行广播减法：从 `src0` 的每一行中减去一个每行标量向量 `src1`。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDADD",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise broadcast add: add a per-row scalar vector.",
+      "summary_zh": "行广播加法：加上一个每行标量向量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDMAX",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise broadcast max with a per-row scalar vector.",
+      "summary_zh": "行广播最大值：与每行标量向量取最大值。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDMIN",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise broadcast min with a per-row scalar vector.",
+      "summary_zh": "行广播最小值：与每行标量向量取最小值。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TROWEXPANDEXPDIF",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Row-wise exp-diff: compute exp(src0 - src1) with per-row scalars.",
+      "summary_zh": "行指数差运算：计算 exp(src0 - src1)，其中 src1 为每行标量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLMIN",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Reduce each column by taking the minimum across rows.",
+      "summary_zh": "通过取行间最小值来归约每一列。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPAND",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Broadcast the first element of each source column across the destination column.",
+      "summary_zh": "将每个源列的第一个元素广播到目标列中。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDDIV",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise broadcast divide: divide each column by a per-column scalar vector.",
+      "summary_zh": "列广播除法：将每一列除以一个每列标量向量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDMUL",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise broadcast multiply: multiply each column by a per-column scalar vector.",
+      "summary_zh": "列广播乘法：将每一列乘以一个每列标量向量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDADD",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise broadcast add with per-column scalar vector.",
+      "summary_zh": "列广播加法：对每一列加上每列标量向量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDMAX",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise broadcast max with per-column scalar vector.",
+      "summary_zh": "列广播最大值：与每列标量向量取最大值。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDMIN",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise broadcast min with per-column scalar vector.",
+      "summary_zh": "列广播最小值：与每列标量向量取最小值。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDSUB",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise broadcast subtract: subtract a per-column scalar vector from each column.",
+      "summary_zh": "列广播减法：从每一列中减去一个每列标量向量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCOLEXPANDEXPDIF",
+      "category": "Axis Reduce / Expand",
+      "summary_en": "Column-wise exp-diff: compute exp(src0 - src1) with per-column scalars.",
+      "summary_zh": "列指数差运算：计算 exp(src0 - src1)，其中 src1 为每列标量。",
+      "diagram_template": "reduce_expand",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TLOAD",
+      "category": "Memory (GM <-> Tile)",
+      "summary_en": "Load data from a GlobalTensor (GM) into a Tile.",
+      "summary_zh": "从 GlobalTensor (GM) 加载数据到 Tile。",
+      "diagram_template": "memory",
+      "operands": [
+        "tile",
+        "global"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPREFETCH",
+      "category": "Memory (GM <-> Tile)",
+      "summary_en": "Prefetch data from global memory into a tile-local cache/buffer (hint).",
+      "summary_zh": "将数据从全局内存预取到 Tile 本地缓存/缓冲区（提示）。",
+      "diagram_template": "memory",
+      "operands": [
+        "tile",
+        "global"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSTORE",
+      "category": "Memory (GM <-> Tile)",
+      "summary_en": "Store data from a Tile into a GlobalTensor (GM), optionally using atomic write or quantization parameters.",
+      "summary_zh": "将 Tile 中的数据存储到 GlobalTensor (GM)，可选使用原子写入或量化参数。",
+      "diagram_template": "memory",
+      "operands": [
+        "tile",
+        "global"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSTORE_FP",
+      "category": "Memory (GM <-> Tile)",
+      "summary_en": "Store an accumulator tile into global memory using a scaling (`fp`) tile for vector quantization parameters.",
+      "summary_zh": "使用缩放 (`fp`) Tile 作为向量量化参数，将累加器 Tile 存储到全局内存。",
+      "diagram_template": "memory",
+      "operands": [
+        "tile",
+        "global"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "MGATHER",
+      "category": "Memory (GM <-> Tile)",
+      "summary_en": "Gather-load elements from global memory into a tile using per-element indices.",
+      "summary_zh": "使用逐元素索引从全局内存收集加载元素到 Tile 中。",
+      "diagram_template": "memory",
+      "operands": [
+        "tile",
+        "global"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "MSCATTER",
+      "category": "Memory (GM <-> Tile)",
+      "summary_en": "Scatter-store elements from a tile into global memory using per-element indices.",
+      "summary_zh": "使用逐元素索引将 Tile 中的元素散播存储到全局内存。",
+      "diagram_template": "memory",
+      "operands": [
+        "tile",
+        "global"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TGEMV_MX",
+      "category": "Matrix Multiply",
+      "summary_en": "GEMV with additional scaling tiles for mixed-precision / quantized matrix-vector compute.",
+      "summary_zh": "带缩放 Tile 的 GEMV 变体，支持混合精度/量化矩阵向量计算。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMATMUL_MX",
+      "category": "Matrix Multiply",
+      "summary_en": "Matrix multiply (GEMM) with additional scaling tiles for mixed-precision / quantized matmul on supported targets.",
+      "summary_zh": "带额外缩放 Tile 的矩阵乘法 (GEMM)，用于支持目标上的混合精度/量化矩阵乘法。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMATMUL",
+      "category": "Matrix Multiply",
+      "summary_en": "Matrix multiply (GEMM) producing an accumulator/output tile.",
+      "summary_zh": "矩阵乘法 (GEMM)，生成累加器/输出 Tile。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMATMUL_ACC",
+      "category": "Matrix Multiply",
+      "summary_en": "Matrix multiply with accumulator input (fused accumulate).",
+      "summary_zh": "带累加器输入的矩阵乘法（融合累加）。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMATMUL_BIAS",
+      "category": "Matrix Multiply",
+      "summary_en": "Matrix multiply with bias add.",
+      "summary_zh": "带偏置加法的矩阵乘法。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TGEMV",
+      "category": "Matrix Multiply",
+      "summary_en": "General Matrix-Vector multiplication producing an accumulator/output tile.",
+      "summary_zh": "通用矩阵-向量乘法，生成累加器/输出 Tile。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TGEMV_ACC",
+      "category": "Matrix Multiply",
+      "summary_en": "GEMV with explicit accumulator input/output tiles.",
+      "summary_zh": "带显式累加器输入/输出 Tile 的 GEMV。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TGEMV_BIAS",
+      "category": "Matrix Multiply",
+      "summary_en": "GEMV with bias add.",
+      "summary_zh": "带偏置加法的 GEMV。",
+      "diagram_template": "matmul",
+      "operands": [
+        "dst",
+        "lhs",
+        "rhs"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TEXTRACT",
+      "category": "Data Movement / Layout",
+      "summary_en": "Extract a sub-tile from a source tile.",
+      "summary_zh": "从源 Tile 中提取子 Tile。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TEXTRACT_FP",
+      "category": "Data Movement / Layout",
+      "summary_en": "Extract with fp/scaling tile (vector-quantization parameters).",
+      "summary_zh": "带 fp/缩放 Tile 的提取（向量量化参数）。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TIMG2COL",
+      "category": "Data Movement / Layout",
+      "summary_en": "Image-to-column transform for convolution-like workloads.",
+      "summary_zh": "用于类卷积工作负载的图像到列变换。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TINSERT",
+      "category": "Data Movement / Layout",
+      "summary_en": "Insert a sub-tile into a destination tile at an (indexRow, indexCol) offset.",
+      "summary_zh": "在 (indexRow, indexCol) 偏移处将子 Tile 插入到目标 Tile 中。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TINSERT_FP",
+      "category": "Data Movement / Layout",
+      "summary_en": "Insert with fp/scaling tile (vector-quantization parameters).",
+      "summary_zh": "带 fp/缩放 Tile 的插入（向量量化参数）。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TFILLPAD",
+      "category": "Data Movement / Layout",
+      "summary_en": "Copy+pad a tile outside the valid region with a compile-time pad value.",
+      "summary_zh": "复制 Tile 并在有效区域外使用编译时填充值进行填充。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TFILLPAD_INPLACE",
+      "category": "Data Movement / Layout",
+      "summary_en": "In-place fill/pad variant.",
+      "summary_zh": "原地填充/填充变体。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TFILLPAD_EXPAND",
+      "category": "Data Movement / Layout",
+      "summary_en": "Fill/pad while allowing dst to be larger than src.",
+      "summary_zh": "填充/填充时允许目标大于源。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMOV",
+      "category": "Data Movement / Layout",
+      "summary_en": "Move/copy between tiles, optionally applying implementation-defined conversion modes.",
+      "summary_zh": "在 Tile 之间移动/复制，可选应用实现定义的转换模式。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMOV_FP",
+      "category": "Data Movement / Layout",
+      "summary_en": "Move/convert from an accumulator tile into a destination tile, using a scaling (`fp`) tile for vector quantization parameters.",
+      "summary_zh": "使用缩放 (`fp`) Tile 作为向量量化参数，将累加器 Tile 移动/转换到目标 Tile。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TRESHAPE",
+      "category": "Data Movement / Layout",
+      "summary_en": "Reinterpret a tile as another tile type/shape while preserving the underlying bytes.",
+      "summary_zh": "将 Tile 重新解释为另一种 Tile 类型/形状，同时保留底层字节。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TTRANS",
+      "category": "Data Movement / Layout",
+      "summary_en": "Transpose with an implementation-defined temporary tile.",
+      "summary_zh": "使用实现定义的临时 Tile 进行转置。",
+      "diagram_template": "reshape_move",
+      "operands": [
+        "dst",
+        "src"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPRINT",
+      "category": "Complex",
+      "summary_en": "Debug/print elements from a tile (implementation-defined).",
+      "summary_zh": "调试/打印 Tile 中的元素（实现定义）。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TMRGSORT",
+      "category": "Complex",
+      "summary_en": "Merge sort for multiple sorted lists (implementation-defined element format and layout).",
+      "summary_zh": "用于多个已排序列表的归并排序（实现定义的元素格式和布局）。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSORT32",
+      "category": "Complex",
+      "summary_en": "Sort a fixed-size 32-element block and produce an index mapping.",
+      "summary_zh": "对固定大小的 32 元素块进行排序并生成索引映射。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TGATHER",
+      "category": "Complex",
+      "summary_en": "Gather/select elements using either an index tile or a compile-time mask pattern.",
+      "summary_zh": "使用索引 Tile 或编译时掩码模式来收集/选择元素。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TCI",
+      "category": "Complex",
+      "summary_en": "Generate a contiguous integer sequence into a destination tile.",
+      "summary_zh": "生成连续整数序列到目标 Tile 中。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TTRI",
+      "category": "Complex",
+      "summary_en": "Generate a triangular (lower/upper) mask tile.",
+      "summary_zh": "生成三角（下/上）掩码 Tile。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPARTADD",
+      "category": "Complex",
+      "summary_en": "Partial elementwise add with implementation-defined handling of mismatched valid regions.",
+      "summary_zh": "部分逐元素加法，对不匹配的有效区域具有实现定义的处理方式。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPARTMUL",
+      "category": "Complex",
+      "summary_en": "Partial elementwise multiply with implementation-defined handling of mismatched valid regions.",
+      "summary_zh": "部分逐元素乘法，对有效区域不一致的处理为实现定义。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPARTMAX",
+      "category": "Complex",
+      "summary_en": "Partial elementwise max with implementation-defined handling of mismatched valid regions.",
+      "summary_zh": "部分逐元素最大值，对不匹配的有效区域具有实现定义的处理方式。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TPARTMIN",
+      "category": "Complex",
+      "summary_en": "Partial elementwise min with implementation-defined handling of mismatched valid regions.",
+      "summary_zh": "部分逐元素最小值，对不匹配的有效区域具有实现定义的处理方式。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TGATHERB",
+      "category": "Complex",
+      "summary_en": "Gather elements using byte offsets.",
+      "summary_zh": "使用字节偏移量收集元素。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TSCATTER",
+      "category": "Complex",
+      "summary_en": "Scatter rows of a source tile into a destination tile using per-element row indices.",
+      "summary_zh": "使用逐元素行索引将源 Tile 的行散播到目标 Tile 中。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    },
+    {
+      "instruction": "TQUANT",
+      "category": "Complex",
+      "summary_en": "Quantize a tile (e.g. FP32 to FP8) producing exponent/scaling/max outputs.",
+      "summary_zh": "量化 Tile（例如 FP32 到 FP8），生成指数/缩放/最大值输出。",
+      "diagram_template": "complex",
+      "operands": [
+        "dst",
+        "src0",
+        "src1"
+      ],
+      "notes": []
+    }
+  ]
+}

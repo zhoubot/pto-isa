@@ -17,11 +17,14 @@ using namespace PtoTestCommon;
 
 class TSCATTERTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -31,8 +34,9 @@ std::string GetGoldenDir() {
 template <int kTRows_, int kTCols_>
 void LaunchTScatter(float *out, float *src, uint16_t *idx, void *stream);
 
-template<int kTRows_, int kTCols_>
-void test_tscatter() {
+template <int kTRows_, int kTCols_>
+void test_tscatter()
+{
     const size_t tileBytes = kTRows_ * kTCols_ * sizeof(float);
     const size_t idxBytes = kTRows_ * kTCols_ * sizeof(uint16_t);
 
@@ -88,4 +92,7 @@ void test_tscatter() {
     EXPECT_TRUE(ResultCmp<float>(golden, devFinal, 0.001f));
 }
 
-TEST_F(TSCATTERTest, case_float_16x16_16x16_16x16) { test_tscatter<16, 16>(); }
+TEST_F(TSCATTERTest, case_float_16x16_16x16_16x16)
+{
+    test_tscatter<16, 16>();
+}

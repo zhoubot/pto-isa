@@ -26,14 +26,48 @@ def _is_truthy(v: str) -> bool:
 
 def run_command(command, cwd=None, check=True, *, verbose: bool = False):
     try:
-        if verbose:
-            log(f"run command: {' '.join(command)}")
-            subprocess.run(
-                command,
-                cwd=cwd,
-                check=check,
-                stdout=None,
-                stderr=None,
+        print(f"run command: {' '.join(command)}")
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            check=check,
+            stdout=None,
+            stderr=None,
+            text=True
+        )
+        return ""
+    except subprocess.CalledProcessError as e:
+        print(f"run command failed with return code {e.returncode}")
+        raise
+
+def set_env_variables(run_mode, soc_version):
+    if run_mode == "sim":
+        ld_lib_path = os.environ.get("LD_LIBRARY_PATH", "")
+        if ld_lib_path:
+            filtered_paths = [
+                path for path in ld_lib_path.split(':')
+                if '/runtime/lib64' not in path
+            ]
+            new_ld_lib = ':'.join(filtered_paths)
+            os.environ["LD_LIBRARY_PATH"] = new_ld_lib
+
+        ascend_home = os.environ.get("ASCEND_HOME_PATH")
+        if not ascend_home:
+            raise EnvironmentError("ASCEND_HOME_PATH is not set")
+
+        os.environ["LD_LIBRARY_PATH"] = f"{ascend_home}/runtime/lib64/stub:{os.environ.get('LD_LIBRARY_PATH', '')}"
+        if soc_version == "Kirin9030":
+            setenv_path = os.path.join(ascend_home, "set_env.sh")
+        else:
+            setenv_path = os.path.join(ascend_home, "bin", "setenv.bash")
+        if os.path.exists(setenv_path):
+            print(f"run env shell: {setenv_path}")
+            result = subprocess.run(
+                f"source {setenv_path} && env",
+                shell=True,
+                executable=shutil.which("bash") or "bash",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True
             )
             return ""
@@ -216,8 +250,8 @@ def build_project(run_mode, soc_version, testcase = "all", debug_enable = False)
                 log(cmake_p.stdout)
             raise subprocess.CalledProcessError(cmake_p.returncode, cmake_cmd, output=cmake_p.stdout)
 
-        # make_cmd = ["make", "VERBOSE=1"] # print compile log for debug
-        make_cmd = ["make"]
+        make_cmd = ["make", "VERBOSE=1"] # print compile log for debug
+        # make_cmd = ["make"]
         cpu_count = os.cpu_count() or 4
         make_cmd.extend(["-j", str(cpu_count)])
 
@@ -345,29 +379,43 @@ def main():
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="执行st脚本")
     parser.add_argument("-r", "--run-mode", required=True, help="运行模式（如 sim or npu)")
-    parser.add_argument("-v", "--soc-version", required=True, help="SOC版本 只支持 a3 or a5")
+    parser.add_argument("-v", "--soc-version", required=True, help="SOC版本 只支持 a3 / a5 / kirin9030")
     parser.add_argument("-t", "--testcase", required=True, help="需要执行的用例")
     parser.add_argument("-g", "--gtest_filter", required=False, help="可选 需要执行的具体case名")
     parser.add_argument("-d", "--debug-enable", action='store_true', help="开启debug检查")
+    parser.add_argument("-w", "--without-build", action='store_true', help="关闭编译（需要预先编译）")
 
     args = parser.parse_args()
     default_soc_version = "Ascend910B1"
     if args.soc_version == "a5":
         default_soc_version = "Ascend910_9599"
+    if args.soc_version == "kirin9030":
+        default_soc_version = "Kirin9030"
     default_cases = "all"
     if args.gtest_filter != None:
         default_cases = args.gtest_filter
+    testcase = args.testcase
+    is_comm = testcase.startswith("comm/")
+    if is_comm:
+        testcase = testcase[len("comm/"):]
+        if not testcase:
+            raise ValueError("comm/ 后必须指定用例名")
 
     original_dir = os.getcwd()
     try:
         # 获取当前脚本（run_st.py）的绝对路径
         script_path = os.path.abspath(__file__)
+        target_dir = os.path.dirname(os.path.dirname(script_path))
 
-        if args.soc_version == "a3":
-            target_dir = os.path.dirname(os.path.dirname(script_path))
+        if is_comm:
+            if args.soc_version != "a3":
+                raise ValueError("comm 暂时仅支持 a3")
+            target_dir = target_dir + "/npu/a2a3/comm/st"
+        elif args.soc_version == "a3":
             target_dir = target_dir + "/npu/a2a3/src/st"
-        else:  # a5
-            target_dir = os.path.dirname(os.path.dirname(script_path))
+        elif args.soc_version == "kirin9030" : # kirin9030
+            target_dir = target_dir + "/npu/kirin9030/src/st"
+        else : # a5
             target_dir = target_dir + "/npu/a5/src/st"
 
         log(f"target_dir: {target_dir}")
@@ -377,27 +425,19 @@ def main():
         set_env_variables(args.run_mode, default_soc_version)
 
         # 执行构建
-        build_project(args.run_mode, default_soc_version, args.testcase, args.debug_enable)
-
-        if args.testcase.lower() == "all":
-            tc_root = Path("testcase")
-            testcases = sorted(
-                p.name for p in tc_root.iterdir() if p.is_dir() and (p / "gen_data.py").exists()
-            )
-            if not testcases:
-                raise RuntimeError(f"no testcases found under {tc_root.resolve()}")
-            log(f"run all testcases: {len(testcases)}")
-            for tc in testcases:
-                golden_path = str(Path("testcase") / tc / "gen_data.py")
-                run_gen_data(golden_path)
-                run_binary(tc, args.run_mode, default_cases)
+        if args.without_build:
+            subprocess.run(["rm", "-rf", "build/T*"],
+                cwd=original_dir,
+                check=True)
         else:
-            # 生成标杆
-            golden_path = "testcase/" + args.testcase + "/gen_data.py"
-            run_gen_data(golden_path)
+            build_project(args.run_mode, default_soc_version, testcase, args.debug_enable)
 
-            # 执行二进制文件
-            run_binary(args.testcase, args.run_mode, default_cases)
+        # 生成标杆
+        golden_path = "testcase/" + testcase + "/gen_data.py"
+        run_gen_data(golden_path)
+
+        # 执行二进制文件
+        run_binary(testcase, args.run_mode, default_cases)
 
     except Exception as e:
         log(f"run failed: {str(e)}")

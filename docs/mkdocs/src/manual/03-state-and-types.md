@@ -1,45 +1,66 @@
 # 3. State and types
 
-## 3.1 Architectural state (conceptual)
+## 3.1 Scope
 
-PTO programs can be described using the following conceptual state:
+This chapter defines the architecture-visible state model and the type-level contracts that PTO Virtual ISA operations consume and produce.
 
-- **Global memory (GM)**: persistent memory visible to the device program
-- **Tile storage**: on-chip 2D storage used by tile operands (locations such as `Vec`, `Mat`, `Left`, `Right`, `Acc`, …)
-- **Scalar state**: scalar registers/immediates used as modifiers, strides, modes, etc.
-- **Synchronization state**: events/flags used to order pipelines and cross-core handshakes
+## 3.2 Architectural state model
 
-The exact physical mapping is platform-dependent; the ISA defines the observable behavior.
+The architecture models the following conceptual state:
 
-## 3.2 Element types
+- tile values and metadata (including valid-region metadata)
+- scalar values and immediate attributes
+- global memory views and addresses
+- synchronization/event state visible to ordering operations
 
-Instructions are parameterized by element types (e.g. `fp16`, `bf16`, `fp32`, `s32`, …). Type legality is instruction-specific.
+Backend-internal transient state is out of scope unless it changes architectural behavior.
 
-For the canonical type tables and naming, see:
+## 3.3 Type classes
 
-- `docs/PTOISA.md`
-- `docs/isa/conventions.md`
+PTO Virtual ISA type classes include:
 
-## 3.3 Tile operands
+- tile-like values (`!pto.tile<...>` class)
+- memory/global views (`!pto.memref<...>` or equivalent class)
+- scalar/integer/float/index classes
+- event/token class for synchronization dependencies
 
-A tile operand conceptually has:
+Each instruction family MUST define accepted type classes for each operand/result position.
 
-- **Location**: selects the storage class / functional unit intent (e.g. `Vec` vs `Left`)
-- **Element type**
-- **Shape**: `[R, C]` (usually compile-time constants)
-- **Layout metadata**
-- **Valid region**: `[Rv, Cv]` (mask)
+## 3.4 Tile legality dimensions
 
-See: `docs/coding/Tile.md`
+Tile legality is constrained by:
 
-## 3.4 GlobalTensor operands
+- element type (`dtype`)
+- shape and valid-region compatibility
+- location-intent role (`Mat/Left/Right/Acc/Bias/Scale` and related forms)
+- layout class and alignment constraints (backend-dependent subset)
 
-A GlobalTensor is a typed view over GM with:
+The virtual ISA defines the legality interface; concrete support sets are backend-profile-specific.
 
-- element type
-- shape (up to 5D in the library model)
-- stride
-- an optional layout hint
+## 3.5 Valid-region semantics
 
-See: `docs/coding/GlobalTensor.md`
+Valid-region semantics are first-class:
 
+- semantic definitions apply to indices in the declared valid domain
+- values outside valid domain are unspecified unless explicitly defined
+- multi-operand operations MUST define domain compatibility rules
+
+The standard notation uses `Rv` and `Cv` for valid rows/columns.
+
+## 3.6 Attribute contracts
+
+Instruction attributes (for example compare mode, rounding mode, transform mode) MUST define:
+
+- type/domain constraints
+- default behavior (if any)
+- interaction with semantics and legality checks
+- diagnostics requirements for invalid values
+
+## 3.7 Diagnostics requirements
+
+Type/state verification diagnostics SHOULD include:
+
+- operand position
+- expected type class and received type class
+- relevant legality dimensions (dtype/layout/location/shape)
+- deterministic error identifiers for CI stability

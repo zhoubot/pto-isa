@@ -35,7 +35,7 @@ python3 tests/script/build_st.py -r npu -v a3 -t ttrans -g TTRANSTest.case1_floa
 
 python3 tests/script/build_st.py -r npu -v a5 -t tcvt -g TCVTTest.case1
 python3 tests/script/build_st.py -r npu -v a5 -t tmatmul -g TMATMULTest.case1
-python3 tests/script/build_st.py -r npu -v a5 -t tmatmul_mx -g TMATMULMXTest.case_e5m2_e5m2_128_64_64
+python3 tests/script/build_st.py -r npu -v a5 -t tmatmul_mx -g TMATMULMXTest.case1
 python3 tests/script/build_st.py -r npu -v a5 -t textract -g TEXTRACTTest.case1
 python3 tests/script/build_st.py -r npu -v a5 -t tmrgsort -g TMRGSORTTest.case_topk1
 python3 tests/script/build_st.py -r npu -v a5 -t tmov_acc2vec -g TMOVTest.case_nz2nd_1

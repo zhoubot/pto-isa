@@ -4,13 +4,13 @@
 
 ## 文档
 
-- PTO 机器模型（core/device/host）：[`docs/machine/abstract-machine.md`](abstract-machine.md)
+- PTO 机器模型（core/device/host）：[`docs/machine/abstract-machine_zh.md`](abstract-machine_zh.md)
 
 ## 与其他文档的关系
 
 - 数据模型与编程模型：
-  - Tiles：[`docs/coding/Tile.md`](../coding/Tile.md)
-  - 全局内存张量：[`docs/coding/GlobalTensor.md`](../coding/GlobalTensor.md)
-  - 事件与同步：[`docs/coding/Event.md`](../coding/Event.md)
-  - 标量值与枚举：[`docs/coding/Scalar.md`](../coding/Scalar.md)
-- 指令参考：[`docs/isa/README.md`](../isa/README.md)
+  - Tiles：[`docs/coding/Tile_zh.md`](../coding/Tile_zh.md)
+  - 全局内存张量：[`docs/coding/GlobalTensor_zh.md`](../coding/GlobalTensor_zh.md)
+  - 事件与同步：[`docs/coding/Event_zh.md`](../coding/Event_zh.md)
+  - 标量值与枚举：[`docs/coding/Scalar_zh.md`](../coding/Scalar_zh.md)
+- 指令参考：[`docs/isa/README_zh.md`](../isa/README_zh.md)

@@ -14,8 +14,9 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 template <typename DstTileData, typename SrcTileData, QuantMode_t QuantPre, ReluPreMode reluMode>
-__tf__ PTO_INTERNAL void TInsertAccToMat(typename DstTileData::TileDType __out__ dst, typename SrcTileData::TileDType __in__ src,
-    uint16_t validRow, uint16_t validCol, uint16_t indexRow, uint16_t indexCol)
+__tf__ PTO_INTERNAL void TInsertAccToMat(typename DstTileData::TileDType __out__ dst,
+                                         typename SrcTileData::TileDType __in__ src, uint16_t validRow,
+                                         uint16_t validCol, uint16_t indexRow, uint16_t indexCol)
 {
     using SrcType = typename SrcTileData::DType;
     using DstType = typename DstTileData::DType;
@@ -27,9 +28,8 @@ __tf__ PTO_INTERNAL void TInsertAccToMat(typename DstTileData::TileDType __out__
     constexpr uint32_t dstStrideD = DstTileData::Rows;
     constexpr uint16_t srcStride = SrcTileData::Rows;
     uint16_t nSize = CeilDivision(validCol, c0Size) * c0Size;
-    copy_matrix_cc_to_cbuf(
-        dstAddr, srcAddr, 0, nSize, SrcTileData::Rows, dstStrideD,
-        srcStride, 0, QuantPre, reluMode, false, false);
+    copy_matrix_cc_to_cbuf(dstAddr, srcAddr, 0, nSize, SrcTileData::Rows, dstStrideD, srcStride, 0, QuantPre, reluMode,
+                           false, false);
 }
 
 template <typename DstTileData, typename SrcTileData>
@@ -37,15 +37,12 @@ PTO_INTERNAL void TINSERT_IMPL(DstTileData &dst, SrcTileData &src, uint16_t inde
 {
     CheckTMovAccToMat<DstTileData, SrcTileData, typename DstTileData::DType, typename SrcTileData::DType, true>();
     PTO_ASSERT(indexRow + SrcTileData::Rows <= DstTileData::Rows,
-        "The sum of indexRow and srcRow should be less than dstRow!");
+               "The sum of indexRow and srcRow should be less than dstRow!");
     PTO_ASSERT(indexCol + SrcTileData::Cols <= DstTileData::Cols,
-        "The sum of indexCol and srcCol should be less than dstCol!");
-    if constexpr (SrcTileData::Loc == TileType::Acc && DstTileData::Loc == TileType::Mat) {
-        constexpr QuantMode_t quantPre =
-            GetCastPreQuantMode<typename SrcTileData::DType, typename DstTileData::DType>(); 
-        TInsertAccToMat<DstTileData, SrcTileData, quantPre, ReluPreMode::NoRelu>(dst.data(), src.data(),
-            src.GetValidRow(), src.GetValidCol(), indexRow, indexCol);
-    }
+               "The sum of indexCol and srcCol should be less than dstCol!");
+    constexpr QuantMode_t quantPre = GetCastPreQuantMode<typename SrcTileData::DType, typename DstTileData::DType>();
+    TInsertAccToMat<DstTileData, SrcTileData, quantPre, ReluPreMode::NoRelu>(dst.data(), src.data(), src.GetValidRow(),
+                                                                             src.GetValidCol(), indexRow, indexCol);
 }
 
 // relu
@@ -54,28 +51,28 @@ PTO_INTERNAL void TINSERT_IMPL(DstTileData &dst, SrcTileData &src, uint16_t inde
 {
     CheckTMovAccToMat<DstTileData, SrcTileData, typename DstTileData::DType, typename SrcTileData::DType, true>();
     PTO_ASSERT(indexRow + SrcTileData::Rows <= DstTileData::Rows,
-        "The sum of indexRow and srcRow should be less than dstRow!");
+               "The sum of indexRow and srcRow should be less than dstRow!");
     PTO_ASSERT(indexCol + SrcTileData::Cols <= DstTileData::Cols,
-        "The sum of indexCol and srcCol should be less than dstCol!");
+               "The sum of indexCol and srcCol should be less than dstCol!");
     constexpr QuantMode_t quantPre = GetCastPreQuantMode<typename SrcTileData::DType, typename DstTileData::DType>();
-    TInsertAccToMat<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(),
-        src.GetValidRow(), src.GetValidCol(), indexRow, indexCol);
+    TInsertAccToMat<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(), src.GetValidRow(),
+                                                                  src.GetValidCol(), indexRow, indexCol);
 }
 
 // scalar quant
 template <typename DstTileData, typename SrcTileData, ReluPreMode reluMode = ReluPreMode::NoRelu>
-PTO_INTERNAL void TINSERT_IMPL(DstTileData &dst, SrcTileData &src, uint64_t preQuantScalar,
-    uint16_t indexRow = 0, uint16_t indexCol = 0)
+PTO_INTERNAL void TINSERT_IMPL(DstTileData &dst, SrcTileData &src, uint64_t preQuantScalar, uint16_t indexRow = 0,
+                               uint16_t indexCol = 0)
 {
     CheckTMovAccToMat<DstTileData, SrcTileData, typename DstTileData::DType, typename SrcTileData::DType, false>();
     PTO_ASSERT(indexRow + SrcTileData::Rows <= DstTileData::Rows,
-        "The sum of indexRow and srcRow should be less than dstRow!");
+               "The sum of indexRow and srcRow should be less than dstRow!");
     PTO_ASSERT(indexCol + SrcTileData::Cols <= DstTileData::Cols,
-        "The sum of indexCol and srcCol should be less than dstCol!");
+               "The sum of indexCol and srcCol should be less than dstCol!");
     constexpr QuantMode_t quantPre = GetScalarPreQuantMode<typename SrcTileData::DType, typename DstTileData::DType>();
     set_quant_pre(preQuantScalar);
-    TInsertAccToMat<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(),
-        src.GetValidRow(), src.GetValidCol(), indexRow, indexCol);
+    TInsertAccToMat<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(), src.GetValidRow(),
+                                                                  src.GetValidCol(), indexRow, indexCol);
 }
 
 // vector quant
@@ -85,24 +82,24 @@ __tf__ PTO_INTERNAL void SetFPCInsert(typename FpTileData::TileDType __in__ fp)
     using FpType = typename FpTileData::DType;
     __fbuf__ FpType *dstAddrFp = (__fbuf__ FpType *)__cce_get_tile_ptr(fp);
     uint64_t deqTensorAddr = ((uint64_t)dstAddrFp >> static_cast<uint64_t>(7))
-                             << 8;  // fpc[15:8] means Quant_PRE_ADDR, uint of 128(2^7)bytes
+                             << 8; // fpc[15:8] means Quant_PRE_ADDR, uint of 128(2^7)bytes
     set_fpc(deqTensorAddr);
 }
 
 template <typename DstTileData, typename SrcTileData, typename FpTileData, ReluPreMode reluMode = ReluPreMode::NoRelu>
-PTO_INTERNAL void TINSERT_IMPL(DstTileData &dst, SrcTileData &src, FpTileData &fp,
-     uint16_t indexRow = 0, uint16_t indexCol = 0)
+PTO_INTERNAL void TINSERT_IMPL(DstTileData &dst, SrcTileData &src, FpTileData &fp, uint16_t indexRow = 0,
+                               uint16_t indexCol = 0)
 {
     CheckTMovAccToMat<DstTileData, SrcTileData, typename DstTileData::DType, typename SrcTileData::DType, false>();
     PTO_ASSERT(indexRow + SrcTileData::Rows <= DstTileData::Rows,
-        "The sum of indexRow and srcRow should be less than dstRow!");
+               "The sum of indexRow and srcRow should be less than dstRow!");
     PTO_ASSERT(indexCol + SrcTileData::Cols <= DstTileData::Cols,
-        "The sum of indexCol and srcCol should be less than dstCol!");
+               "The sum of indexCol and srcCol should be less than dstCol!");
     static_assert(FpTileData::Loc == TileType::Scaling, "Fp only support Scaling.");
     constexpr QuantMode_t quantPre = GetVectorPreQuantMode<typename SrcTileData::DType, typename DstTileData::DType>();
     SetFPCInsert<FpTileData>(fp.data());
-    TInsertAccToMat<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(),
-        src.GetValidRow(), src.GetValidCol(), indexRow, indexCol);
+    TInsertAccToMat<DstTileData, SrcTileData, quantPre, reluMode>(dst.data(), src.data(), src.GetValidRow(),
+                                                                  src.GetValidCol(), indexRow, indexCol);
 }
-}  // namespace pto
-#endif  // TInsert_HPP
+} // namespace pto
+#endif // TInsert_HPP

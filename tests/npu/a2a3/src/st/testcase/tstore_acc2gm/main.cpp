@@ -35,8 +35,10 @@ void LaunchTStoreAcc2gmVectorNz2nz(uint8_t *out, uint8_t *src0, uint8_t *src1, u
 
 class TStoreAcc2gmTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -614,4 +616,3 @@ TEST_F(TStoreAcc2gmTest, case_relu_51)
 {
     test_tstore_acc2gm_vector_nz2nz<21, uint8_t, uint8_t, 80, 128, 90>();
 }
-

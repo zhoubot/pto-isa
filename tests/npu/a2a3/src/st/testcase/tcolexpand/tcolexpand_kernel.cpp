@@ -17,8 +17,9 @@ using namespace pto;
 
 template <typename T, int src_row, int src_col, int src_validCol, int dst_row, int dst_col, int dst_validRow,
           int dst_validCol>
-__global__ AICORE void runTCOLEXPAND(__gm__ T __out__ *out, __gm__ T __in__ *src) {
-    using DynDim2Shape  = Shape<1, 1, 1, -1, -1>;
+__global__ AICORE void runTCOLEXPAND(__gm__ T __out__ *out, __gm__ T __in__ *src)
+{
+    using DynDim2Shape = Shape<1, 1, 1, -1, -1>;
     using DynDim2Stride = pto::Stride<1, 1, -1, -1, 1>;
     using GlobalData = GlobalTensor<T, DynDim2Shape, DynDim2Stride>;
     GlobalData srcGlobal(src, DynDim2Shape(1, src_validCol), DynDim2Stride(src_row, src_col));
@@ -40,7 +41,7 @@ __global__ AICORE void runTCOLEXPAND(__gm__ T __out__ *out, __gm__ T __in__ *src
     set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     TCOLEXPAND(dstTile, srcTile);
-    
+
     set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     TSTORE(dstGlobal, dstTile);
@@ -49,7 +50,7 @@ __global__ AICORE void runTCOLEXPAND(__gm__ T __out__ *out, __gm__ T __in__ *src
 
 template <typename T, int src_row, int src_col, int src_validCol, int dst_row, int dst_col, int dst_validRow,
           int dst_validCol>
-void launchTCOLEXPAND(T *out, T *src, void* stream)
+void launchTCOLEXPAND(T *out, T *src, void *stream)
 {
     cout << "launchTCOLEXPAND start!" << endl;
 
@@ -57,7 +58,7 @@ void launchTCOLEXPAND(T *out, T *src, void* stream)
         <<<1, nullptr, stream>>>(out, src);
 
     cout << "launchTCOLEXPAND end!" << endl;
-} 
+}
 
 template void launchTCOLEXPAND<int16_t, 32, 32, 8, 32, 32, 16, 8>(int16_t *out, int16_t *src, void *stream);
 template void launchTCOLEXPAND<int32_t, 16, 16, 8, 24, 16, 16, 8>(int32_t *out, int32_t *src, void *stream);

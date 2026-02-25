@@ -23,8 +23,10 @@ void LaunchTMATMULBIAS(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2
 
 class TMATMULTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -109,8 +111,8 @@ TEST_F(TMATMULTest, case3)
     uint32_t K = 128;
     uint32_t repeats = 5;
 
-    size_t aFileSize = repeats * M * K * sizeof(uint16_t);  // uint16_t represent half
-    size_t bFileSize = repeats * K * N * sizeof(uint16_t);  // uint16_t represent half
+    size_t aFileSize = repeats * M * K * sizeof(uint16_t); // uint16_t represent half
+    size_t bFileSize = repeats * K * N * sizeof(uint16_t); // uint16_t represent half
     size_t cFileSize = M * N * sizeof(float);
 
     aclInit(nullptr);
@@ -166,7 +168,6 @@ TEST_F(TMATMULTest, case4)
 {
     tmatmul_test<float, float, float, 4>(120, 110, 50);
 }
-
 
 template <typename T, typename U, typename S, typename B, int32_t key>
 void tmatmul_bias_test(uint32_t M, uint32_t K, uint32_t N)

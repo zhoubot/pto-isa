@@ -46,4 +46,3 @@ void LaunchMGather(float *out, float *src, uint32_t *idx, void *stream)
 }
 
 template void LaunchMGather<16, 16, 512>(float *out, float *src, uint32_t *idx, void *stream);
-

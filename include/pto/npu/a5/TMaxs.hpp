@@ -19,25 +19,27 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 
-template <typename T> struct MaxSOp {
+template <typename T>
+struct MaxSOp {
     PTO_INTERNAL static void BinSInstr(RegTensor<T> &reg_dst, RegTensor<T> &reg_src, T scalar, MaskReg &preg)
     {
         vmaxs(reg_dst, reg_src, scalar, preg, MODE_ZEROING);
     }
 };
 
-template <typename TileDataDst, typename TileDataSrc, unsigned elementsPerRepeat, unsigned blockSizeElem, unsigned dstRowStride, unsigned srcRowStride>
-__tf__ PTO_INTERNAL OP_NAME(TMAXS) OP_TYPE(element_wise)
-void TMaxS(typename TileDataDst::TileDType __out__ dst, 
-           typename TileDataSrc::TileDType __in__ src, 
-           typename TileDataSrc::DType scalar,
-           unsigned kValidRows, unsigned kValidCols,
-           VFImplKind version = VFImplKind::VFIMPL_DEFAULT) {
+template <typename TileDataDst, typename TileDataSrc, unsigned elementsPerRepeat, unsigned blockSizeElem,
+          unsigned dstRowStride, unsigned srcRowStride>
+__tf__ PTO_INTERNAL OP_NAME(TMAXS)
+    OP_TYPE(element_wise) void TMaxS(typename TileDataDst::TileDType __out__ dst,
+                                     typename TileDataSrc::TileDType __in__ src, typename TileDataSrc::DType scalar,
+                                     unsigned kValidRows, unsigned kValidCols,
+                                     VFImplKind version = VFImplKind::VFIMPL_DEFAULT)
+{
     using T = typename TileDataDst::DType;
     __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
     __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
     BinaryInstr<MaxSOp<T>, TileDataDst, TileDataSrc, T, elementsPerRepeat, blockSizeElem, dstRowStride, srcRowStride>(
-                dstPtr, srcPtr, scalar, kValidRows, kValidCols, version);
+        dstPtr, srcPtr, scalar, kValidRows, kValidCols, version);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
@@ -60,8 +62,8 @@ PTO_INTERNAL void TMAXS_IMPL(TileDataDst &dst, TileDataSrc &src, typename TileDa
 
     PTO_ASSERT(src.GetValidCol() == dst.GetValidCol(), "Number of columns of src and dst must be the same.");
 
-    TMaxS<TileDataDst, TileDataSrc, elementsPerRepeat, blockSizeElem, dstRowStride, srcRowStride>
-        (dst.data(), src.data(), scalar, validRow, validCol);
+    TMaxS<TileDataDst, TileDataSrc, elementsPerRepeat, blockSizeElem, dstRowStride, srcRowStride>(
+        dst.data(), src.data(), scalar, validRow, validCol);
 }
-}  // namespace pto
+} // namespace pto
 #endif

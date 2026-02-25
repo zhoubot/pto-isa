@@ -25,5 +25,5 @@ PTO_INTERNAL void TORS_IMPL(TileDataDst &dst, TileDataSrc &src0, typename TileDa
     TEXPANDS_IMPL(dst, src1);
     TOR_IMPL(dst, src0, dst);
 }
-}  // namespace pto
+} // namespace pto
 #endif

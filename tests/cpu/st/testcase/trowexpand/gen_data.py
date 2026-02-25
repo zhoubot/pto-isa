@@ -35,6 +35,8 @@ def gen_vec_op(kind: str):
         golden = x * s
     elif kind == "sub":
         golden = x - s
+    elif kind == "add":
+        golden = x + s
     else:
         raise ValueError(kind)
     x.tofile("input1.bin")
@@ -51,6 +53,7 @@ if __name__ == "__main__":
         ("TROWEXPAND_Test.case_div_float_64x64", lambda: gen_vec_op("div")),
         ("TROWEXPAND_Test.case_mul_float_64x64", lambda: gen_vec_op("mul")),
         ("TROWEXPAND_Test.case_sub_float_64x64", lambda: gen_vec_op("sub")),
+        ("TROWEXPAND_Test.case_add_float_64x64", lambda: gen_vec_op("add")),
     ]
 
     cwd = os.getcwd()

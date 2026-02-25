@@ -12,7 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -24,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -32,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, bool isInPlace = false>
 void LaunchTSqrt(T *out, T *src, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, bool isInPlace = false>
-void test_tsqrt() {
+void test_tsqrt()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -77,7 +77,7 @@ void test_tsqrt() {
     std::vector<T> devFinal(fileSize);
     ReadFile(GetGoldenDir() + "/golden.bin", fileSize, golden.data(), fileSize);
     ReadFile(GetGoldenDir() + "/output.bin", fileSize, devFinal.data(), fileSize);
- 
+
     float eps = 0.0f;
     if constexpr (std::is_same_v<T, float>) {
         eps = 0.0001f;
@@ -89,15 +89,19 @@ void test_tsqrt() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TSQRTTest, case_float_64x64_64x64_64x64_inPlace_True) {
+TEST_F(TSQRTTest, case_float_64x64_64x64_64x64_inPlace_True)
+{
     test_tsqrt<float, 64, 64, 64, 64, true>();
 }
-TEST_F(TSQRTTest, case_float_64x64_64x64_64x64_inPlace_False) {
+TEST_F(TSQRTTest, case_float_64x64_64x64_64x64_inPlace_False)
+{
     test_tsqrt<float, 64, 64, 64, 64, false>();
 }
-TEST_F(TSQRTTest, case_half_64x64_64x64_64x64_inPlace_True) {
+TEST_F(TSQRTTest, case_half_64x64_64x64_64x64_inPlace_True)
+{
     test_tsqrt<aclFloat16, 64, 64, 64, 64, true>();
 }
-TEST_F(TSQRTTest, case_half_64x64_64x64_64x64_inPlace_False) {
+TEST_F(TSQRTTest, case_half_64x64_64x64_64x64_inPlace_False)
+{
     test_tsqrt<aclFloat16, 64, 64, 64, 64, false>();
 }

@@ -122,8 +122,7 @@ int main()
 
     const double elapsed_s =
         std::chrono::duration_cast<std::chrono::duration<double>>(t1 - t0).count() / static_cast<double>(kIters);
-    const double matmul_flops =
-        2.0 * static_cast<double>(kM) * static_cast<double>(kK) * static_cast<double>(kN);
+    const double matmul_flops = 2.0 * static_cast<double>(kM) * static_cast<double>(kK) * static_cast<double>(kN);
     const double gflops = (elapsed_s > 0.0) ? (matmul_flops / elapsed_s / 1e9) : 0.0;
 
     gemm_naive(A.data(), B.data(), Ref.data(), kM, kK, kN);

@@ -1,0 +1,8 @@
+# generated artifacts
+add.pto
+add.cpp
+run_cpu
+*.o
+
+# local build dirs
+build/

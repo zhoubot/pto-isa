@@ -15,7 +15,7 @@ import numpy as np
 np.random.seed(19)
 
 
-def gen_golden_data_trem(case_name, param):
+def gen_golden_data_trem(param):
     dtype = param.dtype
 
     dst_tile_row, dst_tile_col = param.dst_tile_row, param.dst_tile_col
@@ -24,8 +24,8 @@ def gen_golden_data_trem(case_name, param):
     h_valid, w_valid = param.valid_row, param.valid_col
 
     # Generate random input arrays
-    input1 = np.random.randint(1, 100, size=[src0_tile_row, src0_tile_col]).astype(dtype)
-    input2 = np.random.randint(1, 100, size=[src1_tile_row, src1_tile_col]).astype(dtype)
+    input1 = np.random.randint(-1000, 1000, size=[src0_tile_row, src0_tile_col]).astype(dtype)
+    input2 = np.random.randint(3, 100, size=[src1_tile_row, src1_tile_col]).astype(dtype)
 
     # Perform the operation
     golden = np.zeros([dst_tile_row, dst_tile_col]).astype(dtype)
@@ -82,6 +82,7 @@ if __name__ == "__main__":
         TremParams(np.int32, 16, 32, 16, 64, 16, 32, 16, 31),
         TremParams(np.int16, 16, 32, 16, 64, 16, 32, 16, 31),
         TremParams(np.int16, 16, 64, 16, 128, 16, 128, 16, 63),
+        TremParams(np.float16, 1, 8192, 1, 8192, 1, 8192, 1, 8192),
     ]
 
     for param in case_params_list:
@@ -90,5 +91,5 @@ if __name__ == "__main__":
             os.makedirs(case_name)
         original_dir = os.getcwd()
         os.chdir(case_name)
-        gen_golden_data_trem(case_name, param)
+        gen_golden_data_trem(param)
         os.chdir(original_dir)

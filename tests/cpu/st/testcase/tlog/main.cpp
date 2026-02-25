@@ -12,12 +12,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
 template <int32_t tilingKey>
-void launchTLOG_demo(uint8_t *out, uint8_t *src,void *stream);
+void launchTLOG_demo(uint8_t *out, uint8_t *src, void *stream);
 
 class TLOGTest : public testing::Test {
 protected:
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTLog(T *out, T *src0, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tlog() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tlog()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -88,15 +88,19 @@ void test_tlog() {
 const int NUM_16 = 16;
 const int NUM_64 = 64;
 const int NUM_256 = 256;
-TEST_F(TLOGTest, case_float_64x64_64x64_64x64) {
+TEST_F(TLOGTest, case_float_64x64_64x64_64x64)
+{
     test_tlog<float, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TLOGTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TLOGTest, case_int32_64x64_64x64_64x64)
+{
     test_tlog<int32_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TLOGTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TLOGTest, case_int16_64x64_64x64_64x64)
+{
     test_tlog<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>();
 }
-TEST_F(TLOGTest, case_half_16x256_16x256_16x256) {
+TEST_F(TLOGTest, case_half_16x256_16x256_16x256)
+{
     test_tlog<aclFloat16, NUM_16, NUM_256, NUM_16, NUM_256>();
 }

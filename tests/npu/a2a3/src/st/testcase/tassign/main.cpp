@@ -18,50 +18,51 @@ using namespace std;
 using namespace PtoTestCommon;
 
 template <uint32_t caseId>
-void launchTASSIGNTestCase(void *out, void *src, int offset,
-                           aclrtStream stream);
+void launchTASSIGNTestCase(void *out, void *src, int offset, aclrtStream stream);
 
 class TASSIGNTest : public testing::Test {
 public:
-  aclrtStream stream;
-  void *dstHost;
-  void *dstDevice;
-  void *srcDevice;
+    aclrtStream stream;
+    void *dstHost;
+    void *dstDevice;
+    void *srcDevice;
 
 protected:
-  void SetUp() override {
-    aclInit(nullptr);
-    aclrtSetDevice(0);
-    aclrtCreateStream(&stream);
-  }
+    void SetUp() override
+    {
+        aclInit(nullptr);
+        aclrtSetDevice(0);
+        aclrtCreateStream(&stream);
+    }
 
-  void TearDown() override {
-    aclrtDestroyStream(stream);
-    aclrtResetDevice(0);
-    aclFinalize();
-  }
+    void TearDown() override
+    {
+        aclrtDestroyStream(stream);
+        aclrtResetDevice(0);
+        aclFinalize();
+    }
 
-  template <uint32_t caseId, typename T, int offset>
-  bool TAssignTestFramework() {
-    size_t ptrByteSize = sizeof(T *);
-    aclrtMallocHost(&dstHost, ptrByteSize);
-    aclrtMalloc(&srcDevice, ptrByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
-    aclrtMalloc(&dstDevice, ptrByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    template <uint32_t caseId, typename T, int offset>
+    bool TAssignTestFramework()
+    {
+        size_t ptrByteSize = sizeof(T *);
+        aclrtMallocHost(&dstHost, ptrByteSize);
+        aclrtMalloc(&srcDevice, ptrByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
+        aclrtMalloc(&dstDevice, ptrByteSize, ACL_MEM_MALLOC_HUGE_FIRST);
 
-    launchTASSIGNTestCase<caseId>(dstDevice, srcDevice, offset, stream);
-    aclrtSynchronizeStream(stream);
-    aclrtMemcpy(dstHost, ptrByteSize, dstDevice, ptrByteSize,
-                ACL_MEMCPY_DEVICE_TO_HOST);
-    bool ret = reinterpret_cast<uintptr_t>((T *)srcDevice + offset) ==
-               *(reinterpret_cast<uintptr_t *>(dstHost));
-    aclrtFree(dstDevice);
-    aclrtFree(srcDevice);
-    aclrtFreeHost(dstHost);
-    return ret;
-  }
+        launchTASSIGNTestCase<caseId>(dstDevice, srcDevice, offset, stream);
+        aclrtSynchronizeStream(stream);
+        aclrtMemcpy(dstHost, ptrByteSize, dstDevice, ptrByteSize, ACL_MEMCPY_DEVICE_TO_HOST);
+        bool ret = reinterpret_cast<uintptr_t>((T *)srcDevice + offset) == *(reinterpret_cast<uintptr_t *>(dstHost));
+        aclrtFree(dstDevice);
+        aclrtFree(srcDevice);
+        aclrtFreeHost(dstHost);
+        return ret;
+    }
 };
 
-TEST_F(TASSIGNTest, case1) {
-  bool ret = TAssignTestFramework<1, float, 4>();
-  EXPECT_TRUE(ret);
+TEST_F(TASSIGNTest, case1)
+{
+    bool ret = TAssignTestFramework<1, float, 4>();
+    EXPECT_TRUE(ret);
 }

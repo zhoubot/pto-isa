@@ -10,8 +10,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #if __CCE_AICORE__ == 220 && defined(__DAV_C220_VEC__)
 
-#define MEMORY_BASE
-
 #include "kernel_operator.h"
 #include <pto/pto-inst.hpp>
 
@@ -32,7 +30,8 @@ constexpr unsigned MAX_TILE_SIZE = (0x10000 - 0x100);  // Maximum tile size
 constexpr uint32_t tileNum = 2;                        // tile number on one vector core
 
 template <typename T, unsigned tileRows, unsigned tileCols>
-AICORE void runTAdd(__gm__ T *z, __gm__ T *x, __gm__ T *y, uint32_t totalLength) {
+AICORE void runTAdd(__gm__ T *z, __gm__ T *x, __gm__ T *y, uint32_t totalLength)
+{
     set_mask_norm();
     set_vector_mask(-1, -1);
     static_assert(BLOCK_ROWS * BLOCK_COLS == BLOCK_DIM, "Wrong block tilling!");
@@ -117,7 +116,8 @@ AICORE void runTAdd(__gm__ T *z, __gm__ T *x, __gm__ T *y, uint32_t totalLength)
 }
 
 // kernel entry
-extern "C" __global__ AICORE void add_custom(GM_ADDR x, GM_ADDR y, GM_ADDR z, uint32_t totalLength) {
+extern "C" __global__ AICORE void add_custom(GM_ADDR x, GM_ADDR y, GM_ADDR z, uint32_t totalLength)
+{
     // Define the tile size
     constexpr unsigned tileRows = 20;
     constexpr unsigned tileCols = 2048;

@@ -16,62 +16,66 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <type_traits>
 
 namespace pto {
-enum class SELMODE : uint8_t {
+enum class SELMODE : uint8_t
+{
     VSEL_CMPMASK_SPR = 0,
     VSEL_TENSOR_SCALAR_MODE = 1,
     VSEL_TENSOR_TENSOR_MODE = 2,
 };
 
-template <typename TileData, typename MaskTile>
-__tf__ PTO_INTERNAL void TSelScalar(typename TileData::TileDType __out__ dst, typename MaskTile::TileDType __in__ selMask,
-    typename TileData::TileDType __in__ src0, typename TileData::TileDType __in__ src1, unsigned validRow,
-    unsigned validCol, unsigned validMaskCol) {
-    using T = typename TileData::DType;
+template <typename DstTile, typename MaskTile, typename Src0Tile, typename Src1Tile>
+__tf__ PTO_INTERNAL void TSel(typename DstTile::TileDType __out__ dst, typename MaskTile::TileDType __in__ selMask,
+                              typename Src0Tile::TileDType __in__ src0, typename Src1Tile::TileDType __in__ src1,
+                              unsigned validRow, unsigned validCol)
+{
+    using T = std::conditional_t<sizeof(typename DstTile::DType) == 4, float, half>;
+    using MaskT = typename MaskTile::DType;
+    constexpr unsigned dstRowStride = DstTile::RowStride;
+    constexpr unsigned src0RowStride = Src0Tile::RowStride;
+    constexpr unsigned src1RowStride = Src1Tile::RowStride;
+    constexpr unsigned maskRowStride = MaskTile::RowStride;
+    constexpr unsigned cmpmaskLen = sizeof(T) == 2 ? 4 : 2; // 128bit for B16 and 64bit for B32
+
     __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
     __ubuf__ T *src0Ptr = (__ubuf__ T *)__cce_get_tile_ptr(src0);
     __ubuf__ T *src1Ptr = (__ubuf__ T *)__cce_get_tile_ptr(src1);
-    __ubuf__ uint8_t *maskPtr = (__ubuf__ uint8_t *)__cce_get_tile_ptr(selMask);
-
-    constexpr unsigned dstStride = TileData::RowStride;
-    constexpr unsigned src0Stride = TileData::RowStride;
-    constexpr unsigned src1Stride = TileData::RowStride;
-    constexpr unsigned maskStride = MaskTile::RowStride;
-
-    for (unsigned r = 0; r < validRow; ++r) {
-        for (unsigned c = 0; c < validCol; ++c) {
-            const unsigned maskByte = (c >> 3);
-            const unsigned maskBit = (c & 7u);
-            const uint8_t packed = maskPtr[r * maskStride + maskByte];
-            const uint8_t bit = (packed >> maskBit) & 1u;
-
-            const unsigned di = r * dstStride + c;
-            const unsigned s0i = r * src0Stride + c;
-            const unsigned s1i = r * src1Stride + c;
-            dstPtr[di] = bit ? src0Ptr[s0i] : src1Ptr[s1i];
-        }
+    __ubuf__ MaskT *maskPtr = (__ubuf__ MaskT *)__cce_get_tile_ptr(selMask);
+    __ubuf__ uint32_t *cmpMaskPtr = (__ubuf__ uint32_t *)get_imm(TMP_UB_OFFSET); // 8KB tmpbuf addr
+    uint32_t maskAddr;
+    set_mask_count();
+    for (unsigned i = 0; i < validRow; i++) {
+        set_vector_mask(0, cmpmaskLen);
+        maskAddr = static_cast<uint32_t>(reinterpret_cast<int64_t>(maskPtr + i * maskRowStride));
+        vector_dup(cmpMaskPtr, maskAddr, 1, 1, 1, 8, 0);
+        pipe_barrier(PIPE_V);
+        set_cmpmask(cmpMaskPtr);
+        pipe_barrier(PIPE_V);
+        set_vector_mask(0, validCol);
+        vsel((__ubuf__ T *)(dstPtr + i * dstRowStride), (__ubuf__ T *)(src0Ptr + i * src0RowStride),
+             (__ubuf__ T *)(src1Ptr + i * src1RowStride), 1, 1, 1, 1, 8, 8, 8, SELMODE::VSEL_TENSOR_TENSOR_MODE);
     }
-
-    // Silence unused param warnings in non-assert builds.
-    (void)validMaskCol;
+    set_mask_norm();
+    set_vector_mask(-1, -1);
 }
 
-template <typename TileData, typename MaskTile>
-PTO_INTERNAL void TSEL_IMPL(TileData &dst, MaskTile &selMask, TileData &src0, TileData &src1) {
-    static_assert(TileData::isRowMajor, "Fix: TSEL has not supported layout type.");
-    static_assert(TileData::Loc == TileType::Vec, "Fix: TSEL only supports Vec tiles.");
-    static_assert(MaskTile::Loc == TileType::Vec, "Fix: TSEL mask must be a Vec tile.");
-    static_assert(std::is_same_v<typename MaskTile::DType, uint8_t>, "Fix: TSEL expects a packed u8 mask tile.");
-    static_assert(TileData::SFractal == SLayout::NoneBox && MaskTile::SFractal == SLayout::NoneBox,
-        "Fix: TSEL only supports non-boxed (ND/DN) tiles.");
-    static_assert(TileData::isRowMajor && MaskTile::isRowMajor, "Fix: TSEL only supports row-major ND tiles.");
+template <typename DstTile, typename MaskTile, typename Src0Tile, typename Src1Tile>
+PTO_INTERNAL void TSEL_IMPL(DstTile &dst, MaskTile &selMask, Src0Tile &src0, Src1Tile &src1)
+{
+    static_assert(sizeof(typename DstTile::DType) == 4 || sizeof(typename DstTile::DType) == 2,
+                  "Fix: TSEL only support 16B and 32B data type.");
+    static_assert(std::is_same_v<typename DstTile::DType, typename Src0Tile::DType> ||
+                      std::is_same_v<typename DstTile::DType, typename Src1Tile::DType>,
+                  "Fix: TSEL only support same data type between dst, src0, and src1.");
+    static_assert(DstTile::isRowMajor && Src0Tile::isRowMajor && Src1Tile::isRowMajor,
+                  "Fix: TSEL only support RowMajor layout type.");
     unsigned validRow = dst.GetValidRow();
     unsigned validCol = dst.GetValidCol();
     unsigned validMaskCol = selMask.GetValidCol();
     PTO_ASSERT(validMaskCol == static_cast<unsigned>(CeilDivision(static_cast<int32_t>(validCol), 8)),
         "Fix: TSEL mask validCol must equal ceil(dst validCol / 8).");
 
-    TSelScalar<TileData, MaskTile>(
-        dst.data(), selMask.data(), src0.data(), src1.data(), validRow, validCol, validMaskCol);
+    TSel<DstTile, MaskTile, Src0Tile, Src1Tile>(dst.data(), selMask.data(), src0.data(), src1.data(), validRow,
+                                                validCol);
 }
 } // namespace pto
 #endif

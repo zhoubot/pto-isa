@@ -62,6 +62,8 @@ if __name__ == "__main__":
         TOrParams("TORTest.case3", np.uint16, 1, 16384, 1, 16384),
         TOrParams("TORTest.case4", np.uint16, 2048, 16, 2048, 16),
         TOrParams("TORTest.case5", np.int16, 64, 64, 64, 64),
+        TOrParams("TORTest.case6", np.uint8, 64, 64, 63, 63),
+        TOrParams("TORTest.case7", np.int8, 64, 64, 63, 63),
     ]
 
     for param in case_params_list:

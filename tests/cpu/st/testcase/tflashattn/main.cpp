@@ -33,8 +33,10 @@ void LaunchTFLASHATTN(float *out, float *q, float *k, float *v, void *stream);
 
 class TFLASHATTNTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 TEST_F(TFLASHATTNTest, case1)
@@ -107,4 +109,3 @@ TEST_F(TFLASHATTNTest, case1)
     const bool ok = ResultCmp(golden, actual, kEps);
     EXPECT_TRUE(ok);
 }
-

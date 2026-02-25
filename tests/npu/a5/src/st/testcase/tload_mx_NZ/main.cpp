@@ -17,13 +17,15 @@ using namespace std;
 using namespace PtoTestCommon;
 
 template <typename T, int format, int N1, int N2, int N3, int N4, int N5, int WN1, int WN2, int WN3, int WN4, int WN5,
-    int BASEM, int BASEK>
+          int BASEM, int BASEK>
 void launchTLOADSCALE(uint8_t *out, uint8_t *src0, uint8_t *src1, void *stream);
 
 class TLOADSCALETest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -36,7 +38,7 @@ std::string GetGoldenDir()
 }
 
 template <typename T, int format, int N1, int N2, int N3, int N4, int N5, int WN1, int WN2, int WN3, int WN4, int WN5,
-    int BASEM, int BASEK>
+          int BASEM, int BASEK>
 void TLOADSCALEFUNC()
 {
     size_t aFileSize = WN1 * WN2 * WN3 * WN4 * WN5 * sizeof(T);
@@ -64,8 +66,8 @@ void TLOADSCALEFUNC()
 
     aclrtMemcpy(src0Device, aFileSize, src0Host, aFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
     aclrtMemcpy(src1Device, bFileSize, src1Host, bFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
-    launchTLOADSCALE<T, format, N1, N2, N3, N4, N5, WN1, WN2, WN3, WN4, WN5, BASEM, BASEK>(
-        dstDevice, src0Device, src1Device, stream);
+    launchTLOADSCALE<T, format, N1, N2, N3, N4, N5, WN1, WN2, WN3, WN4, WN5, BASEM, BASEK>(dstDevice, src0Device,
+                                                                                           src1Device, stream);
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, cFileSize, dstDevice, cFileSize, ACL_MEMCPY_DEVICE_TO_HOST);

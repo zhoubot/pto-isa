@@ -15,23 +15,21 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace PtoTestCommon;
 
-
 template <uint32_t caseId>
 void launchTScatterTestCase(void *out, void *src, void *indexes, aclrtStream stream);
 
 class TSCATTERTest : public testing::Test {
-public: 
+public:
 protected:
     void SetUp() override
-    { 
-    }
+    {}
 
     void TearDown() override
-    {
-    }
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -39,12 +37,13 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-template <uint32_t caseId, typename T, typename TI, uint32_t SRC0ROW, uint32_t SRC0COL, uint32_t SRC1ROW, uint32_t SRC1COL>
+template <uint32_t caseId, typename T, typename TI, uint32_t SRC0ROW, uint32_t SRC0COL, uint32_t SRC1ROW,
+          uint32_t SRC1COL>
 bool TScatterTestFramework()
 {
     aclInit(nullptr);
     aclrtSetDevice(0);
-    
+
     aclrtStream stream;
     aclrtCreateStream(&stream);
 
@@ -83,7 +82,7 @@ bool TScatterTestFramework()
     aclrtFreeHost(dstHost);
     aclrtFreeHost(srcHost);
     aclrtFreeHost(indHost);
-    
+
     aclrtDestroyStream(stream);
     aclrtResetDevice(0);
     aclFinalize();

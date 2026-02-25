@@ -16,9 +16,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/common/type.hpp>
 
 namespace pto {
-  enum class Op : uint16_t {
-    TLOAD,          /* GM to Vec/Mat/ */
-    TSTORE_VEC,     /* Vec to GM */
+enum class Op : uint16_t
+{
+    TLOAD,      /* GM to Vec/Mat/ */
+    TSTORE_VEC, /* Vec to GM */
     SCALAR,
     TRESHAPE,
     VECTOR,
@@ -35,12 +36,15 @@ namespace pto {
     TAND,
     TOR,
     TSEL,
+    TSHL,
+    TSHR,
     TEXP,
     TSELS,
     TSQRT,
     TRSQRT,
     TEXPANDS,
     TPARTADD,
+    TPARTMUL,
     TPARTMAX,
     TPARTMIN,
     TCMPS,
@@ -55,70 +59,87 @@ namespace pto {
     TROWMIN,
     TROWEXPAND,
     TCOLSUM,
+    TCOLPROD,
     TCOLMAX,
     TCOLMIN,
     TTRANS,
     TTRI,
     TREM,
+    TFMOD,
     TREMS,
+    TFMODS,
     TSUBS,
     TMAXS,
     TLRELU,
-    TMOV_V2V,       /* Vec to Vec */
-    TMOV_V2M,       /* Vec to Mat */
-    TEXTRACT_V2M,   /* Vec to Mat */
-    TMOV_M2B,       /* Mat to Bias */
-    TMOV_M2L,       /* Mat to Left */
-    TMOV_M2R,       /* Mat to Right */
-    TMOV_M2S,       /* Mat to Scaling */
-    TMOV_A2V,       /* Acc to Vec */
-    TMOV_A2M,       /* Acc to Mat */
-    TSTORE_ACC,     /* Acc to GM */
-    TSTORE_MAT,     /* Mat to GM */
+    TPRELU,
+    TMOV_V2V,     /* Vec to Vec */
+    TMOV_V2M,     /* Vec to Mat */
+    TEXTRACT_V2M, /* Vec to Mat */
+    TMOV_M2B,     /* Mat to Bias */
+    TMOV_M2L,     /* Mat to Left */
+    TMOV_M2R,     /* Mat to Right */
+    TMOV_M2S,     /* Mat to Scaling */
+    TMOV_A2V,     /* Acc to Vec */
+    TMOV_A2M,     /* Acc to Mat */
+    TSTORE_ACC,   /* Acc to GM */
+    TSTORE_MAT,   /* Mat to GM */
     TMATMUL,
+    TGEMV,
     TMATMUL_MX,
-    TEXTRACT_M2LR,  /* Mat to Left/Right */
+    TEXTRACT_M2LR, /* Mat to Left/Right */
     TANDS,
     TORS,
     TSHLS,
     TSHRS,
     TXOR,
     TXORS,
-    TEXTRACT_A2M,   /* Acc to Mat */
+    TEXTRACT_A2M, /* Acc to Mat */
     TINSERT_A2M,
+    TIMG2COL,
+    TSETFMATRIX,
+    TSET_IMG2COL_RPT,
+    TSET_IMG2COL_PADDING,
     OP_COUNT, // The Total number of operations, please add new operations before OP_COUNT
-  };
+};
 
-  struct RecordEvent {};
+struct RecordEvent {
+};
 
-  template<pipe_t SrcPipe, pipe_t DstPipe>
-  class EventIdCounter {
-    public:
-      PTO_INTERNAL static event_t GetNextId() {
+template <pipe_t SrcPipe, pipe_t DstPipe>
+class EventIdCounter {
+public:
+    PTO_INTERNAL static event_t GetNextId()
+    {
         event_t id = NextId();
         NextId() = (event_t)(((uint8_t)NextId() + 1) % EVENT_ID_MAX);
         return id;
-      }
-      PTO_INTERNAL static void Reset() {
+    }
+    PTO_INTERNAL static void Reset()
+    {
         NextId() = EVENT_ID0;
-      }
-      PTO_INTERNAL static event_t PeekNextId() {
+    }
+    PTO_INTERNAL static event_t PeekNextId()
+    {
         return NextId();
-      }
-    private:
-      static event_t& NextId() {
+    }
+
+private:
+    static event_t &NextId()
+    {
         static event_t id = EVENT_ID0;
         return id;
-      }
-  };
+    }
+};
 
-  template <typename... WaitEvents>
-  PTO_INTERNAL void WaitAllEvents(WaitEvents&... events) {
+template <typename... WaitEvents>
+PTO_INTERNAL void WaitAllEvents(WaitEvents &... events)
+{
     (events.Wait(), ...);
-  }
+}
 
-  template <pipe_t SrcPipe, pipe_t DstPipe>
-  PTO_INTERNAL void PtoSetWaitFlag() {
+template <pipe_t SrcPipe, pipe_t DstPipe>
+PTO_INTERNAL void PtoSetWaitFlag()
+{
 #ifdef PTO_FLAG_TEST
     CceEventIdType token = __pto_set_flag(SrcPipe, DstPipe);
     __pto_wait_flag(SrcPipe, DstPipe, token);
@@ -133,6 +154,6 @@ namespace pto {
     (void)DstPipe;
 #endif
 #endif
-  }
+}
 } // namespace pto
 #endif

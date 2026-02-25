@@ -57,7 +57,8 @@ class TXorParams:
             np.int32: 'int32',
             np.int16: 'int16',
             np.uint32: 'uint32',
-            np.uint16: 'uint16'
+            np.uint16: 'uint16',
+            np.uint8: 'uint8'
         }[dtype]
         self.name = f"TXORTest.case_{dtype_str}_{dst_tile_row}x{dst_tile_col}_\
 {src0_tile_row}x{src0_tile_col}_{src1_tile_row}x{src1_tile_col}_\
@@ -79,6 +80,8 @@ if __name__ == "__main__":
         TXorParams(np.uint16, 64, 64, 64, 64, 64, 64, 64, 64),
         TXorParams(np.uint16, 32, 128, 32, 128, 32, 256, 32, 128),
         TXorParams(np.uint16, 32, 128, 32, 128, 32, 256, 32, 127),
+        TXorParams(np.int8, 32, 128, 32, 128, 32, 256, 32, 127),
+        TXorParams(np.uint8, 32, 128, 32, 128, 32, 256, 32, 127),
     ]
 
     for param in case_list:

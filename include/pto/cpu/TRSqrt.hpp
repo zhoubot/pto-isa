@@ -38,4 +38,3 @@ PTO_INTERNAL void TRSQRT_IMPL(TileData &dst, TileData &src)
 } // namespace pto
 
 #endif
-

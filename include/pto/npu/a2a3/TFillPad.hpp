@@ -17,7 +17,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 template <typename TileData>
-AICORE constexpr auto getCopyNullPtr() {
+AICORE constexpr auto getCopyNullPtr()
+{
     using T = typename TileData::DType;
     if constexpr (sizeof(T) == 4) {
         return (__ubuf__ uint32_t *)0;
@@ -32,8 +33,9 @@ AICORE constexpr auto getCopyNullPtr() {
 
 template <typename TileDataDst, typename TileDataSrc>
 __tf__ PTO_INTERNAL void TFillPad_CopyData(typename TileDataDst::TileDType __out__ dst,
-    typename TileDataSrc::TileDType __in__ src, uint64_t dstValidRow, uint64_t dstValidCol, uint64_t srcValidRow,
-    uint64_t srcValidCol) {
+                                           typename TileDataSrc::TileDType __in__ src, uint64_t dstValidRow,
+                                           uint64_t dstValidCol, uint64_t srcValidRow, uint64_t srcValidCol)
+{
     set_mask_count(); // counter mode
     using T = typename TileDataSrc::DType;
     auto srcPtr = getCopyNullPtr<TileDataSrc>();
@@ -66,7 +68,8 @@ __tf__ PTO_INTERNAL void TFillPad_CopyData(typename TileDataDst::TileDType __out
 }
 
 template <typename T>
-PTO_INTERNAL uint64_t getPadMask(uint64_t validCol) {
+PTO_INTERNAL uint64_t getPadMask(uint64_t validCol)
+{
     if constexpr (sizeof(T) == 4) {
         return 0;
     } else if constexpr (sizeof(T) == 2) {
@@ -81,7 +84,9 @@ PTO_INTERNAL uint64_t getPadMask(uint64_t validCol) {
 // Helper: handle 32B-aligned padding for byte-sized elements (sizeof==1)
 template <typename TileDataDst, typename TileDataSrc>
 PTO_INTERNAL void Handle32BAlignedPad_Byte(decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t srcValidRow,
-    uint64_t srcValidCol, uint64_t /* srcValidCol32B */, decltype(GetPadValue<TileDataDst>()) padValue) {
+                                           uint64_t srcValidCol, uint64_t /* srcValidCol32B */,
+                                           decltype(GetPadValue<TileDataDst>()) padValue)
+{
     using T = typename TileDataSrc::DType;
     uint64_t pad_32B = 32 / sizeof(T) - srcValidCol;
     PtoSetWaitFlag<PIPE_V, PIPE_S>();
@@ -98,7 +103,9 @@ PTO_INTERNAL void Handle32BAlignedPad_Byte(decltype(getCopyNullPtr<TileDataDst>(
 // Helper: handle 32B-aligned padding for non-byte elements (sizeof==2 or 4)
 template <typename TileDataDst, typename TileDataSrc>
 PTO_INTERNAL void Handle32BAlignedPad_Other(decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t srcValidRow,
-    uint64_t srcValidCol, uint64_t srcValidCol32B, decltype(GetPadValue<TileDataDst>()) padValue) {
+                                            uint64_t srcValidCol, uint64_t srcValidCol32B,
+                                            decltype(GetPadValue<TileDataDst>()) padValue)
+{
     using T = typename TileDataSrc::DType;
     uint64_t elements_per_block = (sizeof(T) == 1) ? 16 : 32 / sizeof(T);
     uint64_t pad_32B = srcValidCol32B - srcValidCol;
@@ -127,8 +134,9 @@ PTO_INTERNAL void Handle32BAlignedPad_Other(decltype(getCopyNullPtr<TileDataDst>
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void PadRightSingleRow(
-    decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t padOffset, uint64_t padCols, uint64_t dupPadValue) {
+PTO_INTERNAL void PadRightSingleRow(decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t padOffset,
+                                    uint64_t padCols, uint64_t dupPadValue)
+{
     set_mask_count(); // counter mode
     set_vector_mask(0, padCols);
     vector_dup(dstPtr + padOffset, dupPadValue, 1, 1, 1, 8, 0);
@@ -136,8 +144,9 @@ PTO_INTERNAL void PadRightSingleRow(
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void PadRightRemainingRows(
-    decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t padOffset, uint64_t copyDstCols, uint64_t srcValidRow) {
+PTO_INTERNAL void PadRightRemainingRows(decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t padOffset,
+                                        uint64_t copyDstCols, uint64_t srcValidRow)
+{
     using T = typename TileDataSrc::DType;
     uint16_t dstRepeatStride = TileDataDst::Cols * sizeof(T) / 32;
     auto _dstPtr = dstPtr + padOffset + copyDstCols;
@@ -159,7 +168,8 @@ PTO_INTERNAL void PadRightRemainingRows(
 
 template <typename TileDataDst, typename TileDataSrc>
 PTO_INTERNAL void PadBottomRows(decltype(getCopyNullPtr<TileDataDst>()) dstPtr, uint64_t srcValidRow,
-    uint64_t dstValidRow, uint64_t copyDstCols, uint64_t dupPadValue) {
+                                uint64_t dstValidRow, uint64_t copyDstCols, uint64_t dupPadValue)
+{
     int padRows = static_cast<int>(dstValidRow) - static_cast<int>(srcValidRow);
     if (padRows <= 0)
         return;
@@ -169,8 +179,9 @@ PTO_INTERNAL void PadBottomRows(decltype(getCopyNullPtr<TileDataDst>()) dstPtr, 
 
 template <typename TileDataDst, typename TileDataSrc>
 __tf__ PTO_INTERNAL void TFillPad(typename TileDataDst::TileDType __out__ dst,
-    typename TileDataSrc::TileDType __in__ src, uint64_t dstValidRow, uint64_t dstValidCol, uint64_t srcValidRow,
-    uint64_t srcValidCol) {
+                                  typename TileDataSrc::TileDType __in__ src, uint64_t dstValidRow,
+                                  uint64_t dstValidCol, uint64_t srcValidRow, uint64_t srcValidCol)
+{
     using T = typename TileDataSrc::DType;
     auto srcPtr = getCopyNullPtr<TileDataSrc>();
     auto dstPtr = getCopyNullPtr<TileDataDst>();
@@ -189,11 +200,11 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileDataDst::TileDType __out__ dst,
     // handle 32B-aligned padding (was inlined previously)
     if constexpr (TileDataDst::PadVal != TileDataSrc::PadVal) {
         if constexpr (sizeof(T) == 1) {
-            Handle32BAlignedPad_Byte<TileDataDst, TileDataSrc>(
-                dstPtr, srcValidRow, srcValidCol, srcValidCol32B, padValue);
+            Handle32BAlignedPad_Byte<TileDataDst, TileDataSrc>(dstPtr, srcValidRow, srcValidCol, srcValidCol32B,
+                                                               padValue);
         } else {
-            Handle32BAlignedPad_Other<TileDataDst, TileDataSrc>(
-                dstPtr, srcValidRow, srcValidCol, srcValidCol32B, padValue);
+            Handle32BAlignedPad_Other<TileDataDst, TileDataSrc>(dstPtr, srcValidRow, srcValidCol, srcValidCol32B,
+                                                                padValue);
         }
     }
 
@@ -215,7 +226,8 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileDataDst::TileDType __out__ dst,
 } // end of tf
 
 template <typename TileDataDst, typename TileDataSrc, bool inplace>
-PTO_INTERNAL void TFILLPAD_GENERIC_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_GENERIC_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     constexpr unsigned blockSizeElem = BLOCK_BYTE_SIZE / sizeof(typename TileDataSrc::DType);
     constexpr unsigned dstStride = TileDataDst::RowStride;
     constexpr unsigned srcStride = TileDataSrc::RowStride;
@@ -234,32 +246,35 @@ PTO_INTERNAL void TFILLPAD_GENERIC_IMPL(TileDataDst &dst, TileDataSrc &src) {
         return;
     }
     if constexpr (!inplace) {
-        TFillPad_CopyData<TileDataDst, TileDataSrc>(
-            dst.data(), src.data(), validDstRow, validDstCol, validSrcRow, validSrcCol);
+        TFillPad_CopyData<TileDataDst, TileDataSrc>(dst.data(), src.data(), validDstRow, validDstCol, validSrcRow,
+                                                    validSrcCol);
     }
     TFillPad<TileDataDst, TileDataSrc>(dst.data(), src.data(), validDstRow, validDstCol, validSrcRow, validSrcCol);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void TFILLPAD_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     static_assert(TileDataDst::Cols == TileDataSrc::Cols && TileDataDst::Rows == TileDataSrc::Rows,
-        "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
+                  "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
 
     TFILLPAD_GENERIC_IMPL<TileDataDst, TileDataSrc, false>(dst, src);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void TFILLPAD_INPLACE_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_INPLACE_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     static_assert(TileDataDst::Cols == TileDataSrc::Cols && TileDataDst::Rows == TileDataSrc::Rows,
-        "Fix: TFillPad Dst vecTile Rows/Cols must be greater or equal to src vecTile.");
+                  "Fix: TFillPad Dst vecTile Rows/Cols must be greater or equal to src vecTile.");
 
     TFILLPAD_GENERIC_IMPL<TileDataDst, TileDataSrc, true>(dst, src);
 }
 
 template <typename TileDataDst, typename TileDataSrc>
-PTO_INTERNAL void TFILLPAD_EXPAND_IMPL(TileDataDst &dst, TileDataSrc &src) {
+PTO_INTERNAL void TFILLPAD_EXPAND_IMPL(TileDataDst &dst, TileDataSrc &src)
+{
     static_assert(TileDataDst::Cols >= TileDataSrc::Cols && TileDataDst::Rows >= TileDataSrc::Rows,
-        "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
+                  "Fix: TFillPad Dst/Src vecTile Rows/Cols must be the same.");
 
     TFILLPAD_GENERIC_IMPL<TileDataDst, TileDataSrc, false>(dst, src);
 }
@@ -284,8 +299,9 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileData::TileDType __out__ dst, uint
     if (blockLen != 0) {
         create_cbuf_matrix((__cbuf__ uint16_t *)(dstPtr + dstValidRow * elementsPerBlock), repeatConfig, 0);
     }
-    if (alignedValidCol != TileData::Cols) { // if alignedValidCol is not equal to TileData::Cols, need to pad the left column
-        blockLen = TileData::Rows;        // unit is 32B
+    if (alignedValidCol <
+        TileData::Cols) { // if alignedValidCol is not equal to TileData::Cols, need to pad the left column
+        blockLen = TileData::Rows * (TileData::Cols - alignedValidCol) / elementsPerBlock; // unit is 32B
         repeatConfig = (static_cast<uint64_t>(blockLen) << 16) | // [30:16] is the block number of each repeat
                        (static_cast<uint64_t>(0) << 32) | 1;     // [46:32] is the repeat gap
         create_cbuf_matrix((__cbuf__ uint16_t *)(dstPtr + TileData::Rows * alignedValidCol), repeatConfig, 0);
@@ -293,22 +309,15 @@ __tf__ PTO_INTERNAL void TFillPad(typename TileData::TileDType __out__ dst, uint
 #endif
 }
 
-	template <typename TileData, PadValue PadVal = PadValue::Zero>
-	PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
-	{
-	    if constexpr (TileData::Loc == TileType::Vec) {
-	        static_assert(TileData::PadVal == PadVal,
-	            "Fix: TFILLPAD VecTile PadValue mismatch between tile type and instruction template.");
-	        TFILLPAD_GENERIC_IMPL<TileData, TileData, false>(dst, src);
-	    } else {
-	        static_assert(TileData::Loc == TileType::Mat, "Fix: TFILLPAD PadValue overload only supports Vec/Mat tiles.");
-	        static_assert(!TileData::isRowMajor && (TileData::SFractal == SLayout::RowMajor),
-	            "Fix: TFillPad Dst matTile now only support NZ layout.");
-	        static_assert(TileData::PadVal == PadValue::Zero || TileData::PadVal == PadValue::Null,
-	            "Fix: TFillPad dst matTile pad value only support Zero or Null!");
-	        using T = typename TileData::DType;
-	        static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1,
-	            "Fix: TFillPad type must be b4/b8/b16/b32.");
+template <typename TileData, PadValue PadVal = PadValue::Zero>
+PTO_INTERNAL void TFILLPAD_IMPL(TileData &dst, TileData &src)
+{
+    static_assert(!TileData::isRowMajor && (TileData::SFractal == SLayout::RowMajor),
+                  "Fix: TFillPad Dst matTile now only support NZ layout.");
+    static_assert(TileData::PadVal == PadValue::Zero || TileData::PadVal == PadValue::Null,
+                  "Fix: TFillPad dst matTile pad value only support Zero or Null!");
+    using T = typename TileData::DType;
+    static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1, "Fix: TFillPad type must be b4/b8/b16/b32.");
 
 	        uint32_t validDstRow = dst.GetValidRow();
 	        uint32_t validDstCol = dst.GetValidCol();

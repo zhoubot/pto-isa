@@ -26,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -41,7 +42,7 @@ template <typename T, int kGSize_>
 inline void init_dst(T *dstHost)
 {
     for (size_t i = 0; i < kGSize_; i++) {
-        dstHost[i] =  0;
+        dstHost[i] = 0;
     }
 }
 
@@ -95,9 +96,11 @@ void test_tcolmax()
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TCOLMAXTest, case_float_64x64_64x64_64x64) {
+TEST_F(TCOLMAXTest, case_float_64x64_64x64_64x64)
+{
     test_tcolmax<float, 64, 64, 64, 64>();
 }
-TEST_F(TCOLMAXTest, case_half_16x256_16x256_16x256) {
+TEST_F(TCOLMAXTest, case_half_16x256_16x256_16x256)
+{
     test_tcolmax<aclFloat16, 16, 256, 16, 256>();
 }

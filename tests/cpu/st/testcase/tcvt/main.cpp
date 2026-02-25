@@ -26,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -86,7 +87,6 @@ void test_tcvt()
 
     EXPECT_TRUE(ret);
 }
-
 
 TEST_F(TCVTTest, case1)
 {

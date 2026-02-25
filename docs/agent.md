@@ -80,7 +80,8 @@ python3 tests/run_cpu.py --demo flash_attn --verbose
 Notes:
 
 - CPU ST uses CMake and GoogleTest; it may download GTest if not installed system-wide.
-- Compiler requirement is **C++23** (see `tests/cpu/st/CMakeLists.txt`).
+- Compiler requirement is at least **C++20** (see `tests/cpu/st/CMakeLists.txt`).
+- For enabling bfloat16 support in CPU-SIM, GCC>=14 is required
 
 ## Run: NPU ST (Ascend) — `sim` and `npu`
 

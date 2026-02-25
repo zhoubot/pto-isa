@@ -12,12 +12,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
 template <int32_t tilingKey>
-void launchTSELS_demo(uint8_t *out, uint8_t *src,void *stream);
+void launchTSELS_demo(uint8_t *out, uint8_t *src, void *stream);
 
 class TSELSTest : public testing::Test {
 protected:
@@ -27,7 +26,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -35,12 +35,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
-
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTSelS(T *out, int8_t scalar, T *src0, T *src1, void *stream);
 
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_tsels() {
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void test_tsels()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -63,12 +63,13 @@ void test_tsels() {
     CHECK_RESULT_GTEST(ReadFile(GetGoldenDir() + "/input2.bin", fileSize, src1Host, fileSize));
     std::string scalar_file = GetGoldenDir() + "/scalar.bin";
     std::ifstream file(scalar_file, std::ios::binary);
-    
-    file.read(reinterpret_cast<char*>(&scalar), 4);
+
+    file.read(reinterpret_cast<char *>(&scalar), 4);
     file.close();
     aclrtMemcpy(src0Device, fileSize, src0Host, fileSize, ACL_MEMCPY_HOST_TO_DEVICE);
     aclrtMemcpy(src1Device, fileSize, src1Host, fileSize, ACL_MEMCPY_HOST_TO_DEVICE);
-    LaunchTSelS<T, kGRows_, kGCols_, kTRows_, kTCols_>(dstDevice, static_cast<int8_t>(scalar), src0Device, src1Device, stream);
+    LaunchTSelS<T, kGRows_, kGCols_, kTRows_, kTCols_>(dstDevice, static_cast<int8_t>(scalar), src0Device, src1Device,
+                                                       stream);
 
     aclrtSynchronizeStream(stream);
     aclrtMemcpy(dstHost, fileSize, dstDevice, fileSize, ACL_MEMCPY_DEVICE_TO_HOST);
@@ -96,15 +97,19 @@ void test_tsels() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TSELSTest, case_float_64x64_64x64_64x64) {
+TEST_F(TSELSTest, case_float_64x64_64x64_64x64)
+{
     test_tsels<float, 64, 64, 64, 64>();
 }
-TEST_F(TSELSTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TSELSTest, case_int32_64x64_64x64_64x64)
+{
     test_tsels<int32_t, 64, 64, 64, 64>();
 }
-TEST_F(TSELSTest, case_int16_64x64_64x64_64x64) {
+TEST_F(TSELSTest, case_int16_64x64_64x64_64x64)
+{
     test_tsels<int16_t, 64, 64, 64, 64>();
 }
-TEST_F(TSELSTest, case_half_16x256_16x256_16x256) {
+TEST_F(TSELSTest, case_half_16x256_16x256_16x256)
+{
     test_tsels<aclFloat16, 16, 256, 16, 256>();
 }

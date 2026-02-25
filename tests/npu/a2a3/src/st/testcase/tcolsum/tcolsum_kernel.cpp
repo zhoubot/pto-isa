@@ -16,7 +16,8 @@ using namespace std;
 using namespace pto;
 
 template <typename T, int cols, int src_row, int src_validRow, bool IsBinary>
-__global__ AICORE void runTCOLSUM(__gm__ T __out__ *out, __gm__ T __in__ *src) {
+__global__ AICORE void runTCOLSUM(__gm__ T __out__ *out, __gm__ T __in__ *src)
+{
     using DynDim2Shape = Shape<1, 1, 1, -1, -1>;
     using DynDim2Stride = pto::Stride<1, 1, -1, -1, 1>;
     using GlobalData = GlobalTensor<T, DynDim2Shape, DynDim2Stride>;

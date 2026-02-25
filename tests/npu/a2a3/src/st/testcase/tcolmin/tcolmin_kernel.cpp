@@ -17,8 +17,9 @@ using namespace std;
 using namespace pto;
 
 template <typename T, int cols, int src_row, int src_validRow>
-__global__ AICORE void runTCOLMIN(__gm__ T __out__ *out, __gm__ T __in__ *src) {
-    using DynDim2Shape  = Shape<1, 1, 1, -1, -1>;
+__global__ AICORE void runTCOLMIN(__gm__ T __out__ *out, __gm__ T __in__ *src)
+{
+    using DynDim2Shape = Shape<1, 1, 1, -1, -1>;
     using DynDim2Stride = pto::Stride<1, 1, -1, -1, 1>;
     using GlobalData = GlobalTensor<T, DynDim2Shape, DynDim2Stride>;
     GlobalData srcGlobal(src, DynDim2Shape(src_validRow, cols), DynDim2Stride(src_row, cols));
@@ -40,7 +41,7 @@ __global__ AICORE void runTCOLMIN(__gm__ T __out__ *out, __gm__ T __in__ *src) {
     set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     TCOLMIN(dstTile, srcTile);
-    
+
     set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
     TSTORE(dstGlobal, dstTile);
@@ -48,14 +49,14 @@ __global__ AICORE void runTCOLMIN(__gm__ T __out__ *out, __gm__ T __in__ *src) {
 }
 
 template <typename T, int cols, int src_row, int src_validRow>
-void launchTCOLMIN(T *out, T *src, void* stream)
+void launchTCOLMIN(T *out, T *src, void *stream)
 {
     cout << "launchTCOLMIN start!" << endl;
 
     runTCOLMIN<T, cols, src_row, src_validRow><<<1, nullptr, stream>>>(out, src);
 
     cout << "launchTCOLMIN end!" << endl;
-} 
+}
 
 template void launchTCOLMIN<int16_t, 16, 16, 8>(int16_t *out, int16_t *src, void *stream);
 template void launchTCOLMIN<int32_t, 16, 16, 8>(int32_t *out, int32_t *src, void *stream);

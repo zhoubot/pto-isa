@@ -11,11 +11,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <pto/common/constants.hpp>
 
-
 using namespace pto;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-AICORE void runTLrelu( __gm__ T __out__ *out, __gm__ T __in__ *src, __gm__ T __in__ *scalar) {
+AICORE void runTLrelu(__gm__ T __out__ *out, __gm__ T __in__ *src, __gm__ T __in__ *scalar)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -35,8 +35,8 @@ AICORE void runTLrelu( __gm__ T __out__ *out, __gm__ T __in__ *src, __gm__ T __i
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTLrelu(T *out, T *src, T *scalar, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTLrelu<half, kGRows_, kGCols_, kTRows_, kTCols_>((half*)(out), (half*)(src), (half*)(scalar));
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTLrelu<half, kGRows_, kGCols_, kTRows_, kTCols_>((half *)(out), (half *)(src), (half *)(scalar));
     else
         runTLrelu<T, kGRows_, kGCols_, kTRows_, kTCols_>(out, src, scalar);
 }
@@ -45,8 +45,8 @@ const int NUM_64 = 64;
 const int NUM_256 = 256;
 template void LaunchTLrelu<float, NUM_64, NUM_64, NUM_64, NUM_64>(float *out, float *src, float *scalar, void *stream);
 template void LaunchTLrelu<int32_t, NUM_64, NUM_64, NUM_64, NUM_64>(int32_t *out, int32_t *src, int32_t *scalar,
-                                                                   void *stream);
+                                                                    void *stream);
 template void LaunchTLrelu<aclFloat16, NUM_16, NUM_256, NUM_16, NUM_256>(aclFloat16 *out, aclFloat16 *src,
-                                                                        aclFloat16 *scalar, void *stream);
+                                                                         aclFloat16 *scalar, void *stream);
 template void LaunchTLrelu<int16_t, NUM_64, NUM_64, NUM_64, NUM_64>(int16_t *out, int16_t *src, int16_t *scalar,
-                                                                   void *stream);
+                                                                    void *stream);

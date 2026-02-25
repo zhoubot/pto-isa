@@ -47,4 +47,3 @@ void LaunchTScatter(float *out, float *src, uint16_t *idx, void *stream)
 }
 
 template void LaunchTScatter<16, 16>(float *out, float *src, uint16_t *idx, void *stream);
-

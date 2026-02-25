@@ -16,13 +16,14 @@ using namespace std;
 using namespace pto;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-inline AICORE void runTTRANS( __gm__ T __out__ *out, __gm__ T __in__ *src) {
+inline AICORE void runTTRANS(__gm__ T __out__ *out, __gm__ T __in__ *src)
+{
     using DynShapeDim4 = pto::Shape<-1, -1, -1, -1, -1>;
     using DynStridDim4 = pto::Stride<-1, -1, -1, -1, -1>;
     using GlobalData = GlobalTensor<T, DynShapeDim4, DynStridDim4>;
 
-    constexpr uint16_t aligned_Rows = ( (kTRows_ * sizeof(T) + 31) / 32 ) * (32 / sizeof(T));
-    constexpr uint16_t aligned_Cols = ( (kTCols_ * sizeof(T) + 31) / 32 ) * (32 / sizeof(T));
+    constexpr uint16_t aligned_Rows = ((kTRows_ * sizeof(T) + 31) / 32) * (32 / sizeof(T));
+    constexpr uint16_t aligned_Cols = ((kTCols_ * sizeof(T) + 31) / 32) * (32 / sizeof(T));
 
     using TileDataSrc = Tile<TileType::Vec, T, kTRows_, aligned_Cols, BLayout::RowMajor>;
     using TileDataDst = Tile<TileType::Vec, T, kTCols_, aligned_Rows, BLayout::RowMajor>;
@@ -38,13 +39,9 @@ inline AICORE void runTTRANS( __gm__ T __out__ *out, __gm__ T __in__ *src) {
 
     int offset = 0;
 
-    GlobalData srcGlobal(src + offset,
-                         pto::Shape(1, 1, 1, kGRows_, kGCols_),
-                         pto::Stride(1, 1, 1, kGCols_, 1));
+    GlobalData srcGlobal(src + offset, pto::Shape(1, 1, 1, kGRows_, kGCols_), pto::Stride(1, 1, 1, kGCols_, 1));
 
-    GlobalData dstGlobal(out + offset,
-                         pto::Shape(1, 1, 1, kGCols_, kGRows_),
-                         pto::Stride(1, 1, 1, kGRows_, 1));
+    GlobalData dstGlobal(out + offset, pto::Shape(1, 1, 1, kGCols_, kGRows_), pto::Stride(1, 1, 1, kGRows_, 1));
 
     TLOAD(srcTile, srcGlobal);
 
@@ -61,15 +58,14 @@ inline AICORE void runTTRANS( __gm__ T __out__ *out, __gm__ T __in__ *src) {
     out = dstGlobal.data();
 }
 
-
-extern "C" __global__ AICORE void launchTTRANS_1(__gm__ uint8_t *out, __gm__ uint8_t *src) {
+extern "C" __global__ AICORE void launchTTRANS_1(__gm__ uint8_t *out, __gm__ uint8_t *src)
+{
     constexpr uint32_t M = 128;
     constexpr uint32_t N = 128;
     constexpr uint32_t K = 128;
     constexpr uint32_t L = 128;
-    runTTRANS<float, M, N, K, L>(reinterpret_cast<__gm__ float *>(out), reinterpret_cast<__gm__ float *>(src)); 
+    runTTRANS<float, M, N, K, L>(reinterpret_cast<__gm__ float *>(out), reinterpret_cast<__gm__ float *>(src));
 }
-
 
 template <int32_t tilingKey>
 void launchTTRANS(uint8_t *out, uint8_t *src, void *stream)

@@ -1,5 +1,10 @@
 # TROWMIN
 
+
+## Tile Operation Diagram
+
+![TROWMIN tile operation](../figures/isa/TROWMIN.svg)
+
 ## Introduction
 
 Reduce each row by taking the minimum across columns.
@@ -21,20 +26,17 @@ trowmin %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 Lowering may introduce internal scratch tiles; the C++ intrinsic requires an explicit `tmp` operand.
 
-## IR Syntax
+### IR Level 1 (SSA)
 
-### IR-level1 (SSA)
-
-```mlir
-%dst = pto.trowmin %src : !pto.tile<...> -> !pto.tile<...>
+```text
+%dst = pto.trowmin %src, %tmp : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
 ```
 
-### IR-level2 (DPS)
+### IR Level 2 (DPS)
 
-```mlir
-pto.trowmin ins(%src : !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```text
+pto.trowmin ins(%src, %tmp : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
 ```
-
 ## C++ Intrinsic
 
 Declared in `include/pto/common/pto_instr.hpp`:
@@ -104,3 +106,31 @@ void example_manual() {
   TROWMIN(dst, src, tmp);
 }
 ```
+
+## ASM Form Examples
+
+### Auto Mode
+
+```text
+# Auto mode: compiler/runtime-managed placement and scheduling.
+%dst = pto.trowmin %src, %tmp : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### Manual Mode
+
+```text
+# Manual mode: bind resources explicitly before issuing the instruction.
+# Optional for tile operands:
+# pto.tassign %arg0, @tile(0x1000)
+# pto.tassign %arg1, @tile(0x2000)
+%dst = pto.trowmin %src, %tmp : (!pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+```
+
+### PTO Assembly Form
+
+```text
+%dst = trowmin %src : !pto.tile<...> -> !pto.tile<...>
+# IR Level 2 (DPS)
+pto.trowmin ins(%src, %tmp : !pto.tile_buf<...>, !pto.tile_buf<...>) outs(%dst : !pto.tile_buf<...>)
+```
+

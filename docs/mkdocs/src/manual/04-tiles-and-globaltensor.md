@@ -1,51 +1,61 @@
 # 4. Tiles and GlobalTensor
 
-## 4.1 Tile as the fundamental execution unit
+## 4.1 Scope
 
-Most PTO instructions operate on a Tile and treat it as a 2D array:
+This chapter defines data-model contracts between tile operands and global memory operands.
+It specifies architecture-visible movement and interpretation rules.
 
-```
-T[r, c]   where 0 ≤ r < R, 0 ≤ c < C
-```
+## 4.2 Tile data model
 
-When a Tile has a valid region `[Rv, Cv]`, the ISA meaning is defined only for:
+A tile is the primary architectural data object for compute instructions.
+A tile contract includes:
 
-```
-0 ≤ r < Rv, 0 ≤ c < Cv
-```
+- element type and shape class
+- valid-region metadata (`Rv`, `Cv`)
+- location-intent role where required by instruction legality
+- layout/alignment properties required by backend legality
 
-## 4.2 Location and intent
+## 4.3 GlobalTensor data model
 
-Tile `Location` encodes intent and constraints. Typical locations include:
+A GlobalTensor (or equivalent memory view) represents addressable global-memory data.
+Its architecture-visible contract includes:
 
-- `Vec`: vector/elementwise/reduction operations
-- `Mat`: general matrix tile used for movement/reshape/transpose
-- `Left`, `Right`, `Acc`: cube/matrix-multiply operands
-- `Bias`, `Scale`: auxiliary matrix data for fused operations
+- element type compatibility with participating tile operations
+- address and stride interpretation required by memory instructions
+- visibility behavior under ordering constraints
 
-Location constraints are instruction-specific; see the corresponding instruction page.
+## 4.4 GM <-> Tile movement contracts
 
-## 4.3 Moving data: GM ↔ Tile
+`TLOAD` and `TSTORE` families define the primary GM <-> Tile bridge.
+Conforming implementations MUST preserve:
 
-Canonical data movement instructions:
+- element mapping semantics in the defined valid domain
+- required ordering guarantees under event/TSYNC and memory model rules
+- documented behavior of quantization/scaling and mode attributes where present
 
-- `TLOAD(tile, global)`: loads a rectangular region from GM into a tile
-- `TSTORE(global, tile)`: stores a rectangular region from a tile back to GM
+## 4.5 Shape and domain compatibility
 
-Other movement/shape/layout operations:
+For movement and layout-transform operations:
 
-- `TEXTRACT`: slice a sub-rectangle (or window) into a tile
-- `TMOV`: convert between tile locations/layouts (often for cube preparation)
-- `TTRANS`: transpose
-- `TRESHAPE`: reinterpret layout/shape metadata (with constraints)
+- source and destination domains MUST satisfy instruction-specific compatibility constraints
+- out-of-domain behavior MUST be either explicitly defined (for example pad/fill) or declared unspecified
+- backend legality checks MUST reject unsupported shape/layout tuples deterministically
 
-## 4.4 Practical mapping rule (tiling by block id)
+## 4.6 Layout-transform operations
 
-Most kernels follow the same mapping:
+Operations such as extract/insert/reshape/transpose are architecture-level transforms over tile domains.
+They MUST define:
 
-- interpret GM as an `M×N` matrix
-- choose tile size `TR×TC`
-- compute tile row/col from `block_idx`
+- index-space mapping
+- valid-domain mapping
+- behavior for partially covered domains
+- implementation-defined constraints where hardware-specific behavior exists
 
-For a concrete worked example, see `docs/coding/tutorials/vec-add.md`.
+## 4.7 Diagnostics requirements
 
+Movement/layout diagnostics SHOULD report:
+
+- offending operand and operation
+- incompatible shape/layout/location dimensions
+- relevant index/offset parameter context
+- deterministic wording for reproducible CI behavior

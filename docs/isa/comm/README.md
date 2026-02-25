@@ -1,0 +1,91 @@
+# PTO Communication ISA Reference
+
+This directory contains the per-instruction reference for the PTO Communication ISA.
+
+- Source of truth (C++ intrinsics): `include/pto/comm/pto_comm_inst.hpp`
+- Type definitions: `include/pto/comm/comm_types.hpp`
+
+## Point-to-Point Communication (Synchronous)
+- `TPUT`: `docs/isa/comm/TPUT.md` - Remote write (GM → UB → GM)
+- `TGET`: `docs/isa/comm/TGET.md` - Remote read (GM → UB → GM)
+
+## Signal-Based Synchronization
+- `TNOTIFY`: `docs/isa/comm/TNOTIFY.md` - Send notification to remote NPU
+- `TWAIT`: `docs/isa/comm/TWAIT.md` - Blocking wait for signal condition
+- `TTEST`: `docs/isa/comm/TTEST.md` - Non-blocking test signal condition
+
+## Collective Communication
+
+- `TGATHER`: `docs/isa/comm/TGATHER.md` - Gather data from all ranks
+- `TSCATTER`: `docs/isa/comm/TSCATTER.md` - Scatter data to all ranks
+- `TREDUCE`: `docs/isa/comm/TREDUCE.md` - Reduce data from all ranks to local
+- `TBROADCAST`: `docs/isa/comm/TBROADCAST.md` - Broadcast from current NPU to all ranks
+
+## Type Definitions
+
+### NotifyOp
+
+Operation type for `TNOTIFY`:
+
+| Value | Description |
+|-------|-------------|
+| `NotifyOp::Set` | Direct set (`signal = value`) |
+| `NotifyOp::AtomicAdd` | Atomic add (`signal += value`) |
+
+### WaitCmp
+
+Comparison operators for `TWAIT` and `TTEST`:
+
+| Value | Description |
+|-------|-------------|
+| `WaitCmp::EQ` | Equal (`==`) |
+| `WaitCmp::NE` | Not equal (`!=`) |
+| `WaitCmp::GT` | Greater than (`>`) |
+| `WaitCmp::GE` | Greater or equal (`>=`) |
+| `WaitCmp::LT` | Less than (`<`) |
+| `WaitCmp::LE` | Less or equal (`<=`) |
+
+```cpp
+// Usage (unified runtime parameter style):
+comm::TNOTIFY(signal, 1, comm::NotifyOp::Set);
+comm::TWAIT(signal, 1, comm::WaitCmp::EQ);
+comm::TTEST(signal, 1, comm::WaitCmp::GE);
+```
+
+### ReduceOp
+
+Reduction operators for `TREDUCE`:
+
+| Value | Description |
+|-------|-------------|
+| `ReduceOp::Sum` | Element-wise sum |
+| `ReduceOp::Max` | Element-wise maximum |
+| `ReduceOp::Min` | Element-wise minimum |
+
+### AtomicType
+
+Atomic operation type for `TPUT` (defined in `include/pto/common/constants.hpp`):
+
+| Value | Description |
+|-------|-------------|
+| `AtomicType::AtomicNone` | No atomic operation (default) |
+| `AtomicType::AtomicAdd` | Atomic add operation |
+
+### ParallelGroup
+
+Wrapper for collective communication across multiple NPUs:
+
+```cpp
+template <typename GlobalData>
+struct ParallelGroup {
+    // Pointer to an array of `GlobalData` objects (each wraps a GM address).
+    // The array itself is local metadata; the wrapped addresses may refer to local or remote GM,
+    // depending on the collective instruction.
+    GlobalData *tensors;
+    int nranks;   // Number of ranks
+    int rootIdx;  // Root NPU's rank index
+    
+    // Factory function (recommended): build from an existing tensor array.
+    static ParallelGroup Create(GlobalData *tensorArray, int size, int rank_id);
+};
+```

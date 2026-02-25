@@ -15,97 +15,97 @@ using namespace std;
 using namespace PtoTestCommon;
 
 namespace TRowSumTest {
-    template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-    void launchTROWSUMTest(T *out, T *src, aclrtStream stream);
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void launchTROWSUMTest(T *out, T *src, aclrtStream stream);
 
-    class TROWSUMTest : public testing::Test {
-    protected:
-        void SetUp() override
-        {}
-        void TearDown() override
-        {}
-    };
+class TROWSUMTest : public testing::Test {
+protected:
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
+};
 
-    std::string GetGoldenDir()
-    {
-        const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
-        const std::string caseName = testInfo->name();
-        std::string suiteName = testInfo->test_suite_name();
-        std::string fullPath = "../" + suiteName + "." + caseName;
-        return fullPath;
-    }
-
-    template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-    bool TRowSumTest()
-    {
-        size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
-        size_t inputFileSize = fileSize;
-        size_t outputFileSize = fileSize;
-
-        aclInit(nullptr);
-        aclrtSetDevice(0);
-
-        aclrtStream stream;
-        aclrtCreateStream(&stream);
-
-        T *dstHost;
-        T *srcHost;
-        T *dstDevice;
-        T *srcDevice;
-
-        aclrtMallocHost((void **)&dstHost, outputFileSize);
-        aclrtMallocHost((void **)&srcHost, inputFileSize);
-
-        aclrtMalloc((void **)&dstDevice, outputFileSize, ACL_MEM_MALLOC_HUGE_FIRST);
-        aclrtMalloc((void **)&srcDevice, inputFileSize, ACL_MEM_MALLOC_HUGE_FIRST);
-
-        ReadFile(GetGoldenDir() + "/input0.bin", inputFileSize, srcHost, inputFileSize);
-
-        aclrtMemcpy(srcDevice, inputFileSize, srcHost, inputFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
-        launchTROWSUMTest<T, kGRows_, kGCols_, kTRows_, kTCols_>(dstDevice, srcDevice, stream);
-
-        aclrtSynchronizeStream(stream);
-        aclrtMemcpy(dstHost, outputFileSize, dstDevice, outputFileSize, ACL_MEMCPY_DEVICE_TO_HOST);
-
-        WriteFile(GetGoldenDir() + "/output.bin", dstHost, outputFileSize);
-
-        aclrtFree(dstDevice);
-        aclrtFree(srcDevice);
-
-        aclrtFreeHost(dstHost);
-        aclrtFreeHost(srcHost);
-
-        aclrtDestroyStream(stream);
-        aclrtResetDevice(0);
-        aclFinalize();
-
-        std::vector<float> golden(outputFileSize);
-        std::vector<float> devFinal(outputFileSize);
-        ReadFile(GetGoldenDir() + "/golden.bin", outputFileSize, golden.data(), outputFileSize);
-        ReadFile(GetGoldenDir() + "/output.bin", outputFileSize, devFinal.data(), outputFileSize);
-
-        return ResultCmp(golden, devFinal, 0.001f);
-    }
-
-    constexpr int smallSize = 16;
-    constexpr int bigSize666 = 666;
-    constexpr int bigSizeAligned = 672;
-
-    TEST_F(TROWSUMTest, test1)
-    {
-        bool res = TRowSumTest<float, smallSize, smallSize, smallSize, smallSize>();
-        EXPECT_TRUE(res);
-    }
-
-    TEST_F(TROWSUMTest, test2)
-    {
-        bool res = TRowSumTest<uint16_t, smallSize, smallSize, smallSize, smallSize>();
-        EXPECT_TRUE(res);
-    }
-
-    TEST_F(TROWSUMTest, test3)
-    {
-        bool res = TRowSumTest<float, bigSize666, bigSize666, bigSize666, bigSizeAligned>();
-        EXPECT_TRUE(res);
-    }
+std::string GetGoldenDir()
+{
+    const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
+    const std::string caseName = testInfo->name();
+    std::string suiteName = testInfo->test_suite_name();
+    std::string fullPath = "../" + suiteName + "." + caseName;
+    return fullPath;
 }
+
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+bool TRowSumTest()
+{
+    size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
+    size_t inputFileSize = fileSize;
+    size_t outputFileSize = fileSize;
+
+    aclInit(nullptr);
+    aclrtSetDevice(0);
+
+    aclrtStream stream;
+    aclrtCreateStream(&stream);
+
+    T *dstHost;
+    T *srcHost;
+    T *dstDevice;
+    T *srcDevice;
+
+    aclrtMallocHost((void **)&dstHost, outputFileSize);
+    aclrtMallocHost((void **)&srcHost, inputFileSize);
+
+    aclrtMalloc((void **)&dstDevice, outputFileSize, ACL_MEM_MALLOC_HUGE_FIRST);
+    aclrtMalloc((void **)&srcDevice, inputFileSize, ACL_MEM_MALLOC_HUGE_FIRST);
+
+    ReadFile(GetGoldenDir() + "/input0.bin", inputFileSize, srcHost, inputFileSize);
+
+    aclrtMemcpy(srcDevice, inputFileSize, srcHost, inputFileSize, ACL_MEMCPY_HOST_TO_DEVICE);
+    launchTROWSUMTest<T, kGRows_, kGCols_, kTRows_, kTCols_>(dstDevice, srcDevice, stream);
+
+    aclrtSynchronizeStream(stream);
+    aclrtMemcpy(dstHost, outputFileSize, dstDevice, outputFileSize, ACL_MEMCPY_DEVICE_TO_HOST);
+
+    WriteFile(GetGoldenDir() + "/output.bin", dstHost, outputFileSize);
+
+    aclrtFree(dstDevice);
+    aclrtFree(srcDevice);
+
+    aclrtFreeHost(dstHost);
+    aclrtFreeHost(srcHost);
+
+    aclrtDestroyStream(stream);
+    aclrtResetDevice(0);
+    aclFinalize();
+
+    std::vector<float> golden(outputFileSize);
+    std::vector<float> devFinal(outputFileSize);
+    ReadFile(GetGoldenDir() + "/golden.bin", outputFileSize, golden.data(), outputFileSize);
+    ReadFile(GetGoldenDir() + "/output.bin", outputFileSize, devFinal.data(), outputFileSize);
+
+    return ResultCmp(golden, devFinal, 0.001f);
+}
+
+constexpr int smallSize = 16;
+constexpr int bigSize666 = 666;
+constexpr int bigSizeAligned = 672;
+
+TEST_F(TROWSUMTest, test1)
+{
+    bool res = TRowSumTest<float, smallSize, smallSize, smallSize, smallSize>();
+    EXPECT_TRUE(res);
+}
+
+TEST_F(TROWSUMTest, test2)
+{
+    bool res = TRowSumTest<uint16_t, smallSize, smallSize, smallSize, smallSize>();
+    EXPECT_TRUE(res);
+}
+
+TEST_F(TROWSUMTest, test3)
+{
+    bool res = TRowSumTest<float, bigSize666, bigSize666, bigSize666, bigSizeAligned>();
+    EXPECT_TRUE(res);
+}
+} // namespace TRowSumTest

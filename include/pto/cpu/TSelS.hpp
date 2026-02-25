@@ -14,28 +14,26 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/common/pto_tile.hpp"
 #include "tile_offsets.hpp"
 
-namespace pto{
-    template<typename TileData>
-    void TSelS_Impl(typename TileData::TileDType dst,
-                            typename TileData::DType scalar,
-                            typename TileData::TileDType src0,
-                            typename TileData::TileDType src1,
-                            unsigned validRow, unsigned validCol
-                        ) {
-        for(size_t c=0; c<validCol; c++) {
-            for(size_t r=0; r<validRow; r++) {
-                size_t idx = GetTileElementOffset<TileData>(r,c);
-                // if 1: take src1, else: take src2
-                dst[idx] = scalar == 1 ? src0[idx] : src1[idx];
-            }
+namespace pto {
+template <typename TileData>
+void TSelS_Impl(typename TileData::TileDType dst, typename TileData::DType scalar, typename TileData::TileDType src0,
+                typename TileData::TileDType src1, unsigned validRow, unsigned validCol)
+{
+    for (size_t c = 0; c < validCol; c++) {
+        for (size_t r = 0; r < validRow; r++) {
+            size_t idx = GetTileElementOffset<TileData>(r, c);
+            // if 1: take src1, else: take src2
+            dst[idx] = scalar == 1 ? src0[idx] : src1[idx];
         }
     }
-
-    template <typename TileData>
-    __aicore__ PTO_INLINE void TSELS_IMPL(TileData &dst, TileData &src0, TileData &src1, uint8_t selectMode) {
-        unsigned row = dst.GetValidRow();
-        unsigned col = dst.GetValidCol();
-        TSelS_Impl<TileData>(dst.data(), selectMode, src0.data(), src1.data(), row, col);
-    }
 }
+
+template <typename TileData>
+__aicore__ PTO_INLINE void TSELS_IMPL(TileData &dst, TileData &src0, TileData &src1, uint8_t selectMode)
+{
+    unsigned row = dst.GetValidRow();
+    unsigned col = dst.GetValidCol();
+    TSelS_Impl<TileData>(dst.data(), selectMode, src0.data(), src1.data(), row, col);
+}
+} // namespace pto
 #endif

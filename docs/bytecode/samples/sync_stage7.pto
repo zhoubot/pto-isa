@@ -1,0 +1,10 @@
+module {
+  func.func @sync_stage7() {
+    // Stage7 coverage sample: event ops + barrier + tsync
+    pto.record_event[<TLOAD>, <TMOV_M2L>, <EVENT_ID0>]
+    pto.wait_event[<TLOAD>, <TMOV_M2L>, <EVENT_ID0>]
+    pto.barrier
+    pto.tsync
+    return
+  }
+}

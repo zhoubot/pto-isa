@@ -12,7 +12,6 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <gtest/gtest.h>
 
-
 using namespace std;
 using namespace PtoTestCommon;
 
@@ -24,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -32,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void LaunchTROWMAX(T *out, T *src, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void LaunchTROWMAX(T *out, T *src,  void *stream);
-
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_trowmax() {
+void test_trowmax()
+{
     size_t dstFileSize = kTRows_ * sizeof(T);
     size_t srcFileSize = kTRows_ * kTCols_ * sizeof(T);
 
@@ -84,18 +84,23 @@ void test_trowmax() {
     EXPECT_TRUE(ret);
 }
 
-TEST_F(TROWMAXTest, case_float_64x64_64x64_64x64) {
+TEST_F(TROWMAXTest, case_float_64x64_64x64_64x64)
+{
     test_trowmax<float, 64, 64, 64, 64>();
 }
-TEST_F(TROWMAXTest, case_half_64x64_64x64_64x64) {
+TEST_F(TROWMAXTest, case_half_64x64_64x64_64x64)
+{
     test_trowmax<aclFloat16, 64, 64, 64, 64>();
 }
-TEST_F(TROWMAXTest, case_half_161x161_32x32_161x161) {
+TEST_F(TROWMAXTest, case_half_161x161_32x32_161x161)
+{
     test_trowmax<aclFloat16, 161, 161, 32, 32>();
 }
-TEST_F(TROWMAXTest, case_float_77x81_32x16_77x81) {
+TEST_F(TROWMAXTest, case_float_77x81_32x16_77x81)
+{
     test_trowmax<float, 77, 81, 32, 16>();
 }
-TEST_F(TROWMAXTest, case_float_32x32_32x16_32x32) {
+TEST_F(TROWMAXTest, case_float_32x32_32x16_32x32)
+{
     test_trowmax<float, 32, 32, 32, 16>();
 }

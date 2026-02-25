@@ -10,4 +10,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 include(cmake/package.cmake)
+include(cmake/func.cmake)
+include(version.cmake)
+add_version_info_targets()
 pack_built_in()

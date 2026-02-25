@@ -189,7 +189,7 @@ TEST_F(TMOVTest, case35_bfloat16_1_1_44_39_39_param)
 
 template <int32_t key, typename T, typename U, typename S>
 void textract_test(uint32_t M, uint32_t N, uint32_t K, uint16_t indexM, uint16_t indexN, uint16_t indexK,
-    uint32_t baseM = 0, uint32_t baseN = 0, uint32_t baseK = 0)
+                   uint32_t baseM = 0, uint32_t baseN = 0, uint32_t baseK = 0)
 {
     baseM = (baseM == 0) ? M : baseM;
     baseN = (baseN == 0) ? N : baseN;
@@ -318,7 +318,7 @@ TEST_F(TEXTRACTTest, case42_dynamic_int8_1_1_32_0_32_param)
 
 template <int32_t key, typename T, typename U, typename S>
 void textract_compact_test(uint32_t M, uint32_t N, uint32_t K, uint16_t indexM, uint16_t indexN, uint16_t indexK,
-    uint32_t baseM = 0, uint32_t baseN = 0, uint32_t baseK = 0)
+                           uint32_t baseM = 0, uint32_t baseN = 0, uint32_t baseK = 0)
 {
     baseM = (baseM == 0) ? M : baseM;
     baseN = (baseN == 0) ? N : baseN;

@@ -122,6 +122,81 @@ def HF8(input):
         return input
 
 
+def float32_to_tf32(x, round_mode="CAST_RINT"):
+    """
+    Convert float32 to TF32 format (E8M10), supporting two rounding modes
+    round_mode: "CAST_RINT" (ties to even) or "CAST_ROUND" (ties away from zero)
+    """
+    packed = struct.pack('f', x)
+    bits = struct.unpack('I', packed)[0]
+    
+    # Extract sign, exponent, and mantissa
+    sign = (bits >> 31) & 0x1
+    exponent = (bits >> 23) & 0xFF
+    mantissa = bits & 0x7FFFFF
+    
+    # Handle special values
+    if exponent == 0xFF:  # NaN or Inf
+        if mantissa != 0:
+            return float('nan')
+        return float('inf') * (-1 if sign else 1)
+    
+    if exponent == 0 and mantissa == 0:  # Zero
+        return 0.0 if sign == 0 else -0.0
+    
+    # Handle subnormal numbers: normalize first
+    if exponent == 0 and mantissa != 0:
+        # Subnormal number: actual exponent is -126, no hidden 1 in mantissa
+        # For TF32 conversion, usually handle directly or treat as 0
+        # Hardware may treat subnormals as 0 or handle specially
+        # Simplified here: if too small, return 0 directly
+        actual_value = struct.unpack('f', struct.pack('I', bits))[0]
+        if abs(actual_value) < 1e-30:  # Very small subnormal number
+            return 0.0 if sign == 0 else -0.0
+        # Otherwise continue processing
+    
+    # TF32: 10-bit mantissa, need to handle lower 13 bits
+    mantissa_10bit = mantissa >> 13  # Upper 10 bits
+    lost_bits = mantissa & 0x1FFF    # Lower 13 bits
+    
+    # Apply rounding mode
+    round_bit = (lost_bits >> 12) & 0x1      # 12th bit (0x1000)
+    sticky_bit = 1 if (lost_bits & 0xFFF) != 0 else 0  # Sticky bit for lower bits
+    
+    if round_mode == "CAST_RINT":  # roundTiesToEven
+        # Round to nearest, ties to even
+        if round_bit == 1:
+            if sticky_bit == 1:
+                # Greater than 0.5, round up
+                mantissa_10bit += 1
+            else:
+                # Exactly 0.5, round to nearest even
+                if mantissa_10bit & 0x1:  # If LSB is 1 (odd)
+                    mantissa_10bit += 1
+                # If LSB is 0 (even), keep unchanged
+    
+    elif round_mode == "CAST_ROUND":  # roundTiesAway
+        # Round to nearest, ties away from zero
+        if round_bit == 1 and (sticky_bit == 1 or mantissa_10bit & 0x1):
+            # Greater than 0.5, or exactly 0.5 and currently odd: round up
+            mantissa_10bit += 1
+    
+    # Check mantissa overflow (10-bit mantissa max is 0x3FF)
+    if mantissa_10bit >= 0x400:  # 0x400 = 1024, exceeds 10-bit range
+        mantissa_10bit >>= 1
+        exponent += 1
+    
+    # Check exponent overflow
+    if exponent >= 0xFF:
+        return float('inf') if sign == 0 else -float('inf')
+    
+    # Reconstruct TF32
+    tf32_mantissa = mantissa_10bit << 13
+    tf32_bits = (sign << 31) | (exponent << 23) | tf32_mantissa
+    
+    return struct.unpack('f', struct.pack('I', tf32_bits))[0]
+
+
 def gen_golden_data(case_name, param):
     is_hifloat = False
     a_type = param.atype
@@ -133,8 +208,8 @@ def gen_golden_data(case_name, param):
 
     m, k, n, is_bias, is_atrans, is_btrans = param.m, param.k, param.n, param.is_bias, False, False
 
-    x1_gm = np.random.randint(1, 5, [m, k]).astype(a_type)
-    x2_gm = np.random.randint(1, 5, [k, n]).astype(b_type)
+    x1_gm = np.random.randint(-10, 10, [m, k]).astype(a_type)
+    x2_gm = np.random.randint(-10, 10, [k, n]).astype(b_type)
     bias_gm = np.random.randint(1, 10, [n, ]).astype(bias_type)
 
     if is_atrans:
@@ -167,6 +242,16 @@ def gen_golden_data(case_name, param):
         x1_gm = s1.reshape(x1_gm.shape)
         x2_gm = s2.reshape(x2_gm.shape)
 
+    # TF32 Mode
+    if param.is_tf32:
+        round_mode = param.tf32_trans
+        tf32_func = np.vectorize(lambda x: float32_to_tf32(x, round_mode), otypes=[np.float32])
+
+        x1_gm = tf32_func(x1_gm.astype(np.float32))
+        x2_gm = tf32_func(x2_gm.astype(np.float32))
+        x1_gm.tofile("./x1_gm_tf32.bin")
+        x2_gm.tofile("./x2_gm_tf32.bin")
+
     if is_bias:
         golden = np.matmul(x1_gm.astype(dst_type), x2_gm.astype(dst_type)).astype(dst_type) + bias_gm.astype(dst_type)
     else:
@@ -177,7 +262,8 @@ def gen_golden_data(case_name, param):
 
 
 class tmatmulParams:
-    def __init__(self, atype, btype, ctype, m, k, n, is_bias, bias_type = None):
+    def __init__(self, atype, btype, ctype, m, k, n, is_bias, bias_type=None,
+                    is_tf32=False, tf32_trans="CAST_RINT"):
         self.atype = atype
         self.btype = btype
         self.ctype = ctype
@@ -189,6 +275,8 @@ class tmatmulParams:
             self.bias_type = bias_type
         else:
             self.bias_type = ctype
+        self.is_tf32 = is_tf32
+        self.tf32_trans = tf32_trans
 
 
 if __name__ == "__main__":
@@ -204,6 +292,9 @@ if __name__ == "__main__":
         "TMATMULTest.case8",
         "TMATMULTest.case9",
         "TMATMULTest.case10",
+        "TMATMULTest.case11",
+        "TMATMULTest.case12",
+        "TMATMULTest.case13",
 
         "TMATMULTest.case_bias_1",
         "TMATMULTest.case_bias_2",
@@ -215,6 +306,7 @@ if __name__ == "__main__":
         "TMATMULTest.case_bias_8",
         "TMATMULTest.case_bias_9",
         "TMATMULTest.case_bias_10",
+        "TMATMULTest.case_bias_11",
     ]
 
     case_params_list = [
@@ -228,6 +320,10 @@ if __name__ == "__main__":
         tmatmulParams(fp8_e5m2, fp8_e4m3fn, np.float32, 145, 115, 85, False),
         tmatmulParams(fp8_e5m2, fp8_e5m2, np.float32, 120, 90, 160, False),
         tmatmulParams(np.uint8, np.uint8, np.float32, 30, 90, 60, False),
+        tmatmulParams(np.float16, np.float16, np.float32, 1, 300, 60, False),
+
+        tmatmulParams(np.float32, np.float32, np.float32, 16, 32, 64, False, np.float32, True, "CAST_RINT"),
+        tmatmulParams(np.float32, np.float32, np.float32, 128, 96, 64, False, np.float32, True, "CAST_ROUND"),
 
         tmatmulParams(np.int8, np.int8, np.int32, 8, 7, 6, True),
         tmatmulParams(np.float16, np.float16, np.float32, 16, 15, 16, True, np.float16),
@@ -239,6 +335,7 @@ if __name__ == "__main__":
         tmatmulParams(fp8_e5m2, fp8_e4m3fn, np.float32, 128, 96, 64, True),
         tmatmulParams(fp8_e5m2, fp8_e5m2, np.float32, 30, 90, 60, True),
         tmatmulParams(np.uint8, np.uint8, np.float32, 145, 115, 85, True),
+        tmatmulParams(np.float16, np.float16, np.float32, 1, 512, 85, True),
     ]
 
     for i, case_name in enumerate(case_name_list):

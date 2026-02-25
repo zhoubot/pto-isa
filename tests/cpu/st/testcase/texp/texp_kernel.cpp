@@ -11,11 +11,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <pto/common/constants.hpp>
 
-
 using namespace pto;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-AICORE void runTEXP( __gm__ T __out__ *out, __gm__ T __in__ *src) {
+AICORE void runTEXP(__gm__ T __out__ *out, __gm__ T __in__ *src)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -41,10 +41,9 @@ AICORE void runTEXP( __gm__ T __out__ *out, __gm__ T __in__ *src) {
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTExp(T *out, T *src, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTEXP<half, kGRows_, kGCols_, kTRows_, kTCols_>((half*)(out),
-                                                          (half*)(src));
-    else 
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTEXP<half, kGRows_, kGCols_, kTRows_, kTCols_>((half *)(out), (half *)(src));
+    else
         runTEXP<T, kGRows_, kGCols_, kTRows_, kTCols_>(out, src);
 }
 

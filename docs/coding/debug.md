@@ -33,7 +33,7 @@ Use these codes referenced in the assertion index:
 
 ## Notes
 
-- Many assertions are backend- and SoC-specific (e.g., `include/pto/npu/a2a3/*` vs `include/pto/npu/a5/*`). Ensure your compile flags match the intended target (arch, `MEMORY_BASE` vs `REGISTER_BASE`, etc.).
+- Many assertions are backend- and SoC-specific (e.g., `include/pto/npu/a2a3/*` vs `include/pto/npu/a5/*`).
 - For instruction legality (tile types/layouts/supported dtypes), the authoritative reference is the instruction page under `docs/isa/`.
 
 <!-- The assertion index below is generated from `include/pto/`. Keep it sorted and indexed for quick lookup. -->

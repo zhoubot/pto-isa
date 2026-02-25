@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # --------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -33,16 +34,16 @@ TILE_S1_DEFAULT = 256
 QK_PRELOAD_DEFAULT = 4
 
 DEFAULT_CASES = [
-    (128, 128, 1024, 128, TILE_S1_DEFAULT),
-    (128, 128, 2048, 128, TILE_S1_DEFAULT),
-    (128, 128, 8192, 128, TILE_S1_DEFAULT),
-    (128, 512, 1024, 128, TILE_S1_DEFAULT),
-    (128, 512, 2048, 128, TILE_S1_DEFAULT),
-    (128, 512, 8192, 128, TILE_S1_DEFAULT),
+    (128, 128, 1024, 128, TILE_S1_DEFAULT, False),
+    (128, 128, 2048, 128, TILE_S1_DEFAULT, False),
+    (128, 128, 8192, 128, TILE_S1_DEFAULT, False),
+    (128, 512, 1024, 128, TILE_S1_DEFAULT, False),
+    (128, 512, 2048, 128, TILE_S1_DEFAULT, False),
+    (128, 512, 8192, 128, TILE_S1_DEFAULT, False),
 ]
 
 
-def _parse_case_entry(raw: str, qk_preload: int) -> Dict[str, int]:
+def _parse_case_entry(raw: str, qk_preload: int, causal_mask: bool) -> Dict[str, int]:
     parts = [p.strip() for p in raw.split(',') if p.strip()]
     if len(parts) not in (4, 5):
         raise ValueError(f"Expected 4 or 5 comma-separated values (HEAD_SIZE,S0,S1,CUBE_S0[,TILE_S1]), got '{raw}'")
@@ -56,6 +57,7 @@ def _parse_case_entry(raw: str, qk_preload: int) -> Dict[str, int]:
         "cube_s1": 128,
         "tile_s1": tile_s1,
         "qk_preload": qk_preload,
+        "causal_mask": int(causal_mask),
     }
 
 
@@ -69,8 +71,9 @@ def _default_cases(qk_preload: int) -> List[Dict[str, int]]:
             "cube_s1": 128,
             "tile_s1": tile_s1,
             "qk_preload": qk_preload,
+            "causal_mask": int(causal_mask),
         }
-        for (head, s0, s1, cube_s0, tile_s1) in DEFAULT_CASES
+        for (head, s0, s1, cube_s0, tile_s1, causal_mask) in DEFAULT_CASES
     ]
 
 
@@ -104,8 +107,9 @@ def _normalize_case(case: Dict[str, int]) -> Dict[str, int]:
 def _render_macro(cases: List[Dict[str, int]]) -> str:
     lines = ["#define TFA_FOR_EACH_CASE(MACRO) \\"]
     for idx, case in enumerate(cases):
+        causal_mask = str("true" if bool(case["causal_mask"]) else "false")
         suffix = " \\" if idx + 1 != len(cases) else ""
-        line = f"    MACRO({case['s0']}, {case['head_size']}, {case['s1']}, {case['cube_s0']}, {case['cube_s1']}, {case['tile_s1']}, {case['qk_preload']}){suffix}"
+        line = f"    MACRO({case['s0']}, {case['head_size']}, {case['s1']}, {case['cube_s0']}, {case['cube_s1']}, {case['tile_s1']}, {case['qk_preload']}, {causal_mask}){suffix}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -124,6 +128,7 @@ def _render_header(cases: List[Dict[str, int]]) -> str:
                     str(case["cube_s1"]),
                     str(case["tile_s1"]),
                     str(case["qk_preload"]),
+                    str("true" if bool(case["causal_mask"]) else "false"),
                     f'"{_case_name(case)}"',
                 ]
             ) + "}"
@@ -145,6 +150,7 @@ struct GeneratedTfaCase {{
     int cube_s1;
     int tile_s1;
     int qk_preload;
+    bool causal_mask;
     const char *name;
 }};
 
@@ -180,10 +186,15 @@ def main() -> None:
         default=str((Path(__file__).resolve().parent.parent / "build" / "generated_cases.json")),
         help="Output JSON path (default: kernels/fa_performance/build/generated_cases.json)",
     )
+    parser.add_argument(
+        "--causal-mask",
+        default=False,
+        help="Enable causal mask",
+    )
     args = parser.parse_args()
 
     if args.cases:
-        cases = [_normalize_case(_parse_case_entry(entry, args.qk_preload)) for entry in args.cases]
+        cases = [_normalize_case(_parse_case_entry(entry, args.qk_preload, args.causal_mask)) for entry in args.cases]
     else:
         cases = [_normalize_case(case) for case in _default_cases(args.qk_preload)]
 
@@ -207,7 +218,7 @@ def main() -> None:
     print(f"[INFO] Wrote {json_path}")
     print("[INFO] Cases generated:")
     for case in json_payload:
-        print(f"  - {case['name']} (H={case['head_size']}, S0={case['s0']}, S1={case['s1']}, CUBE_S0={case['cube_s0']}, CUBE_S1={case['cube_s1']}, TILE_S1={case['tile_s1']}, QK_PRELOAD={case['qk_preload']})")
+        print(f"  - {case['name']} (H={case['head_size']}, S0={case['s0']}, S1={case['s1']}, CUBE_S0={case['cube_s0']}, CUBE_S1={case['cube_s1']}, TILE_S1={case['tile_s1']}, QK_PRELOAD={case['qk_preload']}, CAUSAL_MASK={case['causal_mask']})")
 
 
 if __name__ == "__main__":

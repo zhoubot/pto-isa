@@ -20,8 +20,10 @@ void LaunchTMOV_MX(uint8_t *out, uint8_t *src0, uint8_t *src1, uint8_t *src2, ui
 
 class TMOVMXTest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
 std::string GetGoldenDir()
@@ -53,7 +55,7 @@ const T CeilAlign(T num_1, T num_2)
 
 template <typename T, typename U, typename S, bool isFp4, int32_t key, int format>
 void TmovMXTest(uint32_t validM, uint32_t validK, uint32_t validN, uint16_t indexM, uint16_t indexK, uint16_t indexN,
-    uint16_t baseM = 0, uint16_t baseK = 0, uint16_t baseN = 0)
+                uint16_t baseM = 0, uint16_t baseK = 0, uint16_t baseN = 0)
 {
     uint32_t kAlign = CeilAlign<uint32_t>(validK, 64);
     size_t aFileSize = isFp4 ? CeilDiv<uint32_t>(validM * validK, 2) : validM * validK * sizeof(U);
@@ -61,7 +63,7 @@ void TmovMXTest(uint32_t validM, uint32_t validK, uint32_t validN, uint16_t inde
     size_t aScaleFileSize = validM * CeilDiv<uint32_t>(kAlign, 32);
     size_t bScaleFileSize = validN * CeilDiv<uint32_t>(kAlign, 32);
 
-    if(baseM != 0) { //compact cases
+    if (baseM != 0) { // compact cases
         aFileSize = isFp4 ? CeilDiv<uint32_t>(baseM * baseK, 2) : baseM * baseK * sizeof(U);
         bFileSize = isFp4 ? CeilDiv<uint32_t>(baseK * baseN, 2) : baseK * baseN * sizeof(S);
         aScaleFileSize = baseM * CeilDiv<uint32_t>(baseK, 32);

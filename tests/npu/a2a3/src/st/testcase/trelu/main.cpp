@@ -12,11 +12,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "acl/acl.h"
 #include <gtest/gtest.h>
 
-#include "acl/acl.h"
-
 using namespace std;
 using namespace PtoTestCommon;
-
 
 class TRELUTest : public testing::Test {
 protected:
@@ -26,7 +23,8 @@ protected:
     {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -34,12 +32,12 @@ std::string GetGoldenDir() {
     return fullPath;
 }
 
+template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
+void LaunchTRelu(T *out, T *input, void *stream);
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void LaunchTRelu(T *out, T* input, void *stream);
-
-template<typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-void test_trelu() {
+void test_trelu()
+{
     size_t fileSize = kGRows_ * kGCols_ * sizeof(T);
 
     aclInit(nullptr);
@@ -82,15 +80,17 @@ void test_trelu() {
     EXPECT_TRUE(ret);
 }
 
-
-TEST_F(TRELUTest, case_int32_64x64_64x64_64x64) {
+TEST_F(TRELUTest, case_int32_64x64_64x64_64x64)
+{
     test_trelu<int32_t, 64, 64, 64, 64>();
 }
 
-TEST_F(TRELUTest, case_half_60x60_64x64_60x60) {
+TEST_F(TRELUTest, case_half_60x60_64x64_60x60)
+{
     test_trelu<aclFloat16, 60, 60, 64, 64>();
 }
 
-TEST_F(TRELUTest, case_float32_60x60_64x64_60x60) {
+TEST_F(TRELUTest, case_float32_60x60_64x64_60x60)
+{
     test_trelu<float, 60, 60, 64, 64>();
 }

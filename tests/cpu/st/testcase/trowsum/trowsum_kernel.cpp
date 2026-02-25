@@ -30,8 +30,8 @@ AICORE inline void runTROWSUM(__gm__ T __out__ *out, __gm__ T __in__ *src)
     TASSIGN(tmpTile, 0x4000);
     TASSIGN(dstTile, 0x8000);
 
-    std::fill(dstTile.data(),dstTile.data()+kTRows_*kTCols_,0);
-    
+    std::fill(dstTile.data(), dstTile.data() + kTRows_ * kTCols_, 0);
+
     TLOAD(srcTile, srcGlobal);
     set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
@@ -45,10 +45,10 @@ AICORE inline void runTROWSUM(__gm__ T __out__ *out, __gm__ T __in__ *src)
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTROWSUM(T *out, T *src, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> ) {
-        runTROWSUM<half, kGRows_, kGCols_, kTRows_, kTCols_>( (half*)(out), (half*)src);
+    if constexpr (std::is_same_v<T, aclFloat16>) {
+        runTROWSUM<half, kGRows_, kGCols_, kTRows_, kTCols_>((half *)(out), (half *)src);
     } else {
-        runTROWSUM<T, kGRows_, kGCols_, kTRows_, kTCols_>( out, src);
+        runTROWSUM<T, kGRows_, kGCols_, kTRows_, kTCols_>(out, src);
     }
 }
 

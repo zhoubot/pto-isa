@@ -27,7 +27,8 @@ using namespace pto;
 
 // case shape is static, but testing would do dynamic or static test
 template <int shape0, int shape1, int shape2, int shape3, int shape4>
-AICORE __inline__ auto getOptDynShape(int gShape0, int gShape1, int gShape2, int gShape3, int gShape4) {
+AICORE __inline__ auto getOptDynShape(int gShape0, int gShape1, int gShape2, int gShape3, int gShape4)
+{
     if constexpr (shape0 == 1) {
         using DynShapeDim5 = Shape<1, -1, -1, -1, -1>;
         DynShapeDim5 dynShape(gShape1, gShape2, gShape3, gShape4);
@@ -53,9 +54,9 @@ AICORE __inline__ auto getOptDynShape(int gShape0, int gShape1, int gShape2, int
 
 // case shape is static, but testing would do dynamic or static test
 template <typename T, int shape0, int shape1, int shape2, int shape3, int shape4, int tRows, int tCols, BLayout major,
-    int dyn>
-AICORE __inline__ auto getGlobalTensor(
-    __gm__ T *addr, int gShape0, int gShape1, int gShape2, int gShape3, int gShape4) {
+          int dyn>
+AICORE __inline__ auto getGlobalTensor(__gm__ T *addr, int gShape0, int gShape1, int gShape2, int gShape3, int gShape4)
+{
     if constexpr (dyn) {
         int stride0 = gShape1 * gShape2 * shape3 * shape4;
         int stride1 = gShape2 * shape3 * shape4;
@@ -105,10 +106,11 @@ inline AICORE uint64_t get_syscnt() // dont use get_sys_cnt(), need volatile for
 #define align_to_32B(x, T) ((((x) + type_32_aligned(T) - 1) / type_32_aligned(T)) * (type_32_aligned(T)));
 
 template <typename T, int shape0, int shape1, int shape2, int shape3, int shape4, int kTRows_, int kTCols_, int dyn_,
-    PadValue LoadPadVal_ = PadValue::Null, PadValue FillPadVal_ = PadValue::Null, bool inplace = false,
-    bool expand = false>
-AICORE void runTFILLPAD(
-    __gm__ T *out, __gm__ T *src, int gShape0, int gShape1, int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+          PadValue LoadPadVal_ = PadValue::Null, PadValue FillPadVal_ = PadValue::Null, bool inplace = false,
+          bool expand = false>
+AICORE void runTFILLPAD(__gm__ T *out, __gm__ T *src, int gShape0, int gShape1, int gShape2, int gRows, int gCols,
+                        __gm__ uint64_t *gLog)
+{
     // Avoid stack dcache miss
     {
 #define INIT_STACK 8192
@@ -157,7 +159,7 @@ AICORE void runTFILLPAD(
 
     if constexpr (expand) {
         using TileData = Tile<TileType::Vec, T, kTRows_, shape4_aligned, BLayout::RowMajor, -1, -1, SLayout::NoneBox,
-            512, LoadPadVal_>;
+                              512, LoadPadVal_>;
         // using TileData = Tile<TileType::Vec, T, kTRows_, kTCols_, BLayout::RowMajor, -1, -1>;
 
         TileData vecTile(shape3, shape4);
@@ -200,73 +202,85 @@ AICORE void runTFILLPAD(
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_1(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<float, 1, 1, 1, 128, 127, 128, 128, 1, PadValue::Max, PadValue::Max>(
         (__gm__ float *)out, (__gm__ float *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_2(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<float, 1, 1, 1, 128, 127, 128, 160, 1, PadValue::Max, PadValue::Max>(
         (__gm__ float *)out, (__gm__ float *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_3(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<float, 1, 1, 1, 128, 127, 128, 160, 1, PadValue::Min, PadValue::Max>(
         (__gm__ float *)out, (__gm__ float *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_4(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<float, 1, 1, 1, 260, 7, 260, 16, 1, PadValue::Min, PadValue::Max>(
         (__gm__ float *)out, (__gm__ float *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_5(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<float, 1, 1, 1, 260, 7, 260, 16, 1, PadValue::Min, PadValue::Max, true>(
         (__gm__ float *)out, (__gm__ float *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_6(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<uint16_t, 1, 1, 1, 260, 7, 260, 32, 1, PadValue::Min, PadValue::Max>(
         (__gm__ uint16_t *)out, (__gm__ uint16_t *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_7(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<int8_t, 1, 1, 1, 260, 7, 260, 64, 1, PadValue::Min, PadValue::Max>(
         (__gm__ int8_t *)out, (__gm__ int8_t *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_8(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<uint16_t, 1, 1, 1, 259, 7, 260, 32, 1, PadValue::Min, PadValue::Max, false, true>(
         (__gm__ uint16_t *)out, (__gm__ uint16_t *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_9(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                   int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<int8_t, 1, 1, 1, 259, 7, 260, 64, 1, PadValue::Min, PadValue::Max, false, true>(
         (__gm__ int8_t *)out, (__gm__ int8_t *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_10(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<int16_t, 1, 1, 1, 260, 7, 260, 32, 1, PadValue::Min, PadValue::Min>(
         (__gm__ int16_t *)out, (__gm__ int16_t *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 extern "C" __global__ AICORE void launchTFILLPAD_11(__gm__ uint8_t *out, __gm__ uint8_t *src, int gShape0, int gShape1,
-    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog) {
+                                                    int gShape2, int gRows, int gCols, __gm__ uint64_t *gLog)
+{
     runTFILLPAD<int32_t, 1, 1, 1, 260, 7, 260, 32, 1, PadValue::Min, PadValue::Min>(
         (__gm__ int32_t *)out, (__gm__ int32_t *)src, gShape0, gShape1, gShape2, gRows, gCols, gLog);
 }
 
 template <int32_t testKey>
-void launchTFILLPAD(uint8_t *out, uint8_t *src, uint64_t *gLog, void *stream) {
+void launchTFILLPAD(uint8_t *out, uint8_t *src, uint64_t *gLog, void *stream)
+{
     if constexpr (testKey == 1) {
         launchTFILLPAD_1<<<1, nullptr, stream>>>(out, src, 1, 1, 1, 128, 127, gLog);
     } else if constexpr (testKey == 2) {
@@ -293,7 +307,8 @@ void launchTFILLPAD(uint8_t *out, uint8_t *src, uint64_t *gLog, void *stream) {
 }
 
 template <typename T>
-constexpr auto getGoldenZero() {
+constexpr auto getGoldenZero()
+{
     if constexpr (sizeof(T) == 4) {
         return (uint32_t)0;
     } else if constexpr (sizeof(T) == 2) {
@@ -304,8 +319,9 @@ constexpr auto getGoldenZero() {
 }
 
 template <typename U, int Shape0, int Shape1, int Shape2, int Shape3, int Shape4, int kTRows_, int kTCols_,
-    PadValue PadVal_ = PadValue::Null>
-int get_input_golden_case(uint8_t *input, uint8_t *golden) {
+          PadValue PadVal_ = PadValue::Null>
+int get_input_golden_case(uint8_t *input, uint8_t *golden)
+{
     auto arr = getGoldenZero<U>();
     using T = typeof(arr);
 
@@ -355,7 +371,8 @@ int get_input_golden_case(uint8_t *input, uint8_t *golden) {
 }
 
 template <int32_t testKey>
-int get_input_golden(uint8_t *input, uint8_t *golden) {
+int get_input_golden(uint8_t *input, uint8_t *golden)
+{
     if constexpr (testKey == 1) {
         return get_input_golden_case<float, 1, 1, 1, 128, 127, 128, 128, PadValue::Max>(input, golden);
     } else if constexpr (testKey == 2 || testKey == 3) {

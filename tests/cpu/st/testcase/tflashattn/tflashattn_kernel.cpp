@@ -23,26 +23,32 @@ constexpr int kHeadDim = 32;
 __global__ AICORE void RunTFLASHATTN(__gm__ float *out, __gm__ float *q, __gm__ float *k, __gm__ float *v)
 {
     using GlobalQ = GlobalTensor<float, Shape<1, 1, 1, kSeqLen, kHeadDim>,
-        Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
+                                 Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
     using GlobalK = GlobalTensor<float, Shape<1, 1, 1, kSeqLen, kHeadDim>,
-        Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
+                                 Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
     using GlobalV = GlobalTensor<float, Shape<1, 1, 1, kSeqLen, kHeadDim>,
-        Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
+                                 Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
     using GlobalO = GlobalTensor<float, Shape<1, 1, 1, kSeqLen, kHeadDim>,
-        Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
+                                 Stride<kSeqLen * kHeadDim, kSeqLen * kHeadDim, kSeqLen * kHeadDim, kHeadDim, 1>>;
 
     GlobalQ qGlobal(q);
     GlobalK kGlobal(k);
     GlobalV vGlobal(v);
     GlobalO oGlobal(out);
 
-    using QPlain = Tile<TileType::Vec, float, kSeqLen, kHeadDim, BLayout::RowMajor, kSeqLen, kHeadDim, SLayout::NoneBox>;
-    using KPlain = Tile<TileType::Vec, float, kSeqLen, kHeadDim, BLayout::RowMajor, kSeqLen, kHeadDim, SLayout::NoneBox>;
-    using KTPlain = Tile<TileType::Vec, float, kHeadDim, kSeqLen, BLayout::RowMajor, kHeadDim, kSeqLen, SLayout::NoneBox>;
-    using VPlain = Tile<TileType::Vec, float, kSeqLen, kHeadDim, BLayout::RowMajor, kSeqLen, kHeadDim, SLayout::NoneBox>;
+    using QPlain =
+        Tile<TileType::Vec, float, kSeqLen, kHeadDim, BLayout::RowMajor, kSeqLen, kHeadDim, SLayout::NoneBox>;
+    using KPlain =
+        Tile<TileType::Vec, float, kSeqLen, kHeadDim, BLayout::RowMajor, kSeqLen, kHeadDim, SLayout::NoneBox>;
+    using KTPlain =
+        Tile<TileType::Vec, float, kHeadDim, kSeqLen, BLayout::RowMajor, kHeadDim, kSeqLen, SLayout::NoneBox>;
+    using VPlain =
+        Tile<TileType::Vec, float, kSeqLen, kHeadDim, BLayout::RowMajor, kSeqLen, kHeadDim, SLayout::NoneBox>;
 
-    using ScoresPlain = Tile<TileType::Vec, float, kSeqLen, kSeqLen, BLayout::RowMajor, kSeqLen, kSeqLen, SLayout::NoneBox>;
-    using RowReducePlain = Tile<TileType::Vec, float, kSeqLen, kSeqLen, BLayout::ColMajor, kSeqLen, kSeqLen, SLayout::NoneBox>;
+    using ScoresPlain =
+        Tile<TileType::Vec, float, kSeqLen, kSeqLen, BLayout::RowMajor, kSeqLen, kSeqLen, SLayout::NoneBox>;
+    using RowReducePlain =
+        Tile<TileType::Vec, float, kSeqLen, kSeqLen, BLayout::ColMajor, kSeqLen, kSeqLen, SLayout::NoneBox>;
 
     using LeftQ = TileLeft<float, kSeqLen, kHeadDim, kSeqLen, kHeadDim>;
     using RightKT = TileRight<float, kHeadDim, kSeqLen, kHeadDim, kSeqLen>;
@@ -106,4 +112,3 @@ void LaunchTFLASHATTN(float *out, float *q, float *k, float *v, void *stream)
     (void)stream;
     RunTFLASHATTN(out, q, k, v);
 }
-

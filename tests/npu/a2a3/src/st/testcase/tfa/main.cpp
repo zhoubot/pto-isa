@@ -21,16 +21,21 @@ See LICENSE in the root of the software repository for the full text of the Lice
 using namespace std;
 using namespace PtoTestCommon;
 
-template<int S0, int HEAD_SIZE, int S1, int CUBE_S1 = 128, bool INTERMEDIATE_CHECK = false>
-void LaunchTFA(uint16_t *ffts, aclFloat16 *q, aclFloat16 *k, aclFloat16 *v, aclFloat16 *p_out, float *p_out_fp32, float *global_sum_out, float *exp_max_out, float *o_out, float *o_parts_out, float *qk_out, float *pv_out, aclrtStream stream);
+template <int S0, int HEAD_SIZE, int S1, int CUBE_S1 = 128, bool INTERMEDIATE_CHECK = false>
+void LaunchTFA(uint16_t *ffts, aclFloat16 *q, aclFloat16 *k, aclFloat16 *v, aclFloat16 *p_out, float *p_out_fp32,
+               float *global_sum_out, float *exp_max_out, float *o_out, float *o_parts_out, float *qk_out,
+               float *pv_out, aclrtStream stream);
 
 class TFATest : public testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override
+    {}
+    void TearDown() override
+    {}
 };
 
-std::string GetGoldenDir() {
+std::string GetGoldenDir()
+{
     const testing::TestInfo *testInfo = testing::UnitTest::GetInstance()->current_test_info();
     const std::string caseName = testInfo->name();
     std::string suiteName = testInfo->test_suite_name();
@@ -50,8 +55,9 @@ std::string GetGoldenDir() {
  * Example:
  *   run_tfa<float, 64, 128, 256, true>(); // enable intermediate checks
  */
-template<typename T, int S0, int HEAD_SIZE, int S1, bool INTERMEDIATE_CHECK = false>
-void run_tfa() {
+template <typename T, int S0, int HEAD_SIZE, int S1, bool INTERMEDIATE_CHECK = false>
+void run_tfa()
+{
     size_t fullSize = S0 * S1 * sizeof(T); // Keep output as float
     size_t qSize = S0 * HEAD_SIZE * sizeof(aclFloat16);
     size_t kSize = HEAD_SIZE * S1 * sizeof(aclFloat16);
@@ -135,7 +141,10 @@ void run_tfa() {
     }
 
     // Launch kernel, pass ffts ctrl addr and device-side log buffer, and xexp/tmp_float_exp device ptrs
-    LaunchTFA<S0, HEAD_SIZE, S1, 128, INTERMEDIATE_CHECK>((uint16_t *)ffts, (aclFloat16*)qDevice, (aclFloat16*)kDevice, (aclFloat16*)vDevice, (aclFloat16*)xexpDevice, (float*)pOutFp32Device, (float*)gSumDevice, (float*)expMaxDevice, (float*)oDevice, (float*)oPartsDevice, (float*)outDevice, (float*)out2Device, stream);
+    LaunchTFA<S0, HEAD_SIZE, S1, 128, INTERMEDIATE_CHECK>(
+        (uint16_t *)ffts, (aclFloat16 *)qDevice, (aclFloat16 *)kDevice, (aclFloat16 *)vDevice, (aclFloat16 *)xexpDevice,
+        (float *)pOutFp32Device, (float *)gSumDevice, (float *)expMaxDevice, (float *)oDevice, (float *)oPartsDevice,
+        (float *)outDevice, (float *)out2Device, stream);
 
     aclrtSynchronizeStream(stream);
 
@@ -176,19 +185,22 @@ void run_tfa() {
     // write per-tile global_sum parts
     for (int ti = 0; ti < num_tiles; ++ti) {
         size_t partOffset = static_cast<size_t>(ti) * static_cast<size_t>(S0);
-        WriteFile(GetGoldenDir() + "/global_sum_part" + std::to_string(ti) + "_out.bin", gSumHost + partOffset, S0 * sizeof(float));
+        WriteFile(GetGoldenDir() + "/global_sum_part" + std::to_string(ti) + "_out.bin", gSumHost + partOffset,
+                  S0 * sizeof(float));
     }
     // write per-tile exp_max parts
     for (int ti = 0; ti < num_tiles; ++ti) {
         size_t partOffset = static_cast<size_t>(ti) * static_cast<size_t>(S0);
-        WriteFile(GetGoldenDir() + "/exp_max_part" + std::to_string(ti) + "_out.bin", expMaxHost + partOffset, S0 * sizeof(float));
+        WriteFile(GetGoldenDir() + "/exp_max_part" + std::to_string(ti) + "_out.bin", expMaxHost + partOffset,
+                  S0 * sizeof(float));
     }
     // write running output
     WriteFile(GetGoldenDir() + "/o_out.bin", oHost, oSize);
     // write per-iteration running output snapshots
     for (int ti = 0; ti < num_tiles; ++ti) {
         size_t byteOffset = static_cast<size_t>(ti) * pvPartSize;
-        WriteFile(GetGoldenDir() + "/o_part" + std::to_string(ti) + "_out.bin", ((uint8_t*)oPartsHost) + byteOffset, pvPartSize);
+        WriteFile(GetGoldenDir() + "/o_part" + std::to_string(ti) + "_out.bin", ((uint8_t *)oPartsHost) + byteOffset,
+                  pvPartSize);
     }
 
     aclrtFree(outDevice);
@@ -277,13 +289,15 @@ void run_tfa() {
             std::string partName = GetGoldenDir() + "/pv_part" + std::to_string(ti) + ".bin";
             ReadFile(partName, pvPartSize, golden_part.data(), pvPartSize);
             // copy corresponding chunk from out2Host
-            memcpy(dev_part.data(), ((uint8_t*)out2Host) + ti * pvPartSize, pvPartSize);
+            memcpy(dev_part.data(), ((uint8_t *)out2Host) + ti * pvPartSize, pvPartSize);
             std::cout << "[CHECK] PV part " << ti << " compare" << std::endl;
             bool partOk = ResultCmp<T>(golden_part, dev_part, 0.001f);
             pv_part_status[ti] = partOk;
-            if (!partOk) pv_parts_ok = false;
+            if (!partOk)
+                pv_parts_ok = false;
             // accumulate into dev_sum
-            for (size_t i = 0; i < dev_sum.size(); ++i) dev_sum[i] += dev_part[i];
+            for (size_t i = 0; i < dev_sum.size(); ++i)
+                dev_sum[i] += dev_part[i];
         }
         EXPECT_TRUE(pv_parts_ok);
         // compare accumulated sum to pv.bin
@@ -297,22 +311,24 @@ void run_tfa() {
             std::cout << "[CHECK] Global sum " + std::to_string(ti) << std::endl;
             std::string gname = GetGoldenDir() + "/global_sum_part" + std::to_string(ti) + ".bin";
             ReadFile(gname, gSum_size, golden_gsum.data(), gSum_size);
-            memcpy(dev_gsum.data(), ((uint8_t*)gSumHost) + ti * gSum_size, gSum_size);
+            memcpy(dev_gsum.data(), ((uint8_t *)gSumHost) + ti * gSum_size, gSum_size);
             bool okg = ResultCmp<float>(golden_gsum, dev_gsum, 0.001f);
             gsum_part_status[ti] = okg;
-            if (!okg) gsum_parts_ok = false;
+            if (!okg)
+                gsum_parts_ok = false;
         }
         EXPECT_TRUE(gsum_parts_ok);
 
-        //ti=0 no meaning for exp_max
+        // ti=0 no meaning for exp_max
         for (int ti = 1; ti < numTiles; ++ti) {
             std::cout << "[CHECK] expmax part " + std::to_string(ti) << std::endl;
             std::string ename = GetGoldenDir() + "/exp_max_part" + std::to_string(ti) + ".bin";
             ReadFile(ename, gSum_size, golden_exp.data(), gSum_size);
-            memcpy(dev_exp.data(), ((uint8_t*)expMaxHost) + ti * gSum_size, gSum_size);
+            memcpy(dev_exp.data(), ((uint8_t *)expMaxHost) + ti * gSum_size, gSum_size);
             bool oke = ResultCmp<float>(golden_exp, dev_exp, 0.001f);
             exp_part_status[ti] = oke;
-            if (!oke) exp_parts_ok = false;
+            if (!oke)
+                exp_parts_ok = false;
         }
         EXPECT_TRUE(exp_parts_ok);
 
@@ -320,10 +336,11 @@ void run_tfa() {
             std::cout << "[CHECK] O part " + std::to_string(ti) << std::endl;
             std::string oname = GetGoldenDir() + "/o_part" + std::to_string(ti) + ".bin";
             ReadFile(oname, pvPartSize, golden_opart.data(), pvPartSize);
-            memcpy(dev_opart.data(), ((uint8_t*)oPartsHost) + ti * pvPartSize, pvPartSize);
+            memcpy(dev_opart.data(), ((uint8_t *)oPartsHost) + ti * pvPartSize, pvPartSize);
             bool ok = ResultCmp<float>(golden_opart, dev_opart, 0.001f);
             o_part_status[ti] = ok;
-            if (!ok) o_parts_ok = false;
+            if (!ok)
+                o_parts_ok = false;
         }
         EXPECT_TRUE(o_parts_ok);
 
@@ -352,9 +369,7 @@ void run_tfa() {
 
     // Summary printout (single line)
     constexpr bool intermediateEnabled = INTERMEDIATE_CHECK;
-    auto summary_status = [](bool enabled, bool ok) -> const char * {
-        return enabled ? (ok ? "OK" : "FAIL") : "SKIP";
-    };
+    auto summary_status = [](bool enabled, bool ok) -> const char * { return enabled ? (ok ? "OK" : "FAIL") : "SKIP"; };
 
     std::cout << "Summary: "
               << "QK=" << summary_status(intermediateEnabled, qk_ok) << ", "
@@ -362,7 +377,8 @@ void run_tfa() {
               << "PV_parts=" << summary_status(intermediateEnabled, pv_parts_ok) << " [";
     for (int ti = 0; ti < numTiles; ++ti) {
         std::cout << (intermediateEnabled ? (pv_part_status[ti] ? "OK" : "FAIL") : "SKIP");
-        if (ti != numTiles - 1) std::cout << ",";
+        if (ti != numTiles - 1)
+            std::cout << ",";
     }
     std::cout << "]"
               << ", "
@@ -370,28 +386,29 @@ void run_tfa() {
               << "GSum_parts=" << summary_status(intermediateEnabled, gsum_parts_ok) << " [";
     for (int ti = 0; ti < numTiles; ++ti) {
         std::cout << (intermediateEnabled ? (gsum_part_status[ti] ? "OK" : "FAIL") : "SKIP");
-        if (ti != numTiles - 1) std::cout << ",";
+        if (ti != numTiles - 1)
+            std::cout << ",";
     }
     std::cout << "]"
               << ", "
               << "Exp_parts=" << summary_status(intermediateEnabled, exp_parts_ok) << " [";
-    //ti=0 no meaning for exp_max
+    // ti=0 no meaning for exp_max
     for (int ti = 1; ti < numTiles; ++ti) {
         std::cout << (intermediateEnabled ? (exp_part_status[ti] ? "OK" : "FAIL") : "SKIP");
-        if (ti != numTiles - 1) std::cout << ",";
+        if (ti != numTiles - 1)
+            std::cout << ",";
     }
     std::cout << "]"
               << ", "
               << "O_parts=" << summary_status(intermediateEnabled, o_parts_ok) << " [";
     for (int ti = 0; ti < numTiles; ++ti) {
         std::cout << (intermediateEnabled ? (o_part_status[ti] ? "OK" : "FAIL") : "SKIP");
-        if (ti != numTiles - 1) std::cout << ",";
+        if (ti != numTiles - 1)
+            std::cout << ",";
     }
     std::cout << "]"
               << ", "
-              << "O=" << (o_ok ? "OK" : "FAIL")
-              << std::endl;
-
+              << "O=" << (o_ok ? "OK" : "FAIL") << std::endl;
 
     aclrtFreeHost(outHost); // Free host memory
     aclrtFreeHost(qHost);
@@ -407,30 +424,35 @@ void run_tfa() {
     aclrtDestroyStream(stream);
     aclrtResetDevice(0);
     aclFinalize();
-
 }
 
-TEST_F(TFATest, case_float_H_128_S0_64_S1_256) {
+TEST_F(TFATest, case_float_H_128_S0_64_S1_256)
+{
     run_tfa<float, 64, 128, 256>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_64_S1_128) {
+TEST_F(TFATest, case_float_H_128_S0_64_S1_128)
+{
     run_tfa<float, 64, 128, 128>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_64_S1_512) {
+TEST_F(TFATest, case_float_H_128_S0_64_S1_512)
+{
     run_tfa<float, 64, 128, 512>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_128_S1_512) {
+TEST_F(TFATest, case_float_H_128_S0_128_S1_512)
+{
     run_tfa<float, 128, 128, 512>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_128_S1_2048) {
+TEST_F(TFATest, case_float_H_128_S0_128_S1_2048)
+{
     run_tfa<float, 128, 128, 2048>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_128_S1_8192) {
+TEST_F(TFATest, case_float_H_128_S0_128_S1_8192)
+{
     run_tfa<float, 128, 128, 8192>();
 }
 
@@ -438,27 +460,32 @@ TEST_F(TFATest, case_float_H_128_S0_128_S1_8192) {
 // expose intermediate buffers via TSTORE so host can read and compare).
 // NOTE: test name intentionally uses "64x512_precision_debug" while
 // the run uses S1=256 — this mirrors the requested debug naming.
-TEST_F(TFATest, case_float_H_128_S0_64_S1_128_precision_debug) {
+TEST_F(TFATest, case_float_H_128_S0_64_S1_128_precision_debug)
+{
     run_tfa<float, 64, 128, 128, true>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_64_S1_256_precision_debug) {
+TEST_F(TFATest, case_float_H_128_S0_64_S1_256_precision_debug)
+{
     run_tfa<float, 64, 128, 256, true>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_64_S1_512_precision_debug) {
+TEST_F(TFATest, case_float_H_128_S0_64_S1_512_precision_debug)
+{
     run_tfa<float, 64, 128, 512, true>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_128_S1_512_precision_debug) {
+TEST_F(TFATest, case_float_H_128_S0_128_S1_512_precision_debug)
+{
     run_tfa<float, 128, 128, 512, true>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_128_S1_2048_precision_debug) {
+TEST_F(TFATest, case_float_H_128_S0_128_S1_2048_precision_debug)
+{
     run_tfa<float, 128, 128, 2048, true>();
 }
 
-TEST_F(TFATest, case_float_H_128_S0_128_S1_8192_precision_debug) {
+TEST_F(TFATest, case_float_H_128_S0_128_S1_8192_precision_debug)
+{
     run_tfa<float, 128, 128, 8192, true>();
 }
-

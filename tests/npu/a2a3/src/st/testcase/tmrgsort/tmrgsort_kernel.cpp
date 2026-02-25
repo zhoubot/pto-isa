@@ -17,23 +17,24 @@ using namespace std;
 using namespace pto;
 
 template <typename Src0GlobalData, typename Src1GlobalData, typename DstTileData, typename TmpTileData,
-    typename TileData, typename T, bool EXHAUSTED>
+          typename TileData, typename T, bool EXHAUSTED>
 PTO_INTERNAL void Sort2Lists(DstTileData &dstTile, Src0GlobalData &src0Global, Src1GlobalData &src1Global,
-    TileData &src0Tile, TileData &src1Tile, TmpTileData &tmpTile)
+                             TileData &src0Tile, TileData &src1Tile, TmpTileData &tmpTile)
 {
     MrgSortExecutedNumList executedNumList;
     TLOAD(src0Tile, src0Global);
     TLOAD(src1Tile, src1Global);
     set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    TMRGSORT<DstTileData, TmpTileData, TileData, TileData, EXHAUSTED>(
-        dstTile, executedNumList, tmpTile, src0Tile, src1Tile);
+    TMRGSORT<DstTileData, TmpTileData, TileData, TileData, EXHAUSTED>(dstTile, executedNumList, tmpTile, src0Tile,
+                                                                      src1Tile);
 }
 
 template <typename Src0GlobalData, typename Src1GlobalData, typename Src2GlobalData, typename DstTileData,
-    typename TmpTileData, typename TileData, typename T, bool EXHAUSTED>
+          typename TmpTileData, typename TileData, typename T, bool EXHAUSTED>
 PTO_INTERNAL void Sort3Lists(DstTileData &dstTile, Src0GlobalData &src0Global, Src1GlobalData &src1Global,
-    Src2GlobalData &src2Global, TileData &src0Tile, TileData &src1Tile, TileData &src2Tile, TmpTileData &tmpTile)
+                             Src2GlobalData &src2Global, TileData &src0Tile, TileData &src1Tile, TileData &src2Tile,
+                             TmpTileData &tmpTile)
 {
     MrgSortExecutedNumList executedNumList;
     TLOAD(src0Tile, src0Global);
@@ -41,15 +42,15 @@ PTO_INTERNAL void Sort3Lists(DstTileData &dstTile, Src0GlobalData &src0Global, S
     TLOAD(src2Tile, src2Global);
     set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-    TMRGSORT<DstTileData, TmpTileData, TileData, TileData, TileData, EXHAUSTED>(
-        dstTile, executedNumList, tmpTile, src0Tile, src1Tile, src2Tile);
+    TMRGSORT<DstTileData, TmpTileData, TileData, TileData, TileData, EXHAUSTED>(dstTile, executedNumList, tmpTile,
+                                                                                src0Tile, src1Tile, src2Tile);
 }
 
 template <typename Src0GlobalData, typename Src1GlobalData, typename Src2GlobalData, typename Src3GlobalData,
-    typename DstTileData, typename TmpTileData, typename TileData, typename T, bool EXHAUSTED>
+          typename DstTileData, typename TmpTileData, typename TileData, typename T, bool EXHAUSTED>
 PTO_INTERNAL void Sort4Lists(DstTileData &dstTile, Src0GlobalData &src0Global, Src1GlobalData &src1Global,
-    Src2GlobalData &src2Global, Src3GlobalData &src3Global, TileData &src0Tile, TileData &src1Tile, TileData &src2Tile,
-    TileData &src3Tile, TmpTileData &tmpTile)
+                             Src2GlobalData &src2Global, Src3GlobalData &src3Global, TileData &src0Tile,
+                             TileData &src1Tile, TileData &src2Tile, TileData &src3Tile, TmpTileData &tmpTile)
 {
     MrgSortExecutedNumList executedNumList;
     TLOAD(src0Tile, src0Global);
@@ -63,7 +64,7 @@ PTO_INTERNAL void Sort4Lists(DstTileData &dstTile, Src0GlobalData &src0Global, S
 }
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kTCols_src1, int kTCols_src2,
-    int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
+          int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
 __global__ AICORE void RunTMrgsort(__gm__ T *out, __gm__ T *src0, __gm__ T *src1, __gm__ T *src2, __gm__ T *src3)
 {
     using Src0GlobalData = GlobalTensor<T, Shape<1, 1, 1, kTRows_, kTCols_>, pto::Stride<1, 1, 1, kTCols_, 1>>;
@@ -98,8 +99,8 @@ __global__ AICORE void RunTMrgsort(__gm__ T *out, __gm__ T *src0, __gm__ T *src1
 
     if constexpr (LISTNUM == 4) {
         Sort4Lists<Src0GlobalData, Src1GlobalData, Src2GlobalData, Src3GlobalData, DstTileData, TmpTileData, TileData,
-            T, EXHAUSTED>(
-            dstTile, src0Global, src1Global, src2Global, src3Global, src0Tile, src1Tile, src2Tile, src3Tile, tmpTile);
+                   T, EXHAUSTED>(dstTile, src0Global, src1Global, src2Global, src3Global, src0Tile, src1Tile, src2Tile,
+                                 src3Tile, tmpTile);
     } else if constexpr (LISTNUM == 3) {
         Sort3Lists<Src0GlobalData, Src1GlobalData, Src2GlobalData, DstTileData, TmpTileData, TileData, T, EXHAUSTED>(
             dstTile, src0Global, src1Global, src2Global, src0Tile, src1Tile, src2Tile, tmpTile);
@@ -163,7 +164,7 @@ PTO_INTERNAL int32_t FillMrgArray(int32_t *mrgArray, int blockLen)
 }
 
 template <typename GlobalData, typename DstGlobalData, typename DstTileData, typename TileData, typename TmpTileData,
-    typename T, int kTCols_, int topk>
+          typename T, int kTCols_, int topk>
 PTO_INTERNAL void SortTailBlock(DstGlobalData &dstGlobal, DstTileData &dstTile, TileData &srcTile, int blockLen)
 {
     TmpTileData tmp1Tile(1, kTCols_);
@@ -183,13 +184,13 @@ PTO_INTERNAL void SortTailBlock(DstGlobalData &dstGlobal, DstTileData &dstTile, 
         if (tmpMrgArray > topk) {
             tmpMrgArray = topk;
         }
-        
+
         TileData src0Tile(1, tmpMrgSortedLen);
         TileData src1Tile(1, tmpMrgArray);
         TASSIGN(src0Tile, 0x0);
         TASSIGN(src1Tile, 0x0 + mrgSortedLen * sizeof(T));
-        TMRGSORT<DstTileData, TmpTileData, TileData, TileData, 0>(
-            dstTile, executedNumList, tmp1Tile, src0Tile, src1Tile);
+        TMRGSORT<DstTileData, TmpTileData, TileData, TileData, 0>(dstTile, executedNumList, tmp1Tile, src0Tile,
+                                                                  src1Tile);
         pipe_barrier(PIPE_V);
         TileData srcMovTile(1, topk);
         TASSIGN(srcMovTile, 0x0);
@@ -255,18 +256,19 @@ __global__ AICORE void RunTMrgsortTopk(__gm__ T *out, __gm__ T *src)
 }
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_, int kTCols_src1, int kTCols_src2,
-    int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
+          int kTCols_src3, int TOPK, int LISTNUM, bool EXHAUSTED>
 void LanchTMrgsortMulti(float *out, float *src0, float *src1, float *src2, float *src3, void *stream)
 {
     if constexpr (std::is_same_v<T, uint16_t>) {
         constexpr uint32_t TYPE_COEF = sizeof(float) / sizeof(T);
         RunTMrgsort<half, kGRows_, kGCols_ * TYPE_COEF, kTRows_, kTCols_ * TYPE_COEF, kTCols_src1 * TYPE_COEF,
-            kTCols_src2 * TYPE_COEF, kTCols_src3 * TYPE_COEF, TOPK * TYPE_COEF, LISTNUM, EXHAUSTED>
+                    kTCols_src2 * TYPE_COEF, kTCols_src3 * TYPE_COEF, TOPK * TYPE_COEF, LISTNUM, EXHAUSTED>
             <<<1, nullptr, stream>>>(reinterpret_cast<half *>(out), reinterpret_cast<half *>(src0),
-                reinterpret_cast<half *>(src1), reinterpret_cast<half *>(src2), reinterpret_cast<half *>(src3));
+                                     reinterpret_cast<half *>(src1), reinterpret_cast<half *>(src2),
+                                     reinterpret_cast<half *>(src3));
     } else {
         RunTMrgsort<T, kGRows_, kGCols_, kTRows_, kTCols_, kTCols_src1, kTCols_src2, kTCols_src3, TOPK, LISTNUM,
-            EXHAUSTED><<<1, nullptr, stream>>>(out, src0, src1, src2, src3);
+                    EXHAUSTED><<<1, nullptr, stream>>>(out, src0, src1, src2, src3);
     }
 }
 
@@ -295,19 +297,24 @@ void LanchTMrgsortTopK(float *out, float *src, void *stream)
 }
 
 // multi case
-template void LanchTMrgsortMulti<float, 1, 128, 1, 128, 128, 128, 128, 512, 4, false>(
-    float *out, float *src0, float *src1, float *src2, float *src3, void *stream);
-template void LanchTMrgsortMulti<uint16_t, 1, 128, 1, 128, 128, 128, 128, 512, 4, false>(
-    float *out, float *src0, float *src1, float *src2, float *src3, void *stream);
-template void LanchTMrgsortMulti<float, 1, 128, 1, 128, 128, 128, 64, 448, 4, false>(
-    float *out, float *src0, float *src1, float *src2, float *src3, void *stream);
-template void LanchTMrgsortMulti<float, 1, 128, 1, 128, 128, 64, 0, 128, 3, false>(
-    float *out, float *src0, float *src1, float *src2, float *src3, void *stream);
+template void LanchTMrgsortMulti<float, 1, 128, 1, 128, 128, 128, 128, 512, 4, false>(float *out, float *src0,
+                                                                                      float *src1, float *src2,
+                                                                                      float *src3, void *stream);
+template void LanchTMrgsortMulti<uint16_t, 1, 128, 1, 128, 128, 128, 128, 512, 4, false>(float *out, float *src0,
+                                                                                         float *src1, float *src2,
+                                                                                         float *src3, void *stream);
+template void LanchTMrgsortMulti<float, 1, 128, 1, 128, 128, 128, 64, 448, 4, false>(float *out, float *src0,
+                                                                                     float *src1, float *src2,
+                                                                                     float *src3, void *stream);
+template void LanchTMrgsortMulti<float, 1, 128, 1, 128, 128, 64, 0, 128, 3, false>(float *out, float *src0, float *src1,
+                                                                                   float *src2, float *src3,
+                                                                                   void *stream);
 // multi exhausted case
-template void LanchTMrgsortMulti<float, 1, 64, 1, 64, 64, 0, 0, 128, 2, true>(
-    float *out, float *src0, float *src1, float *src2, float *src3, void *stream);
-template void LanchTMrgsortMulti<uint16_t, 1, 256, 1, 256, 256, 256, 0, 768, 3, true>(
-    float *out, float *src0, float *src1, float *src2, float *src3, void *stream);
+template void LanchTMrgsortMulti<float, 1, 64, 1, 64, 64, 0, 0, 128, 2, true>(float *out, float *src0, float *src1,
+                                                                              float *src2, float *src3, void *stream);
+template void LanchTMrgsortMulti<uint16_t, 1, 256, 1, 256, 256, 256, 0, 768, 3, true>(float *out, float *src0,
+                                                                                      float *src1, float *src2,
+                                                                                      float *src3, void *stream);
 // single case
 template void LanchTMrgsortSingle<float, 1, 256, 1, 256, 64>(float *out, float *src, void *stream);
 template void LanchTMrgsortSingle<float, 1, 320, 1, 256, 64>(float *out, float *src, void *stream);

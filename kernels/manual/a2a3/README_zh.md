@@ -6,6 +6,7 @@
 
 - GEMM 性能 kernel：`kernels/manual/a2a3/gemm_performance/README.md`
 - Flash-Attention kernel：`kernels/manual/a2a3/flash_atten/README.md`
+- TOPK 性能 kernel：`kernels/manual/a2a3/topk/README.md`
 
 ## 通用环境准备
 

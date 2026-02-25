@@ -12,19 +12,45 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TCOLEXPANDEXPDIF_HPP
 
 #include <pto/common/constants.hpp>
+#include <pto/common/utils.hpp>
+#include <pto/npu/a2a3/TColExpandBinOp.hpp>
 
 namespace pto {
 
-template <typename TileDataDst, typename TileDataSrc1>
-PTO_INTERNAL void TCOLEXPANDEXPDIF_IMPL(TileDataDst &dst, TileDataDst &src0, TileDataSrc1 &src1)
+template <typename T>
+struct ColExpandExpdifOp {
+    PTO_INTERNAL static void ColExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats)
+    {
+        vsub(dst, src0, src1, repeats, 1, 1, 1, 8, 8, 8);
+        pipe_barrier(PIPE_V);
+        vexp(dst, dst, repeats, 1, 1, 8, 8);
+    }
+    PTO_INTERNAL static void ColExpandBinInstr(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, uint8_t repeats,
+                                               uint8_t dstRepeatStride, uint8_t src0RepeatStride,
+                                               uint8_t src1RepeatStride)
+    {
+        vsub(dst, src0, src1, repeats, 1, 1, 1, dstRepeatStride, src0RepeatStride, 0);
+        pipe_barrier(PIPE_V);
+        vexp(dst, dst, repeats, 1, 1, dstRepeatStride, dstRepeatStride);
+    }
+};
+
+template <typename TileData, typename TileDataSrc>
+PTO_INTERNAL void TCOLEXPANDEXPDIF_IMPL(TileData &dst, TileData &src0, TileDataSrc &src1)
 {
-    // Compose expdif via colexpandsub + exp. colexpandsub handles src0==dst safely.
-    TCOLEXPANDSUB_IMPL(dst, src0, src1);
-    pipe_barrier(PIPE_V);
-    TEXP_IMPL(dst, dst);
+    using T = typename TileData::DType;
+    static_assert(
+        std::is_same<typename TileData::DType, float>::value || std::is_same<typename TileData::DType, half>::value,
+        "Fix: TCOLEXPANDEXPDIF Invalid data type.");
+    static_assert(TileData::isRowMajor, "Fix: TCOLEXPANDEXPDIF not supported Layout type");
+    constexpr unsigned blockSizeElem = BLOCK_BYTE_SIZE / sizeof(typename TileData::DType);
+    constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(typename TileData::DType);
+    constexpr unsigned rowStride = TileData::RowStride;
+    unsigned validRow = dst.GetValidRow();
+    unsigned validCol = dst.GetValidCol();
+
+    ColExpandBinaryInstr<ColExpandExpdifOp<T>, TileData, TileDataSrc, elementsPerRepeat, blockSizeElem, rowStride>(
+        dst.data(), src0.data(), src1.data(), validRow, validCol);
 }
-
 } // namespace pto
-
 #endif
-

@@ -45,4 +45,3 @@ void LaunchTCOLEXPAND(T *out, T *src, void *stream)
 
 template void LaunchTCOLEXPAND<float, 64, 64, 64, 64>(float *out, float *src, void *stream);
 template void LaunchTCOLEXPAND<aclFloat16, 16, 256, 16, 256>(aclFloat16 *out, aclFloat16 *src, void *stream);
-

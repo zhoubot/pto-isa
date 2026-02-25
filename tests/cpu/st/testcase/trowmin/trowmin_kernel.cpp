@@ -56,4 +56,3 @@ template void LaunchTROWMIN<aclFloat16, 64, 64, 64, 64>(aclFloat16 *out, aclFloa
 template void LaunchTROWMIN<aclFloat16, 161, 161, 32, 32>(aclFloat16 *out, aclFloat16 *src, void *stream);
 template void LaunchTROWMIN<float, 77, 81, 32, 16>(float *out, float *src, void *stream);
 template void LaunchTROWMIN<float, 32, 32, 32, 16>(float *out, float *src, void *stream);
-

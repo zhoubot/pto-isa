@@ -2,7 +2,7 @@
 
 ## Overview
 
-This example demonstrates how to implement a basic GEMM operator using PTO, including project setup, build, and execution.
+This example demonstrates how to implement a basic GEMM operator using PTO and expose it as a PyTorch operator via `torch_npu`.
 
 ## Supported AI Processors
 
@@ -11,13 +11,15 @@ This example demonstrates how to implement a basic GEMM operator using PTO, incl
 ## Directory Layout
 
 ```
-kernels/gemm_basic/
-├── scripts/
-│   └── gen_data.py              # Generates input and golden output
-├── CMakeLists.txt               # Build configuration
-├── gemm_basic_kernel.cpp        # Kernel implementation
-├── main.cpp                     # Host-side entry point
-└── run.sh                       # Convenience script
+demos/baseline/gemm_basic/
+├── op_extension/              # Python package entry (module loader)
+├── csrc/
+│   ├── kernel/                # PTO kernel implementation
+│   └── host/                  # Host-side PyTorch operator registration
+├── test/                      # Minimal Python test
+├── CMakeLists.txt             # Build configuration
+├── setup.py                   # Wheel build script
+└── README.md                  # This document
 ```
 
 ## Operator Description
@@ -43,7 +45,7 @@ Where:
 | OpType      | `gemm` |
 | Inputs      | `a`: `m×k`, `float16`, `ND`; `b`: `k×n`, `float16`, `DN` |
 | Output      | `c`: `m×n`, `float`, `ND` |
-| Kernel name | `gemm_basic_kernel` |
+| Kernel name | `gemm_basic_custom` |
 
 ### Tiling Parameters
 
@@ -102,21 +104,35 @@ Pipeline overview:
 
 ## Build and Run
 
-1. Configure your Ascend CANN environment (example path):
+### 1. Prepare the python environment
+
+Create your own virtual environment and install the required python package.
 
 ```bash
+python -m venv virEnv
+source virEnv/bin/activate
+python3 -m pip install -r requirements.txt
+```
+
+### 2. Configure environment and build the wheel
+
+```bash
+export ASCEND_HOME_PATH=/usr/local/Ascend/
 source ${ASCEND_INSTALL_PATH}/bin/setenv.bash
+export PTO_LIB_PATH=[YOUR_PATH]/pto-isa
+rm -rf build op_extension.egg-info
+python3 setup.py bdist_wheel
 ```
 
-2. Run the example:
+### 3. Install the wheel
 
 ```bash
-cd ${git_clone_path}/demos/baseline/gemm_basic
-bash run.sh -r npu -v Ascend910B1
+pip install dist/*.whl
 ```
 
-If the run succeeds, the output prints:
+### 4. Run the example
 
-```text
-test success
+```bash
+cd test
+python3 test.py
 ```

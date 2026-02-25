@@ -119,25 +119,143 @@ def cmake_friendly_path(p: Optional[str]) -> Optional[str]:
     return p
 
 
+def get_compiler_major_version(compiler_path: str) -> int:
+    """Get the major version number of the compiler."""
+    if not compiler_path:
+        return 0
+
+    try:
+        logging.debug("Checking version for compiler: %s", compiler_path)
+        # check=False ensures that even if the command returns a non-zero status code,
+        # it will not raise CalledProcessError, but judge by result.returncode.
+        result = subprocess.run(
+            [compiler_path, "--version"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+
+        if result.returncode != 0:
+            logging.warning("Failed to run --version on: %s", compiler_path)
+            return 0
+
+        match = re.search(r'(\d+)\.', result.stdout)
+        if match:
+            version = int(match.group(1))
+            logging.debug("Parsed version for %s: %d", compiler_path, version)
+            return version
+
+    except Exception as e:
+        logging.warning("Exception occurred while checking compiler version: %s", e)
+        return 0
+
+    return 0
+
+
+def _try_find_compiler(cxx_name: str, cc_name: str, min_ver: int) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Try to find a specific C++ compiler and check if the version meets the requirements.
+    """
+    cxx_path = shutil.which(cxx_name)
+    if not cxx_path:
+        return None, None
+
+    ver = get_compiler_major_version(cxx_path)
+
+    # Log the detection result
+    logging.debug("Found candidate %s, version: %d (required: %d)", cxx_path, ver, min_ver)
+
+    if ver >= min_ver:
+        cc_path = shutil.which(cc_name)
+        logging.info("Selected compiler pair: %s / %s (Version >= %d)", cxx_path, cc_path, min_ver)
+        return cxx_path, cc_path
+
+    return None, None
+
+
+def _auto_detect_compilers() -> Tuple[str, Optional[str]]:
+    logging.info("CXX not specified, starting automatic detection...")
+
+    # 1. Try Clang
+    cxx, cc = _try_find_compiler("clang++", "clang", 15)
+    if cxx:
+        return cxx, cc
+
+    # 2. Try GCC
+    cxx, cc = _try_find_compiler("g++", "gcc", 13)
+    if cxx:
+        return cxx, cc
+
+    # 3. Fail
+    error_msg = (
+        "Could not find a suitable compiler.\n"
+        "Requirements:\n"
+        " - clang++ >= 15\n"
+        " - OR g++ >= 13"
+    )
+    logging.error(error_msg)
+    raise RuntimeError(error_msg)
+
+
+def _derive_cc_from_cxx(cxx_path: str) -> Optional[str]:
+    """
+    Guess the corresponding CC based on the path name of CXX.
+    """
+    if not cxx_path:
+        return None
+
+    logging.debug("Attempting to derive CC from CXX: %s", cxx_path)
+    name = Path(cxx_path).name
+
+    # Match as long as the path contains "g++" or "clang" keywords
+    if "clang" in name:
+        logging.info("Derived CC as clang")
+        return shutil.which("clang")
+
+    if "g++" in name:
+        logging.info("Derived CC as gcc")
+        return shutil.which("gcc")
+
+    return None
+
+
 def detect_compilers(cxx_arg: Optional[str], cc_arg: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    # 1. Initialize variables
     cxx = cxx_arg or os.environ.get("CXX")
     cc = cc_arg or os.environ.get("CC")
 
+    if cxx:
+        logging.info("Using explicit CXX: %s", cxx)
+
+    # 2. Determine CXX path
     if not cxx:
-        cxx = shutil.which("clang++") or shutil.which("g++")
+        # Auto detection mode
+        cxx, auto_cc = _auto_detect_compilers()
+        if not cc:
+            cc = auto_cc
     elif not Path(cxx).is_absolute():
-        cxx = shutil.which(cxx) or cxx
+        # Resolve relative path
+        resolved_cxx = shutil.which(cxx)
+        if resolved_cxx:
+            logging.debug("Resolved relative path '%s' to '%s'", cxx, resolved_cxx)
+            cxx = resolved_cxx
 
+    # 3. Determine CC path
     if not cc:
-        if cxx and Path(cxx).name in ("clang++", "clang-cl"):
-            cc = shutil.which("clang")
-        elif cxx and Path(cxx).name == "g++":
-            cc = shutil.which("gcc")
+        cc = _derive_cc_from_cxx(cxx)
     elif not Path(cc).is_absolute():
-        cc = shutil.which(cc) or cc
-    cxx = cmake_friendly_path(cxx)
-    cc = cmake_friendly_path(cc)
+        resolved_cc = shutil.which(cc) or cc
+        if resolved_cc != cc:
+            logging.debug("Resolved relative path '%s' to '%s'", cc, resolved_cc)
+        cc = resolved_cc
 
+    # 4. Format paths
+    if cxx:
+        cxx = cmake_friendly_path(cxx)
+    if cc:
+        cc = cmake_friendly_path(cc)
+
+    logging.info("Final Compiler Selection -> CXX: %s, CC: %s", cxx, cc)
     return cxx, cc
 
 

@@ -11,11 +11,11 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <pto/pto-inst.hpp>
 #include <pto/common/constants.hpp>
 
-
 using namespace pto;
 
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
-AICORE void runTAddsc( __gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *scalar, __gm__ T __in__ *src1) {
+AICORE void runTAddsc(__gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __in__ *scalar, __gm__ T __in__ *src1)
+{
     using DynShapeDim5 = Shape<1, 1, 1, kGRows_, kGCols_>;
     using DynStridDim5 = Stride<1, 1, 1, kGCols_, 1>;
     using GlobalData = GlobalTensor<T, DynShapeDim5, DynStridDim5>;
@@ -38,9 +38,9 @@ AICORE void runTAddsc( __gm__ T __out__ *out, __gm__ T __in__ *src0, __gm__ T __
 template <typename T, int kGRows_, int kGCols_, int kTRows_, int kTCols_>
 void LaunchTAddsc(T *out, T *src0, T *scalar, T *src1, void *stream)
 {
-    if constexpr ( std::is_same_v<T, aclFloat16> )
-        runTAddsc<half, kGRows_, kGCols_, kTRows_, kTCols_>((half*)(out), (half*)(src0), (half*)(scalar),
-                                                            (half*)(src1));
+    if constexpr (std::is_same_v<T, aclFloat16>)
+        runTAddsc<half, kGRows_, kGCols_, kTRows_, kTCols_>((half *)(out), (half *)(src0), (half *)(scalar),
+                                                            (half *)(src1));
     else
         runTAddsc<T, kGRows_, kGCols_, kTRows_, kTCols_>(out, src0, scalar, src1);
 }
