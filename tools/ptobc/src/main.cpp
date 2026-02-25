@@ -58,6 +58,12 @@ int main(int argc, char** argv) {
       mlir::MLIRContext ctx(registry);
       ctx.allowUnregisteredDialects(true);
 
+      // Preload dialects so custom op/type parsing is available.
+      (void)ctx.getOrLoadDialect<mlir::func::FuncDialect>();
+      (void)ctx.getOrLoadDialect<mlir::arith::ArithDialect>();
+      (void)ctx.getOrLoadDialect<mlir::scf::SCFDialect>();
+      (void)ctx.getOrLoadDialect<mlir::pto::PTODialect>();
+
       auto module = ptobc::parsePTOFile(ctx, in);
       auto file = ptobc::encodeFromMLIRModule(*module);
       auto bytes = file.serialize();

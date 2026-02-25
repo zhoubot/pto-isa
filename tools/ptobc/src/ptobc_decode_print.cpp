@@ -374,9 +374,15 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
   std::string out;
   llvm::raw_string_ostream os(out);
 
+  // Default to dialect-pretty `.pto` printing. You can force generic printing via:
+  //   PTOBC_PRINT_GENERIC=1
   mlir::OpPrintingFlags flags;
-  flags.printGenericOpForm();
   flags.useLocalScope();
+  flags.assumeVerified();
+  if (std::getenv("PTOBC_PRINT_GENERIC")) {
+    flags.printGenericOpForm();
+  }
+
   module.print(os, flags);
   os.flush();
 
