@@ -389,6 +389,8 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
   if (dbg) llvm::errs() << "[ptobc] writing output: " << outPath << "\n";
   std::ofstream ofs(outPath);
   ofs << out;
+  // Ensure the output ends with a newline for stable diffs/tools.
+  if (!out.empty() && out.back() != '\n') ofs << "\n";
 }
 
 } // namespace ptobc
