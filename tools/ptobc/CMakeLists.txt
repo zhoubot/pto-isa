@@ -38,6 +38,7 @@ add_executable(ptobc
   src/ptobc_format.cpp
   src/mlir_helpers.cpp
   src/mlir_encode.cpp
+  src/canonical_printer.cpp
   src/ptobc_decode_print.cpp
 )
 
