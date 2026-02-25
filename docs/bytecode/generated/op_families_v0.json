@@ -1,0 +1,22 @@
+{
+  "pto.section": {
+    "cube": 0,
+    "vector": 1
+  },
+  "pto.tgemv": {
+    "acc": 1,
+    "base": 0,
+    "bias": 2,
+    "mx": 3
+  },
+  "pto.tmatmul": {
+    "acc": 1,
+    "base": 0,
+    "bias": 2
+  },
+  "pto.tmatmul.mx": {
+    "acc": 1,
+    "base": 0,
+    "bias": 2
+  }
+}
