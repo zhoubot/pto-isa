@@ -12,7 +12,8 @@
   "pto.tmatmul": {
     "acc": 1,
     "base": 0,
-    "bias": 2
+    "bias": 2,
+    "mx": 3
   },
   "pto.tmatmul.mx": {
     "acc": 1,

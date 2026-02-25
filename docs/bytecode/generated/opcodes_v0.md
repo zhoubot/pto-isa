@@ -4,7 +4,7 @@ Generated from: docs/isa/manifest.yaml, docs/ir/PTO-IR-ops.md, docs/bytecode/sam
 ## Families (variant u8)
 - `pto.section`: cube=0, vector=1
 - `pto.tgemv`: base=0, acc=1, bias=2, mx=3
-- `pto.tmatmul`: base=0, acc=1, bias=2
+- `pto.tmatmul`: base=0, acc=1, bias=2, mx=3
 - `pto.tmatmul.mx`: base=0, acc=1, bias=2
 
 ## Opcodes
