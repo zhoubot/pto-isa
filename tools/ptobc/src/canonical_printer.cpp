@@ -44,6 +44,18 @@ static std::string joinLines(const std::vector<std::string> &lines) {
   return out;
 }
 
+static void stripUnknownLocSuffix(std::vector<std::string> &lines) {
+  // MLIR prints `loc(unknown)` when debug printing is enabled. It is pure noise
+  // for canonical output, so strip it.
+  static const std::regex re(R"(^(.*?)(?:[ \t]+loc\(unknown\))[ \t]*$)");
+  for (auto &ln : lines) {
+    std::smatch m;
+    if (std::regex_match(ln, m, re)) {
+      ln = m[1].str();
+    }
+  }
+}
+
 static std::string hexFloatLiteral(mlir::FloatAttr a) {
   llvm::SmallString<32> s;
   llvm::raw_svector_ostream os(s);
@@ -139,9 +151,9 @@ static void collectSSADefsFromSignature(const std::string &line,
 }
 
 static bool parseConstantLine(const std::string &line, std::string &imm, std::string &ty) {
-  // Match: "%x = arith.constant <imm> : <ty>" (pretty form)
+  // Match: "%x = arith.constant <imm> : <ty> [loc(...)]" (pretty form)
   // We don't try to parse attributes on constants.
-  static const std::regex re(R"(^[ \t]*%[-a-zA-Z$._0-9]+[ \t]*=[ \t]*arith\.constant[ \t]+(.+?)[ \t]*:[ \t]*([^ \t]+)[ \t]*$)");
+  static const std::regex re(R"(^[ \t]*%[-a-zA-Z$._0-9]+[ \t]*=[ \t]*arith\.constant[ \t]+(.+?)[ \t]*:[ \t]*([^ \t]+)(?:[ \t]+loc\(.+\))?[ \t]*$)");
   std::smatch m;
   if (!std::regex_match(line, m, re)) return false;
   imm = m[1].str();
@@ -241,9 +253,9 @@ static std::string canonicalizeSSANames(const std::string &printed) {
 static void canonicalizeScalarFloatConstants(mlir::ModuleOp module,
                                              const mlir::AsmState::LocationMap &locMap,
                                              std::vector<std::string> &lines) {
-  // Match: "%name = arith.constant <anything> : fXX"
-  // We keep the prefix + the type suffix, replace the literal.
-  const std::regex re(R"(^([ \t]*%[-a-zA-Z$._0-9]+[ \t]*=[ \t]*arith\.constant[ \t]+)(.+?)([ \t]*:[ \t]*f(16|32|64)[ \t]*$))");
+  // Match: "%name = arith.constant <anything> : fXX [loc(...)]"
+  // We keep the prefix + the type suffix (+ optional loc suffix), replace the literal.
+  const std::regex re(R"(^([ \t]*%[-a-zA-Z$._0-9]+[ \t]*=[ \t]*arith\.constant[ \t]+)(.+?)([ \t]*:[ \t]*f(16|32|64)(?:[ \t]+loc\(.+\))?[ \t]*$))");
 
   module.walk([&](mlir::Operation *op) {
     auto cst = llvm::dyn_cast<mlir::arith::ConstantOp>(op);
@@ -284,6 +296,7 @@ std::string printModuleCanonical(mlir::ModuleOp module,
   flags.useLocalScope();
   flags.assumeVerified();
   if (opt.generic) flags.printGenericOpForm();
+  if (opt.printDebugInfo) flags.enableDebugInfo(true, /*prettyForm=*/false);
 
   mlir::AsmState::LocationMap locMap;
   mlir::AsmState state(module.getOperation(), flags, &locMap);
@@ -300,6 +313,9 @@ std::string printModuleCanonical(mlir::ModuleOp module,
   // Canonicalize floats in-place.
   auto lines = splitLinesPreserveEmpty(printed);
   canonicalizeScalarFloatConstants(module, locMap, lines);
+
+  // If debug printing is enabled, strip noise like `loc(unknown)`.
+  stripUnknownLocSuffix(lines);
 
   std::string out = joinLines(lines);
 
