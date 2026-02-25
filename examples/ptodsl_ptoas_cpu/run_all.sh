@@ -18,7 +18,7 @@ for ex in "${EXAMPLES[@]}"; do
   echo "============================================================"
   echo "[RUN] $ex"
   echo "============================================================"
-  bash "$ROOT/examples/ptodsl_ptoas_cpu/$ex/run.sh"
+  bash "$ROOT/demos/ptodsl_ptoas_cpu/$ex/run.sh"
   echo
   echo
 

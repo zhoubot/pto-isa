@@ -55,11 +55,13 @@ int main() {
   auto kernel = +[](float* a, float* b, float* c, int32_t vr, int32_t vc) {
     vec_add_kernel_2d_dynamic(a, b, c, vr, vc);
   };
+  constexpr int valid_row = tile;
+  constexpr int valid_col = tile;
 
   if (launch_mode && std::string(launch_mode) == "sequential") {
-    pto::cpu_sim::launch_sequential(blocks, subblocks, kernel, x.data(), y.data(), z.data(), tile, tile);
+    pto::cpu_sim::launch_sequential(blocks, subblocks, kernel, x.data(), y.data(), z.data(), valid_row, valid_col);
   } else {
-    pto::cpu_sim::launch_parallel(blocks, subblocks, kernel, max_threads, x.data(), y.data(), z.data(), tile, tile);
+    pto::cpu_sim::launch_parallel(blocks, subblocks, kernel, max_threads, x.data(), y.data(), z.data(), valid_row, valid_col);
   }
 
   // Verify.
