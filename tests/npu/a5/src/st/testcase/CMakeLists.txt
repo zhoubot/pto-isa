@@ -207,6 +207,7 @@ set(ALL_TESTCASES
     tnot
     trelu
     tquant
+    tdequant
     mgather
     mscatter
 )

@@ -54,6 +54,8 @@ This is the central repository for the PTO ecosystem. It connects multiple compo
 | `ptoas` | PTO Assembler - compiles PTO text to C++ | `ptoas input.pto -o output.cpp` |
 | `ptobc` | PTO Bytecode encoder/decoder | `ptobc encode input.pto -o out.ptobc` |
 
+For performance profiling, refer to the [msprof tool](https://www.hiascend.com/document/detail/zh/canncommercial/850/devaids/Profiling/atlasprofiling_16_0010.html).
+
 ## Intended Audience
 
 PTO Tile Lib is not aimed at beginner-level users. It is intended for:
@@ -80,6 +82,12 @@ For details, see: [Released PTO ISA](include/README.md)
 - Python 3
 
 ### Ascend (NPU / simulator)
+
+If you wish to directly browse the PTO ISA documentation online:
+
+- [Documentation Center](https://pto-isa.gitcode.com)
+
+To build the documentation locally, see the **Documentation Site (MkDocs)** section below.
 
 - Ascend CANN toolkit **>= 8.3** (see `version.info`)
 - A working runtime environment (`setenv.bash` sourced)

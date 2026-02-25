@@ -109,6 +109,8 @@ setgetval
 ttest
 tget
 tput
+tnotify
+twait
 )
 
 foreach(TESTCASE ${ALL_TESTCASES})

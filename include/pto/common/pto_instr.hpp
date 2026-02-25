@@ -1404,6 +1404,15 @@ PTO_INST RecordEvent TCOLEXPANDEXPDIF(TileDataDst &dst, TileDataDst &src0, TileD
     return {};
 }
 
+template <typename TileDataDst, typename TileDataSrc, typename TileDataPara, typename... WaitEvents>
+PTO_INST RecordEvent TDEQUANT(TileDataDst &dst, TileDataSrc &src, TileDataPara &scale, TileDataPara &offset,
+                              WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TDEQUANT, dst, src, scale, offset);
+    return {};
+}
+
 template <typename TileDataDst, typename TileDataSrc0, typename TileDataSrc1, typename... WaitEvents>
 PTO_INST RecordEvent TREM(TileDataDst &dst, TileDataSrc0 &src0, TileDataSrc1 &src1, WaitEvents &... events)
 {

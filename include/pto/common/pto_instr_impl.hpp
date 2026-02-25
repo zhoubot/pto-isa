@@ -107,6 +107,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TColExpandMul.hpp"
 #include "pto/npu/a2a3/TColExpandDiv.hpp"
 #include "pto/npu/a2a3/TColExpandExpdif.hpp"
+#include "pto/npu/a2a3/TQuant.hpp"
 #endif
 
 #ifdef PTO_NPU_ARCH_A5
@@ -178,6 +179,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TPartMax.hpp"
 #include "pto/npu/a5/TPartMin.hpp"
 #include "pto/npu/a5/TQuant.hpp"
+#include "pto/npu/a5/TDeQuant.hpp"
 #include "pto/npu/a5/TImg2col.hpp"
 #include "pto/npu/a5/TSetFmatrix.hpp"
 #include "pto/npu/a5/TSetImg2colRpt.hpp"
@@ -265,6 +267,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/TSync.hpp"
 #include "pto/cpu/TTest.hpp"
 #include "pto/cpu/TGet.hpp"
+#include "pto/cpu/TWait.hpp"
 #endif
 
 #endif

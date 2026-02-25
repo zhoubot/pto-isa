@@ -35,6 +35,9 @@ PTO Tile Lib 并不面向入门级用户，主要面向：
 
 ## 集成情况
 
+本仓库包含面向性能的 kernels，并给出参考测量数据与可复现的实验设置。
+性能测试工具请参考：[msprof 工具](https://www.hiascend.com/document/detail/zh/canncommercial/850/devaids/Profiling/atlasprofiling_16_0010.html)。
+
 PTO 指令已集成到：
 
 - [PyPTO](https://gitcode.com/cann/pypto/)
@@ -59,6 +62,12 @@ PTO 指令已集成到：
 - Python 3
 
 ### 昇腾（NPU / simulator）
+
+如果想直接查阅 PTO ISA 文档，可访问：
+
+- [文档中心](https://pto-isa.gitcode.com)
+
+如希望自行构建文档，请参考下文 **文档站点（MkDocs）** 章节。
 
 - Ascend CANN Toolkit **>= 8.3**（见 `version.info`）
 - 已正确配置运行环境（需要 source `setenv.bash`）

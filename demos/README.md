@@ -1,96 +1,98 @@
-<p align="center">
-  <img src="docs/figures/pto_logo.svg" alt="PTO Tile Lib" width="180" />
-</p>
+# PTO Demos
 
-# PTO Demos and Examples
-
-This directory contains demonstrations and examples for the PTO (Parallel Tile Operation) ecosystem.
+This directory contains demonstration examples showing how to use **PTO Tile Library** in different scenarios.
 
 ## Directory Structure
 
 ```
 demos/
-├── baseline/           # Baseline implementations
-├── cpu/                # CPU simulation examples
-├── python/             # Python-based examples
-├── torch_jit/         # PyTorch JIT examples
-└── ptodsl_ptoas_cpu/  # PTODSL + PTOAS CPU examples
-    ├── add_static/             # Static addition kernel
-    ├── add_dynamic_multicore/  # Dynamic multi-core addition
-    ├── matmul_static_singlecore/   # Single-core GEMM
-    ├── matmul_dynbatch_multicore/  # Dynamic batch multi-core GEMM
-    └── relu_dynamic_multicore/    # Dynamic multi-core ReLU
+├── baseline/         # Production PyTorch operator examples (NPU)
+│   ├── add/          # Basic element-wise addition
+│   ├── gemm_basic/   # GEMM with pipeline optimization
+│   └── flash_atten/  # Flash Attention with dynamic tiling
+├── cpu/              # CPU simulation demos (cross-platform)
+│   ├── gemm_demo/
+│   ├── flash_attention_demo/
+│   └── mla_attention_demo/
+└── torch_jit/        # PyTorch JIT compilation examples
+    ├── add/
+    ├── gemm/
+    └── flash_atten/
 ```
 
-## Quick Start with PTODSL
+> Note: PTODSL + PTOAS CPU end-to-end examples live in `examples/ptodsl_ptoas_cpu/` (not under `demos/`).
 
-### Prerequisites
+## Demo Categories
+
+### 1) Baseline (`baseline/`)
+
+Production-ready examples showing how to implement custom PTO kernels and expose them as PyTorch operators via `torch_npu`. Includes complete workflow from kernel implementation to Python integration with CMake build system and wheel packaging.
+
+**Supported Platforms**: A2/A3/A5
+
+**Examples**: Element-wise addition, GEMM with double-buffering pipeline, Flash Attention with automatic tile size selection.
+
+### 2) CPU Simulation (`cpu/`)
+
+Cross-platform examples that run on CPU (x86_64/AArch64) without requiring Ascend hardware. Ideal for algorithm prototyping, learning PTO programming model, and CI/CD testing.
+
+**Examples**: Basic GEMM, Flash Attention, Multi-Latent Attention.
+
+### 3) PyTorch JIT (`torch_jit/`)
+
+Examples showing on-the-fly C++ compilation and direct integration with PyTorch tensors. Useful for rapid prototyping without pre-building wheels.
+
+**Examples**: JIT addition, JIT GEMM, JIT Flash Attention with benchmark suite.
+
+## Quick Start
+
+### CPU Simulation (Recommended First Step)
 
 ```bash
-# Initialize submodules
-git submodule update --init --recursive
-
-# Build PTOAS
-cd PTOAS && mkdir -p build && cd build
-cmake .. && make -j$(nproc)
+python3 tests/run_cpu.py --demo gemm --verbose
+python3 tests/run_cpu.py --demo flash_attn --verbose
 ```
 
-### Running Examples
+### NPU Baseline Example
 
 ```bash
-# Run all PTODSL examples
-cd demos/ptodsl_ptoas_cpu
-./run_all.sh
-
-# Run specific example
-cd demos/ptodsl_ptoas_cpu/add_static
-./run.sh
+cd demos/baseline/add
+python -m venv virEnv && source virEnv/bin/activate
+pip install -r requirements.txt
+export PTO_LIB_PATH=[YOUR_PATH]/pto-isa
+python3 setup.py bdist_wheel
+pip install dist/*.whl
+cd test && python3 test.py
 ```
 
-## Example: GEMM with PTODSL
+### JIT Example
 
-```python
-import pto
-
-# Define a GEMM kernel
-@pto.kernel
-def gemm(A: pto.Tensor[(M, K), pto.f16],
-         B: pto.Tensor[(K, N), pto.f16],
-         C: pto.Tensor[(M, N), pto.f16]):
-    for m in pto.range(0, M, tile_size=16):
-        for k in pto.range(0, K, tile_size=16):
-            for n in pto.range(0, N, tile_size=16):
-                # Load tiles
-                tA = pto.tload(A[m:m+16, k:k+16])
-                tB = pto.tload(B[k:k+16, n:n+16])
-                tC = pto.tload(C[m:m+16, n:n+16])
-                
-                # Matrix multiplication
-                tC = pto.tmatmul(tA, tB, tC)
-                
-                # Store result
-                pto.tstore(C[m:m+16, n:n+16], tC)
+```bash
+export PTO_LIB_PATH=[YOUR_PATH]/pto-isa
+cd demos/torch_jit/add
+python add_compile_and_run.py
 ```
 
-## Related Documentation
+## Prerequisites
 
-| Document | Description |
-|----------|-------------|
-| [PTOAS submodule](../PTOAS/) | Assembler and MLIR dialect |
-| [PTODSL submodule](../PTODSL/) | Python DSL for kernel authoring |
-| [docs/grammar/](../docs/grammar/) | PTO-AS specification |
-| [docs/bytecode/](../docs/bytecode/) | PTO-BC bytecode specification |
-| [docs/coding/tutorials/](../docs/coding/tutorials/) | Step-by-step tutorials |
+**For Baseline and JIT (NPU)**:
+- Ascend AI Processor (910B/910C/950)
+- CANN Toolkit 8.5.0+
+- PyTorch with `torch_npu`
+- Python 3.8+, CMake 3.16+
 
-## External Resources
+**For CPU Demos**:
+- C++ compiler with C++23 support
+- CMake 3.16+
+- Python 3.8+ (optional)
 
-| Project | Description | Link |
-|---------|-------------|------|
-| **pyPTO** | Python-first frontend | [GitCode](https://gitcode.com/cann/pypto/) |
-| **PTODSL** | Python DSL | [GitHub](https://github.com/huawei-csl/pto-dsl) |
-| **PTOAS** | Assembler and MLIR dialect | [GitHub](https://github.com/zhangstevenunity/PTOAS) |
-| **TileLang Ascend** | High-level framework | [GitHub](https://github.com/tile-ai/tilelang-ascend/) |
+## Documentation
 
----
+- Getting Started: `docs/getting-started.md`
+- ISA Reference: `docs/isa/README.md`
 
-For the main project README, see: [README.md](../README.md)
+## Related
+
+- Manual Kernels: `kernels/manual/`
+- Custom Operators: `kernels/custom/`
+- Test Cases: `tests/`
