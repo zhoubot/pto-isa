@@ -6,6 +6,8 @@
 #include <mlir/IR/DialectRegistry.h>
 #include <mlir/IR/MLIRContext.h>
 
+#include <PTO/IR/PTO.h>
+
 #include <iostream>
 
 namespace ptobc {
@@ -52,7 +54,7 @@ int main(int argc, char** argv) {
   try {
     if (cmd == "encode") {
       mlir::DialectRegistry registry;
-      registry.insert<mlir::func::FuncDialect, mlir::arith::ArithDialect, mlir::scf::SCFDialect>();
+      registry.insert<mlir::func::FuncDialect, mlir::arith::ArithDialect, mlir::scf::SCFDialect, mlir::pto::PTODialect>();
       mlir::MLIRContext ctx(registry);
       ctx.allowUnregisteredDialects(true);
 

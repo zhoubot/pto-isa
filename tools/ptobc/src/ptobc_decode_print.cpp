@@ -5,6 +5,8 @@
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/SCF/IR/SCF.h>
+
+#include <PTO/IR/PTO.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Operation.h>
 #include <mlir/IR/OpImplementation.h>
@@ -13,11 +15,16 @@
 
 #include <llvm/Support/raw_ostream.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
 
 namespace ptobc {
+
+static bool debugEnabled() {
+  return std::getenv("PTOBC_DEBUG") != nullptr;
+}
 
 struct Reader {
   const uint8_t* p;
@@ -131,8 +138,11 @@ static mlir::DictionaryAttr getAttrDict(BuildCtx& bc, uint64_t aid) {
 static void buildRegionInto(BuildCtx& bc, Reader& r, mlir::Region& region);
 
 static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
+  const bool dbg = debugEnabled();
   uint64_t opcnt = r.readULEB();
+  if (dbg) llvm::errs() << "[ptobc]   ops=" << opcnt << "\n";
   for (uint64_t oi = 0; oi < opcnt; ++oi) {
+    if (dbg) llvm::errs() << "[ptobc]    op[" << oi << "]...\n";
     uint16_t opcode = r.readU16LE();
     uint64_t attrId = r.readULEB();
 
@@ -176,34 +186,38 @@ static void buildOpList(BuildCtx& bc, Reader& r, mlir::Block& block) {
       st.addAttribute(na.getName(), na.getValue());
     }
 
-    // Decode regions into the OperationState (will be transferred to the op on create).
-    llvm::SmallVector<mlir::Region*, 4> regions;
-    regions.reserve(nreg);
+    // Add empty regions first; decode them after op creation.
     for (uint64_t ri = 0; ri < nreg; ++ri) {
-      regions.push_back(st.addRegion());
-    }
-    for (uint64_t ri = 0; ri < nreg; ++ri) {
-      buildRegionInto(bc, r, *regions[ri]);
+      (void)st.addRegion();
     }
 
     mlir::Operation* op = mlir::Operation::create(st);
     block.getOperations().push_back(op);
 
-    // Fill result value ids (stable even if regions added new values)
+    // Fill result value ids *before* decoding regions. This allows nested regions
+    // (for ops that are not IsolatedFromAbove) to reference parent op results.
     for (uint64_t i = 0; i < nres; ++i) {
       bc.values[resStart + i] = op->getResult(i);
+    }
+
+    for (uint64_t ri = 0; ri < nreg; ++ri) {
+      buildRegionInto(bc, r, op->getRegion(ri));
     }
   }
 }
 
 static void buildRegionInto(BuildCtx& bc, Reader& r, mlir::Region& region) {
+  const bool dbg = debugEnabled();
   uint64_t bcnt = r.readULEB();
+  if (dbg) llvm::errs() << "[ptobc] region: blocks=" << bcnt << "\n";
   region.getBlocks().clear();
 
   for (uint64_t bi = 0; bi < bcnt; ++bi) {
+    if (dbg) llvm::errs() << "[ptobc]  block[" << bi << "]...\n";
     auto* block = new mlir::Block();
 
     uint64_t nargs = r.readULEB();
+    if (dbg) llvm::errs() << "[ptobc]   nargs=" << nargs << "\n";
     for (uint64_t ai = 0; ai < nargs; ++ai) {
       uint64_t tid = r.readULEB();
       auto ty = getType(bc, tid);
@@ -221,19 +235,22 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
                                     const std::vector<TypeEntry>& types,
                                     const std::vector<AttrEntry>& attrs,
                                     const std::vector<uint8_t>& moduleBytes) {
+  const bool dbg = debugEnabled();
+
   Reader r{moduleBytes.data(), moduleBytes.data() + moduleBytes.size()};
   uint8_t profile = r.readU8();
-  (void)profile;
   uint8_t indexWidth = r.readU8();
-  (void)indexWidth;
+  if (dbg) llvm::errs() << "[ptobc] module: profile=" << unsigned(profile) << " indexWidth=" << unsigned(indexWidth) << "\n";
 
   uint64_t moduleAttrId = r.readULEB();
   uint64_t gcnt = r.readULEB();
+  if (dbg) llvm::errs() << "[ptobc] module: moduleAttrId=" << moduleAttrId << " globals=" << gcnt << "\n";
   for (uint64_t i = 0; i < gcnt; ++i) {
     throw std::runtime_error("globals not supported");
   }
 
   uint64_t fcnt = r.readULEB();
+  if (dbg) llvm::errs() << "[ptobc] module: funcs=" << fcnt << "\n";
 
   struct FuncDecl { std::string name; mlir::FunctionType type; mlir::DictionaryAttr attrs; uint8_t flags; };
   std::vector<FuncDecl> decls;
@@ -247,6 +264,9 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
     uint8_t flags = r.readU8();
     uint64_t fattrId = r.readULEB();
     if (nameSid >= strings.size()) throw std::runtime_error("bad func name sid");
+    if (ftypeId >= types.size()) throw std::runtime_error("bad func type id");
+
+    if (dbg) llvm::errs() << "[ptobc] func[" << i << "]: nameSid=" << nameSid << " ftypeId=" << ftypeId << " flags=" << unsigned(flags) << " fattrId=" << fattrId << "\n";
 
     auto ty = parseType(ctx, types.at(ftypeId).asmStr);
     auto fty = mlir::dyn_cast<mlir::FunctionType>(ty);
@@ -264,7 +284,10 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
   }
 
   for (uint64_t i = 0; i < fcnt; ++i) {
+    if (dbg) llvm::errs() << "[ptobc] building func body: " << decls[i].name << "\n";
+
     auto fn = mlir::func::FuncOp::create(mlir::UnknownLoc::get(&ctx), decls[i].name, decls[i].type);
+    if (dbg) llvm::errs() << "[ptobc] created func op\n";
     for (auto na : decls[i].attrs) {
       fn->setAttr(na.getName(), na.getValue());
     }
@@ -273,6 +296,7 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
       // decode body region
       bc.values.clear();
       buildRegionInto(bc, r, fn.getBody());
+      if (dbg) llvm::errs() << "[ptobc] func body built ok: values=" << bc.values.size() << "\n";
     }
 
     module.push_back(fn);
@@ -283,6 +307,9 @@ static mlir::ModuleOp decodeToModule(mlir::MLIRContext& ctx,
 }
 
 void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
+  const bool dbg = debugEnabled();
+
+  if (dbg) llvm::errs() << "[ptobc] decode: reading file: " << inPath << "\n";
   auto data = readFile(inPath);
   if (data.size() < 14) throw std::runtime_error("file too small");
   if (std::memcmp(data.data(), "PTOBC\0", 6) != 0) throw std::runtime_error("bad magic");
@@ -299,6 +326,7 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
     uint8_t sid = r.readU8();
     uint32_t slen = r.readU32LE();
     auto bytes = r.readBytes(slen);
+    if (dbg) llvm::errs() << "[ptobc] section id=" << unsigned(sid) << " len=" << slen << "\n";
     return {sid, bytes};
   };
 
@@ -321,21 +349,38 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
   std::vector<AttrEntry> attrs;
   parseAttrsSection(d3, strings, attrs);
 
+  if (dbg) {
+    llvm::errs() << "[ptobc] strings=" << strings.size() << " types=" << types.size() << " attrs=" << attrs.size() << " moduleBytes=" << d6.size() << "\n";
+  }
+
   // ignore constpool
   (void)d4;
 
   mlir::DialectRegistry registry;
-  registry.insert<mlir::func::FuncDialect, mlir::arith::ArithDialect, mlir::scf::SCFDialect>();
+  registry.insert<mlir::func::FuncDialect, mlir::arith::ArithDialect, mlir::scf::SCFDialect, mlir::pto::PTODialect>();
   mlir::MLIRContext ctx(registry);
   ctx.allowUnregisteredDialects(true);
 
+  // Ensure dialects are loaded before we start materializing ops.
+  (void)ctx.getOrLoadDialect<mlir::func::FuncDialect>();
+  (void)ctx.getOrLoadDialect<mlir::arith::ArithDialect>();
+  (void)ctx.getOrLoadDialect<mlir::scf::SCFDialect>();
+  (void)ctx.getOrLoadDialect<mlir::pto::PTODialect>();
+
+  if (dbg) llvm::errs() << "[ptobc] decoding module...\n";
   auto module = decodeToModule(ctx, strings, types, attrs, d6);
+  if (dbg) llvm::errs() << "[ptobc] decoded module ok; printing...\n";
 
   std::string out;
   llvm::raw_string_ostream os(out);
-  module.print(os);
+
+  mlir::OpPrintingFlags flags;
+  flags.printGenericOpForm();
+  flags.useLocalScope();
+  module.print(os, flags);
   os.flush();
 
+  if (dbg) llvm::errs() << "[ptobc] writing output: " << outPath << "\n";
   std::ofstream ofs(outPath);
   ofs << out;
 }
