@@ -1,6 +1,7 @@
 #include "ptobc/mlir_helpers.h"
 #include "ptobc/ptobc_format.h"
 #include "ptobc/leb128.h"
+#include "ptobc/canonical_printer.h"
 
 #include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -371,20 +372,15 @@ void decodeFileToPTO(const std::string& inPath, const std::string& outPath) {
   auto module = decodeToModule(ctx, strings, types, attrs, d6);
   if (dbg) llvm::errs() << "[ptobc] decoded module ok; printing...\n";
 
-  std::string out;
-  llvm::raw_string_ostream os(out);
+  CanonicalPrintOptions opt;
+  opt.generic = (std::getenv("PTOBC_PRINT_GENERIC") != nullptr);
+  opt.keepMLIRFloatPrinting = (std::getenv("PTOBC_PRINT_PRETTY") != nullptr);
 
-  // Default to dialect-pretty `.pto` printing. You can force generic printing via:
-  //   PTOBC_PRINT_GENERIC=1
-  mlir::OpPrintingFlags flags;
-  flags.useLocalScope();
-  flags.assumeVerified();
-  if (std::getenv("PTOBC_PRINT_GENERIC")) {
-    flags.printGenericOpForm();
-  }
-
-  module.print(os, flags);
-  os.flush();
+  // Default: canonical pretty printing.
+  // Env toggles:
+  //   PTOBC_PRINT_GENERIC=1  -> generic MLIR form
+  //   PTOBC_PRINT_PRETTY=1   -> keep MLIR default float printing (non-canonical)
+  std::string out = printModuleCanonical(module, opt);
 
   if (dbg) llvm::errs() << "[ptobc] writing output: " << outPath << "\n";
   std::ofstream ofs(outPath);
