@@ -107,7 +107,6 @@ module {
   func.func @f() {
     %c0_i32 = arith.constant 0 : i32 loc("x.cc":10:2)
     %c1_f32 = arith.constant 1.0 : f32 loc("x.cc":11:3)
-    %0 = arith.addf %c1_f32, %c1_f32 : f32 loc("x.cc":11:9)
     return loc("x.cc":12:1)
   } loc("x.cc":9:1)
 } loc("x.cc":8:1)
