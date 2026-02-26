@@ -86,12 +86,12 @@ User Kernels (pyPTO / PTODSL / TileLang)
 
 ## Tool: ptobc
 
-The `ptobc` tool is located at [`tools/ptobc/`](tools/ptobc/) and provides:
+The `ptobc` tool is located at [`tools/ptobc/`](../../tools/ptobc/) and currently provides:
 
 - `ptobc encode` - Convert PTO text to bytecode
 - `ptobc decode` - Convert bytecode back to PTO text
-- `ptobc info` - Display bytecode metadata
-- `ptobc verify` - Verify bytecode integrity
+
+Tool behavior / encoding rules (implementation notes): [`ptobc.md`](ptobc.md)
 
 ## See Also
 
