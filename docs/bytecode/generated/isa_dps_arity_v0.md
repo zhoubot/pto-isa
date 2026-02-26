@@ -55,6 +55,7 @@ Columns: op | dps_arity | operand_mode | num_operands | imm_kind
 - `pto.tmatmul` | 3 | by_variant | 0 | 0x00
 - `pto.tmatmul.acc`: MISSING OPCODE
 - `pto.tmatmul.bias`: MISSING OPCODE
+- `pto.tmatmul.mx` | 5 | by_variant | 0 | 0x00
 - `pto.tmax` | 3 | fixed | 3 | 0x00
 - `pto.tmaxs` | 3 | fixed | 3 | 0x00
 - `pto.tmin` | 3 | fixed | 3 | 0x00

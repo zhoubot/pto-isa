@@ -82,8 +82,11 @@ std::vector<uint8_t> PTOBCFile::buildAttrsSection() const {
 
 std::vector<uint8_t> PTOBCFile::buildConstPoolSection() const {
   Buffer b;
-  // empty for now
-  writeULEB128(0, b.bytes);
+  writeULEB128(consts.size(), b.bytes);
+  for (const auto &c : consts) {
+    b.appendU8(c.tag);
+    if (!c.payload.empty()) b.append(c.payload.data(), c.payload.size());
+  }
   return b.bytes;
 }
 

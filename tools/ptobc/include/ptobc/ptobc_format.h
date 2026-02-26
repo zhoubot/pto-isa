@@ -64,11 +64,19 @@ struct DebugSnippetEntry {
   uint64_t snippetSid;
 };
 
+struct ConstEntry {
+  uint8_t tag;
+  std::vector<uint8_t> payload; // tag-specific payload bytes
+};
+
 struct PTOBCFile {
   // Tables
   StringTable strings;
   std::vector<std::string> typeAsm; // 1-based IDs; 0 means none
   std::vector<std::string> attrAsm; // 1-based IDs; 0 means none
+
+  // Const pool
+  std::vector<ConstEntry> consts;
 
   // DebugInfo tables (optional section)
   std::vector<DebugFileEntry> dbgFiles;
