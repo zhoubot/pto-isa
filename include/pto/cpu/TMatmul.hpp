@@ -114,36 +114,38 @@ PTO_INTERNAL void TMATMUL_BIAS_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileRig
         }
     }
 
-    // Keep TMATMUL_MX available in the CPU reference backend by treating it as
-    // a normal matmul/matmul_acc/matmul_bias. Scale tiles are accepted but are
-    // currently ignored (matching the A2/A3 fallback behavior).
-    template <typename TileAcc, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
-    PTO_INTERNAL void TMATMUL_MX_IMPL(
-        TileAcc &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix, TileRightScale &bScaleMatrix)
-    {
-        (void)aScaleMatrix;
-        (void)bScaleMatrix;
-        TMATMUL_IMPL(cMatrix, aMatrix, bMatrix);
-    }
+}
 
-    template <typename TileAcc, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
-    PTO_INTERNAL void TMATMUL_MX_IMPL(TileAcc &cOutMatrix, TileAcc &cInMatrix, TileLeft &aMatrix,
-        TileLeftScale &aScaleMatrix, TileRight &bMatrix, TileRightScale &bScaleMatrix)
-    {
-        (void)aScaleMatrix;
-        (void)bScaleMatrix;
-        TMATMUL_ACC_IMPL(cOutMatrix, cInMatrix, aMatrix, bMatrix);
-    }
 
-    template <typename TileAcc, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale,
-        typename TileBias>
-    PTO_INTERNAL void TMATMUL_MX_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix,
-        TileRightScale &bScaleMatrix, TileBias &biasMatrix)
-    {
-        (void)aScaleMatrix;
-        (void)bScaleMatrix;
-        TMATMUL_BIAS_IMPL(cMatrix, aMatrix, bMatrix, biasMatrix);
-    }
+// TMATMUL_MX: CPU reference fallback
+// Treat MX variants as normal matmul/matmul_acc/matmul_bias; scale tiles are accepted but ignored.
+
+template <typename TileAcc, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
+PTO_INTERNAL void TMATMUL_MX_IMPL(
+    TileAcc &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix, TileRightScale &bScaleMatrix)
+{
+    (void)aScaleMatrix;
+    (void)bScaleMatrix;
+    TMATMUL_IMPL(cMatrix, aMatrix, bMatrix);
+}
+
+template <typename TileAcc, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale>
+PTO_INTERNAL void TMATMUL_MX_IMPL(TileAcc &cOutMatrix, TileAcc &cInMatrix, TileLeft &aMatrix,
+    TileLeftScale &aScaleMatrix, TileRight &bMatrix, TileRightScale &bScaleMatrix)
+{
+    (void)aScaleMatrix;
+    (void)bScaleMatrix;
+    TMATMUL_ACC_IMPL(cOutMatrix, cInMatrix, aMatrix, bMatrix);
+}
+
+template <typename TileAcc, typename TileLeft, typename TileLeftScale, typename TileRight, typename TileRightScale,
+    typename TileBias>
+PTO_INTERNAL void TMATMUL_MX_IMPL(TileAcc &cMatrix, TileLeft &aMatrix, TileLeftScale &aScaleMatrix, TileRight &bMatrix,
+    TileRightScale &bScaleMatrix, TileBias &biasMatrix)
+{
+    (void)aScaleMatrix;
+    (void)bScaleMatrix;
+    TMATMUL_BIAS_IMPL(cMatrix, aMatrix, bMatrix, biasMatrix);
 }
 } // namespace pto
 #endif
