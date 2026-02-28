@@ -106,7 +106,7 @@ namespace pto {
         });
     }
 
-    template <typename GlobalData, typename TileData>
+    template <typename GlobalData, typename TileData, AtomicType atomicType = AtomicType::AtomicNone>
     __tf__  PTO_INLINE void TStore(typename GlobalData::DType __out__ *dst, typename TileData::TileDType __in__ src,
         int gShape0, int gShape1, int gShape2, int gShape3, int gShape4, int gStride0, int gStride1, int gStride2,
         int gStride3, int gStride4, int validRow, int validCol)
@@ -143,7 +143,47 @@ namespace pto {
                         idx2 * static_cast<std::size_t>(gStride2) +
                         idx3 * static_cast<std::size_t>(gStride3) +
                         idx4 * static_cast<std::size_t>(gStride4);
-                    dst[gd_idx] = src[GetTileElementOffset<TileData>(r, c)];
+                    if constexpr (atomicType == AtomicType::AtomicAdd) {
+                        dst[gd_idx] += src[GetTileElementOffset<TileData>(r, c)];
+                    } else {
+                        dst[gd_idx] = src[GetTileElementOffset<TileData>(r, c)];
+                    }
+                }
+            }
+        } else if constexpr (atomicType == AtomicType::AtomicAdd) {
+            // AtomicAdd path: use a deterministic sequential loop to avoid data races in CPU_SIM.
+            for (std::size_t i = 0; i < static_cast<std::size_t>(gShape0); ++i) {
+                for (std::size_t j = 0; j < static_cast<std::size_t>(gShape1); ++j) {
+                    for (std::size_t k = 0; k < static_cast<std::size_t>(gShape2); ++k) {
+                        const std::size_t baseDst =
+                            i * static_cast<std::size_t>(gStride0) +
+                            j * static_cast<std::size_t>(gStride1) +
+                            k * static_cast<std::size_t>(gStride2);
+                        if constexpr (TileData::SFractal == SLayout::NoneBox) {
+                            // Plain ND/DN store (matches StorePlain).
+                            for (std::size_t r = 0; r < static_cast<std::size_t>(gShape3); ++r) {
+                                for (std::size_t c = 0; c < static_cast<std::size_t>(gShape4); ++c) {
+                                    const std::size_t dstIdx = baseDst + r * static_cast<std::size_t>(gStride3) +
+                                                          c * static_cast<std::size_t>(gStride4);
+                                    const std::size_t srcIdx = GetTileElementOffset<TileData>(r, c);
+                                    dst[dstIdx] += src[srcIdx];
+                                }
+                            }
+                        } else {
+                            // Subfractal tile store: iterate over the 2D view and map tile offsets.
+                            // This matches the existing StoreSubfractalMatrix logic but in atomic form.
+                            PTO_CPU_ASSERT(gShape0==1 && gShape1==1 && gShape2==1,
+                                           "Fix: subfractal ND/DN store only supports 2D GMs");
+                            for (std::size_t r = 0; r < static_cast<std::size_t>(gShape3); ++r) {
+                                for (std::size_t c = 0; c < static_cast<std::size_t>(gShape4); ++c) {
+                                    const std::size_t dstIdx = baseDst + r * static_cast<std::size_t>(gStride3) +
+                                                          c * static_cast<std::size_t>(gStride4);
+                                    const std::size_t srcIdx = GetTileElementOffset<TileData>(r, c);
+                                    dst[dstIdx] += src[srcIdx];
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } else if(TileData::SFractal == SLayout::NoneBox) {
@@ -174,7 +214,7 @@ namespace pto {
                            dst.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
                        "Fix: TSTORE requires all dst shape dims > 0");
 
-        TStore<GlobalData, TileData>(dst.data(),
+        TStore<GlobalData, TileData, atomicType>(dst.data(),
             src.data(),
             dst.GetShape(pto::GlobalTensorDim::DIM_0),
             dst.GetShape(pto::GlobalTensorDim::DIM_1),
