@@ -26,11 +26,16 @@ endif()
 
 set(ASCEND_DRIVER_PATH /usr/local/Ascend/driver)
 
-set(CMAKE_COMPILER bisheng)
-set(CMAKE_C_COMPILER ${CMAKE_COMPILER})
-set(CMAKE_CXX_COMPILER ${CMAKE_COMPILER})
 
-find_package(GTest REQUIRED)
+# Prefer in-tree googletest to avoid ABI mismatch with preinstalled libgtest
+set(GTEST_SRC_DIR "${PROJECT_SOURCE_DIR}/../../../../../build_tests/_deps/googletest-src" CACHE PATH "Path to googletest source")
+if(EXISTS "${GTEST_SRC_DIR}/CMakeLists.txt")
+    message(STATUS "Using in-tree googletest: ${GTEST_SRC_DIR}")
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${GTEST_SRC_DIR}" "${CMAKE_BINARY_DIR}/_deps/googletest" EXCLUDE_FROM_ALL)
+else()
+    find_package(GTest REQUIRED)
+endif()
 
 add_compile_options(
     -D_FORTIFY_SOURCE=2

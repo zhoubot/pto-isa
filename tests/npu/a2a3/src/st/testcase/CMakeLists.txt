@@ -32,11 +32,19 @@ function(pto_vec_st NAME)
         ${ASCEND_HOME_PATH}/tools/simulator/${SOC_VERSION}/lib
     )
 
+
+    if(TARGET GTest::gtest)
+        set(_GTEST_LIB GTest::gtest)
+        set(_GTEST_MAIN GTest::gtest_main)
+    else()
+        set(_GTEST_LIB gtest)
+        set(_GTEST_MAIN gtest_main)
+    endif()
     target_link_libraries(${NAME} PRIVATE
         ${NAME}_kernel
         $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},sim>:runtime_camodel>>
         $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},npu>:runtime>>
-        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase GTest::gtest GTest::gtest_main pthread
+        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase ${_GTEST_LIB} ${_GTEST_MAIN} pthread
     )
 endfunction()
 
@@ -64,11 +72,19 @@ function(pto_cube_st NAME)
         ${ASCEND_HOME_PATH}/tools/simulator/${SOC_VERSION}/lib
     )
 
+
+    if(TARGET GTest::gtest)
+        set(_GTEST_LIB GTest::gtest)
+        set(_GTEST_MAIN GTest::gtest_main)
+    else()
+        set(_GTEST_LIB gtest)
+        set(_GTEST_MAIN gtest_main)
+    endif()
     target_link_libraries(${NAME} PRIVATE
         ${NAME}_kernel
         $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},sim>:runtime_camodel>>
         $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},npu>:runtime>>
-        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase GTest::gtest GTest::gtest_main pthread
+        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase ${_GTEST_LIB} ${_GTEST_MAIN} pthread
     )
 endfunction()
 
@@ -95,11 +111,19 @@ function(pto_mix_st NAME)
         ${ASCEND_HOME_PATH}/tools/simulator/${SOC_VERSION}/lib
     )
 
+
+    if(TARGET GTest::gtest)
+        set(_GTEST_LIB GTest::gtest)
+        set(_GTEST_MAIN GTest::gtest_main)
+    else()
+        set(_GTEST_LIB gtest)
+        set(_GTEST_MAIN gtest_main)
+    endif()
     target_link_libraries(${NAME} PRIVATE
         ${NAME}_kernel_mix
         $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},sim>:runtime_camodel>>
         $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},npu>:runtime>>
-        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase GTest::gtest GTest::gtest_main pthread
+        stdc++ ascendcl m tiling_api platform c_sec dl nnopbase ${_GTEST_LIB} ${_GTEST_MAIN} pthread
     )
 endfunction()
 

@@ -81,6 +81,8 @@ def build_project(run_mode, soc_version, testcase = "all", debug_enable = False)
     try:
         cmake_cmd = [
             "cmake",
+            "-DCMAKE_C_COMPILER=bisheng",
+            "-DCMAKE_CXX_COMPILER=bisheng",
             f"-DRUN_MODE={run_mode}",
             f"-DSOC_VERSION={soc_version}",
             f"-DTEST_CASE={testcase}",
