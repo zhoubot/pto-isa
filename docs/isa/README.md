@@ -65,10 +65,16 @@ This directory contains the per-instruction reference for the PTO Tile Lib ISA.
 - `TROWEXPANDDIV`: `docs/isa/TROWEXPANDDIV.md`
 - `TROWEXPANDMUL`: `docs/isa/TROWEXPANDMUL.md`
 - `TROWEXPANDSUB`: `docs/isa/TROWEXPANDSUB.md`
+- `TROWEXPANDADD`: `docs/isa/TROWEXPANDADD.md`
+- `TROWEXPANDMAX`: `docs/isa/TROWEXPANDMAX.md`
+- `TROWEXPANDMIN`: `docs/isa/TROWEXPANDMIN.md`
 - `TCOLSUM`: `docs/isa/TCOLSUM.md`
 - `TCOLMAX`: `docs/isa/TCOLMAX.md`
 - `TCOLMIN`: `docs/isa/TCOLMIN.md`
 - `TCOLEXPAND`: `docs/isa/TCOLEXPAND.md`
+- `TCOLEXPANDDIV`: `docs/isa/TCOLEXPANDDIV.md`
+- `TCOLEXPANDMUL`: `docs/isa/TCOLEXPANDMUL.md`
+- `TCOLEXPANDSUB`: `docs/isa/TCOLEXPANDSUB.md`
 
 ## Memory (GM <-> Tile)
 - `TLOAD`: `docs/isa/TLOAD.md`
@@ -91,7 +97,13 @@ This directory contains the per-instruction reference for the PTO Tile Lib ISA.
 - `TRESHAPE`: `docs/isa/TRESHAPE.md`
 - `TASSIGN`: `docs/isa/TASSIGN.md`
 
+## Padding
+- `TFILLPAD`: `docs/isa/TFILLPAD.md`
+- `TFILLPAD_INPLACE`: `docs/isa/TFILLPAD_INPLACE.md`
+- `TFILLPAD_EXPAND`: `docs/isa/TFILLPAD_EXPAND.md`
+
 ## Complex
+- `TTRI`: `docs/isa/TTRI.md`
 - `TCI`: `docs/isa/TCI.md`
 - `TGATHER`: `docs/isa/TGATHER.md`
 - `TGATHERB`: `docs/isa/TGATHERB.md`
