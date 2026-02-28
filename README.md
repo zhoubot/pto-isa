@@ -2,13 +2,36 @@
   <img src="docs/figures/pto_logo.svg" alt="PTO Tile Lib" width="220" />
 </p>
 
+<div align="center">
+
+[![License](https://img.shields.io/badge/License-CANN%20Open%20Software%20License%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-9.0.0-green.svg)](version.cmake)
+[![Platform](https://img.shields.io/badge/Platform-Ascend%20A2%2FA3%2FA5%20%2B%20CPU-orange.svg)](docs/getting-started.md)
+[![C++](https://img.shields.io/badge/C%2B%2B-20-yellow.svg)](include/README.md)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-yellow.svg)](PTODSL/README.md)
+
 # PTO Tile Library
 
-Parallel Tile Operation (PTO) is a virtual instruction set architecture designed by Ascend CANN, focusing on tile-level operations. This repository offers high-performance, cross-platform tile operations across Ascend platforms. By porting to PTO instruction sequences, users can migrate Ascend hardware more easily.
+**Parallel Tile Operation (PTO)** is a virtual instruction set architecture designed by **Ascend CANN**, focusing on tile-level operations. This repository offers high-performance, cross-platform tile operations across Ascend platforms. By porting to PTO instruction sequences, users can migrate Ascend hardware more easily.
+
+</div>
 
 ## News
 
 * **2025-12-27**: PTO Tile Library becomes publicly available.
+* **2026-02-28**: Added PTO-DSL - In-core level Pythonic programming language for PTO-ISA.
+
+## Quick Links
+
+| Resource | Description |
+|----------|-------------|
+| [🚀 Getting Started](docs/getting-started.md) | Setup guide for CPU simulation and NPU |
+| [📘 ISA Manual](docs/PTO-Virtual-ISA-Manual.md) | Complete PTO ISA reference |
+| [🐍 PTO-DSL](PTODSL/README.md) | In-core level Pythonic programming language |
+| [🐍 PyPTO](https://gitcode.com/cann/pypto/) | Formal Pythonic programming interface |
+| [📚 TileLang Ascend](https://github.com/tile-ai/tilelang-ascend/) | High-level DSL for Ascend NPUs |
+| [🧩 Examples](kernels/README.md) | Kernel implementations and demos |
+| [🔧 Contributing](CONTRIBUTING.md) | How to contribute to this project |
 
 ## Overview
 
@@ -20,17 +43,25 @@ Our goal is to offer users a simplified, yet powerful way to optimize performanc
 
 Currently, PTO instructions are integrated into the following frameworks:
 
-* [PyPTO](https://gitcode.com/cann/pypto/)
-* [TileLang Ascend](https://github.com/tile-ai/tilelang-ascend/)
-* More languages coming soon
+| Framework | Description | Repository |
+|-----------|-------------|------------|
+| **PyPTO** | Formal Pythonic programming interface with Python bindings | https://gitcode.com/cann/pypto/ |
+| **PTO-DSL** | In-core level Pythonic programming language (included in this repo) | [PTODSL/](PTODSL/README.md) |
+| **TileLang Ascend** | High-level DSL for Ascend NPUs | https://github.com/tile-ai/tilelang-ascend/ |
+| **More languages** | Additional language bindings coming soon | - |
 
-## Target Users of this Repository
+## Who Is This For?
 
-PTO Tile Lib is not aimed at beginner-level users. The intended audience includes:
+PTO Tile Lib is designed for **intermediate to advanced developers**. It's ideal for:
 
-* Backend developers implementing frameworks that directly interface with Ascend hardware.
-* Cross-platform application developers.
-* High-performance operator developers (manual operator implementations).
+| User Type | Use Case |
+|-----------|----------|
+| **Backend Developers** | Building frameworks that directly interface with Ascend hardware |
+| **Framework Integrators** | Implementing kernel libraries on Ascend NPUs |
+| **Performance Engineers** | Developing high-performance operators with manual optimization |
+| **Researchers** | Exploring novel tile-based parallel algorithms |
+
+> **Note:** If you're new to NPU programming, we recommend starting with [PTO-DSL](PTODSL/README.md) - our in-core level Pythonic programming language that provides automatic software pipelining.
 
 ## Performance
 

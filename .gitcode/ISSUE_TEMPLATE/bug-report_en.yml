@@ -1,0 +1,52 @@
+name: Bug Report 🐛
+description: Report a bug or defect in PTO Tile Library
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in the following template to help us quickly solve your problem.
+  - type: textarea
+    attributes:
+      label: Bug Description
+      description: Provide as much detail as possible about what went wrong
+      value: |
+        ### Description
+        <!-- Describe what happened -->
+
+        ### Environment Information
+        <!--
+        • Hardware: (e.g., Ascend A2, Ascend A3, Ascend A5, CPU)
+        • CANN Version:
+        • OS:
+        • Python Version:
+        • Other relevant software versions:
+        -->
+
+        ### Steps to Reproduce
+        <!-- Provide steps to reproduce the bug -->
+
+        ### Expected Behavior
+        <!-- What should have happened -->
+
+        ### Actual Behavior
+        <!-- What actually happened -->
+
+        ### Error Logs
+        <!-- Paste error logs or screenshots -->
+
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem
+      value: |
+        ### Additional Notes
+        <!-- Add any other notes or context -->
+  - type: input
+    attributes:
+      label: PTO-ISA Version
+      description: Which version of PTO-ISA are you using?
+      placeholder: e.g., v9.0.0

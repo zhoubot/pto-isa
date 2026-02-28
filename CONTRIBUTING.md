@@ -1,97 +1,226 @@
-# 贡献指南
+# Contributing to PTO Tile Library
 
-本项目欢迎广大开发者体验并参与贡献，在参与社区贡献之前。请参见[cann-community](https://gitcode.com/cann/community)了解行为准则，进行CLA协议签署，了解源码仓的贡献流程。
+Welcome to PTO Tile Library! We appreciate your interest in contributing to this project. This guide will help you get started with the contribution process.
 
-开发者准备本地代码与提交PR时需要重点关注如下几点：
+## Code of Conduct
 
-1. 提交PR时，请按照PR模板仔细填写本次PR的业务背景、目的、方案等信息。
-2. 若您的修改不是简单的bug修复，而是涉及到新增特性、新增接口、新增配置参数或者修改代码流程等，请务必先通过Issue进行方案讨论，以避免您的代码被拒绝合入。若您不确定本次修改是否可被归为“简单的bug修复”，亦可通过提交Issue进行方案讨论。
+Please follow our [Community Code of Conduct](https://gitcode.com/cann/community) to ensure a welcoming and respectful environment for all contributors.
 
+## Getting Started
 
-开发者贡献场景主要包括：
+### Prerequisites
 
-### 算子Bug修复
+Before contributing, make sure you have:
 
-  如果您在本项目中发现了某些算子Bug，希望对其进行修复，欢迎您新建Issue进行反馈和跟踪处理。
+- A GitHub/GitCode account
+- Basic knowledge of C++20 and Python
+- Understanding of tile-based parallel programming (helpful but not required)
+- Familiarity with Ascend CANN (for NPU-related contributions)
 
-  您可以按照[提交Issue/处理Issue任务](https://gitcode.com/cann/community#提交Issue处理Issue任务)指引新建 `Bug-Report|缺陷反馈` 类Issue对Bug进行描述，然后在评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您进行处理。
-  
-### 算子优化
+### Finding Issues to Work On
 
-  如果您对本项目中某些算子实现有泛化性增强/性能优化思路，希望着手实现这些优化点，欢迎您对算子进行优化贡献。
+1. Browse existing [issues](https://gitcode.com/cann/pto-isa/issues) to find something to work on
+2. Look for issues labeled `good first issue` for beginner-friendly tasks
+3. Create a new issue if you've found a bug or have a feature request
 
-  您可以按照[提交Issue/处理Issue任务](https://gitcode.com/cann/community#提交Issue处理Issue任务)指引新建 `Requirement|需求建议` 类Issue对优化点进行说明，并提供您的设计方案，
-  然后在评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您进行跟踪优化。
+## Contribution Workflow
 
-### 贡献新算子
+### 1. Claim an Issue
 
-  如果您有全新的算子希望基于 NPU 进行设计与实现，欢迎在 Issue 中提出您的想法与设计方案。完整的贡献流程如下：
+Before starting work on any issue:
 
-  #### 1. 新增 Issue  
-  请按照[提交 Issue / 处理 Issue 任务](https://gitcode.com/cann/community#提交Issue处理Issue任务)指引，新建 `Requirement|需求建议` 类 Issue，并在其中说明新增算子的设计方案。  
-  Issue 需包含以下内容：
+1. Browse the [issue list](https://gitcode.com/cann/pto-isa/issues)
+2. Select an issue and comment `/assign` or `/assign @yourself` to claim it
+3. Wait for maintainers to acknowledge before starting
 
-  - **背景信息**  
-  - **价值/作用**  
-  - **设计方案**
+### 2. Fork and Clone
 
-  同时，请在提交的 Issue 中评论 `/assign` 或 `/assign @yourself` 认领该任务，以便后续完成算子上库。
+```bash
+# Fork the repository on GitHub/GitCode
+# Then clone your fork
+git clone https://gitcode.com/YOUR_USERNAME/pto-isa.git
+cd pto-isa
+```
 
-  #### 2. 需求评审
-  Sig成员将对您提交的 Issue 进行评审并给出修改意见。请在完成修改后，于 Issue 中回复：
-  > “完成意见修改，申请复审”
+### 3. Create a Feature Branch
 
-  若需求被接纳，sig成员将为您分配合适的算子分类路径（如：`include/pto/npu/a5`），以便您将新增算子提交至对应目录。
-  如在 Issue 交流中未能达成共识，建议申报 SIG 组双周例会，在会议中进行进一步讨论。
+```bash
+git checkout -b feature/your-feature-name
+# or
+git checkout -b fix/issue-description
+```
 
-  #### 3. 提交 PR  
-  在方案确定后，即可开始开发工作。新增算子的交付内容可基于最小交付件结构调整，请参考以下最小交付件进行检查。其中 `${op_name}` 为新增算子名称。
-  ```
-    docs
-    ├── isa
-    │   ├── ${op_name}.md                                # 算子说明文档
-    include
-    ├── pto                                              # 业务代码
-    │   ├── common                                       # 通用目录
-    │   │   ├── pto_instr_impl.hpp                       # 算子实现文件汇总
-    │   │   └── pto_instr.hpp                            # 对外暴露接口
-    │   ├── ${op_class}                                  # 算子分类
-    │   │   └── ${op_name}.hpp                           # 算子实现文件，定义算子头文件，包含函数说明、结构定义、逻辑实现
-    tests                                                # 测试文件目录
-    ├── ${op_class}/src/st/testcase                      # st测试目录
-    │   ├── ${op_name}                                   # 单个算子st测试文件
-    │   │   ├── ${op_name}.cpp                           # 调用接口文件
-    │   │   ├── main.cpp                                 # st运行主函数文件
-    │   │   ├── gen_data.py                              # st用例输入数据与预期结果生成文件
-    │   │   └── CMakeList.txt                            # 编译配置文件
-    │   └── CMakeList.txt                                # 编译配置文件
-    ├── run_st.sh                                        # cpu类算子st用例执行文件，添加单个用例及所有用例的执行命令
-  ```
+### 4. Make Your Changes
 
-  开发完成后，请检查以下内容：
-  - 代码交付件完整性（含 ST 测试用例代码）
-  - 代码符合.clang-format和pyproject.toml规范，提交前请使用命令clang-format -i -style=file <文件名>和ruff format <文件名>修复代码规范问题
-  - PR 是否已关联对应 Issue  
-  - 是否签署 CLA  
-  - 通过评论 `compile` 指令触发开源仓门禁，并依据 CI 检测结果进行修改。如涉及codecheck误报，请提交给sig成员屏蔽。
+Follow these guidelines:
 
-  门禁通过后，请在关联的 Issue 中回复：
-  > "该 Issue 关联的 PR：XXX，请尽快评审"
+- **Code Style**: Use `clang-format` for C++ and `ruff format` for Python
+- **Testing**: Add tests for new features or bug fixes
+- **Documentation**: Update docs for any API changes
 
-  Sig成员检视后将反馈检视意见，请完成所有修改后回复：
-  > "该 Issue 关联的 PR：XXX，已完成 PR 问题整改，请尽快评审"
+```bash
+# Format C++ code
+clang-format -i -style=file <your_file.cpp>
 
-  #### 4. PR 上库  
-  Committer 检视通过后，Maintainer 将进行最终审核。确认无误后，将标注 `/lgtm` 和 `/approve` 标签合入PR。
+# Format Python code
+ruff format <your_file.py>
+```
 
-### 文档纠错
+### 5. Submit a Pull Request
 
-  如果您在本项目中发现某些算子文档描述错误，欢迎您新建Issue进行反馈和修复。
+1. Push your changes to your fork:
+   ```bash
+   git push origin your-branch-name
+   ```
 
-  您可以按照[提交Issue/处理Issue任务](https://gitcode.com/cann/community#提交Issue处理Issue任务)指引新建 `Documentation|文档反馈` 类Issue指出对应文档的问题，然后在评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您纠正对应文档描述。
-  
-### 帮助解决他人Issue
+2. Open a Pull Request using our [template](.gitcode/PULL_REQUEST_TEMPLATE.md)
 
-  如果社区中他人遇到的问题您有合适的解决方法，欢迎您在Issue中发表评论交流，帮助他人解决问题和痛点，共同优化易用性。
+3. Fill in all required information:
+   - **Description**: What does this PR do?
+   - **Motivation**: Why is this change needed?
+   - **Testing**: How did you test your changes?
 
-  如果对应Issue需要进行代码修改，您可以在Issue评论框中输入“/assign”或“/assign @yourself”，将该Issue分配给您，跟踪协助解决问题。
+4. Link the related issue using keywords like `Fixes #123` or `Closes #456`
+
+5. Comment on the issue to notify maintainers:
+   > "This PR addresses the issue. Please review."
+
+### 6. Code Review Process
+
+1. Maintainers will review your PR
+2. Address any feedback by pushing additional commits
+3. Once approved, a maintainer will merge your PR
+
+## Contribution Types
+
+### 🐛 Bug Fixes
+
+If you find a bug:
+
+1. Create a `Bug Report` issue
+2. Describe the bug with reproduction steps
+3. Submit a PR with the fix
+
+### ✨ New Features
+
+For new features:
+
+1. Create a `Feature Request` issue first
+2. Wait for design discussion and approval
+3. Implement the feature with tests and documentation
+
+### 📝 Documentation
+
+Help improve our docs:
+
+1. Find docs issues or suggest improvements
+2. Submit PRs for typo fixes, clarifications, or new content
+
+### 🚀 New Operators
+
+To contribute new operators:
+
+#### Step 1: Create an Issue
+
+Create a `Requirement` issue with:
+- **Background**: What problem does this solve?
+- **Value**: Why is it useful?
+- **Design**: Your proposed implementation
+
+#### Step 2: Design Review
+
+SIG members will review and provide feedback. Address comments and request re-review.
+
+#### Step 3: Implementation
+
+Minimum deliverable structure:
+```
+docs/
+├── isa/
+│   └── ${op_name}.md           # Operator documentation
+include/
+├── pto/
+│   ├── common/
+│   │   ├── pto_instr_impl.hpp  # Implementation aggregation
+│   │   └── pto_instr.hpp       # Public API
+│   └── ${op_class}/
+│       └── ${op_name}.hpp       # Operator implementation
+tests/
+├── ${op_class}/src/st/
+│   ├── ${op_name}/
+│   │   ├── ${op_name}.cpp      # Test harness
+│   │   ├── main.cpp            # Entry point
+│   │   ├── gen_data.py         # Test data generation
+│   │   └── CMakeLists.txt      # Build config
+│   └── CMakeLists.txt
+└── run_st.sh                    # Test runner script
+```
+
+#### Step 4: Submit PR
+
+Ensure:
+- [ ] Code passes `clang-format` and `ruff format`
+- [ ] Tests are included
+- [ ] Documentation is complete
+- [ ] PR links to the related issue
+
+Comment `compile` to trigger CI checks.
+
+## Development Setup
+
+### CPU Simulation (Recommended for Starters)
+
+```bash
+# Clone and setup
+git clone https://gitcode.com/cann/pto-isa.git
+cd pto-isa
+
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install numpy pytest
+
+# Run tests
+python3 tests/run_cpu.py --clean --verbose
+```
+
+### NPU Development (Linux Only)
+
+See [Getting Started Guide](docs/getting-started.md) for:
+- CANN toolkit installation
+- NPU driver setup
+- Building and testing
+
+## Style Guides
+
+### C++ Code
+
+- Follow C++20 standard
+- Use `clang-format` with `.clang-format` config
+- Add comments for complex logic
+
+### Python Code
+
+- Follow PEP 8
+- Use `ruff format` for formatting
+- Add docstrings to functions
+
+### Documentation
+
+- Use clear, concise language
+- Include code examples where appropriate
+- Keep markdown tables properly aligned
+
+## License
+
+By contributing to PTO Tile Library, you agree that your contributions will be licensed under the [CANN Open Software License Agreement Version 2.0](LICENSE).
+
+## Questions?
+
+- Open an issue for bugs or feature requests
+- Join our community discussions
+- Contact maintainers directly for sensitive topics
+
+Thank you for contributing to PTO Tile Library! 🎉

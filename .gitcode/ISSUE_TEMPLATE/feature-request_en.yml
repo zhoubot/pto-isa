@@ -1,0 +1,45 @@
+name: Feature Request ✨
+description: Propose a new feature or enhancement for PTO Tile Library
+title: "[Feature]: "
+labels: ["feature-request", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new feature! Please fill in the following template to help us understand your proposal.
+  - type: textarea
+    attributes:
+      label: Feature Description
+      description: Describe the feature you're proposing
+      value: |
+        ### Summary
+        <!-- Briefly describe what you want to add -->
+
+        ### Problem Statement
+        <!-- What problem does this solve? Why is it needed? -->
+
+        ### Proposed Solution
+        <!-- Describe your proposed solution -->
+
+        ### Use Cases
+        <!-- List specific use cases for this feature -->
+
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions you've considered
+      value: |
+        ### Alternatives
+        <!-- Describe any alternative approaches -->
+  - type: input
+    attributes:
+      label: Priority
+      description: How important is this feature?
+      placeholder: e.g., High, Medium, Low
+  - type: input
+    attributes:
+      label: Would you like to implement this?
+      description: Are you planning to contribute this feature?
+      placeholder: Yes/No/Maybe

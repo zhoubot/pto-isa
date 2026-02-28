@@ -1,3 +1,13 @@
+<p align="center">
+  <img src="../figures/pto_logo.svg" alt="PTO Tile Lib" width="180" />
+</p>
+
+<div align="center">
+
+[![License](https://img.shields.io/badge/License-CANN%20Open%20Software%20License%202.0-blue.svg)](../../LICENSE)
+
+</div>
+
 # PTO IR Operations Reference
 
 This directory contains comprehensive documentation for PTO IR operations, covering ISA-level tile operations and auxiliary IR constructs used in PTO Level-1 and Level-2 intermediate representations.

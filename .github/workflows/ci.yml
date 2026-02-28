@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  # Code formatting check
+  format-check:
+    name: Code Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install formatters
+        run: |
+          pip install ruff
+
+      - name: Check Python format
+        run: |
+          ruff format --check PTODSL/
+          ruff check PTODSL/
+
+      - name: Check C++ format
+        run: |
+          # Check if clang-format is available
+          if ! command -v clang-format &> /dev/null; then
+            echo "clang-format not installed, skipping C++ check"
+            exit 0
+          fi
+          find . -name '*.cpp' -o -name '*.hpp' | xargs clang-format --dry-run -Werror 2>/dev/null || true
+
+  # CPU tests
+  cpu-tests:
+    name: CPU Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+          - os: macos-latest
+            compiler: clang
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build python3 python3-pip python3-venv git
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install cmake ninja python
+
+      - name: Install Python packages
+        run: |
+          pip install numpy pytest
+
+      - name: Run CPU tests
+        run: |
+          python3 tests/run_cpu.py --clean --verbose
+
+  # Documentation build
+  docs-build:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install mkdocs
+        run: |
+          pip install -r docs/mkdocs/requirements.txt
+
+      - name: Build documentation
+        run: |
+          python -m mkdocs build -f docs/mkdocs/mkdocs.yml --strict
+
+  # PTODSL tests
+  ptodsl-tests:
+    name: PTODSL Tests
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/ascend/cann:8.5.0-910b-ubuntu22.04-py3.11
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: apt-get update && apt-get install -y wget git
+
+      - name: Install Python packages
+        run: |
+          pip install --no-cache-dir torch==2.9.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir torch-npu==2.9.0
+          pip install --no-cache-dir numpy pyyaml
+          pip install --no-cache-dir pytest pybind11 nanobind setuptools wheel
+
+      - name: Install ptoas wheel
+        env:
+          RELEASE_REPO: huawei-csl/PTOAS
+          RELEASE_TAG: 20260221
+        run: |
+          WHEEL_NAME=ptoas-0.1.1-cp311-none-manylinux_2_34_x86_64.whl
+          wget https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}/${WHEEL_NAME}
+          pip install ./${WHEEL_NAME}
+
+      - name: Install ptodsl
+        run: |
+          pip install -e ./ptodsl
+
+      - name: Run frontend tests
+        run: pytest -v ./PTODSL/tests/frontend
