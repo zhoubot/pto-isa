@@ -16,9 +16,10 @@ TEST(TStoreAtomicAdd, ND_float_add_twice) {
     alignas(64) T gm[C*R];
     for (int i=0;i<R*C;i++) gm[i] = 1.0f;
 
-    TileT t(R, C);
+    TileT t;
     // fill tile with 2
-    for (int r=0;r<R;r++) for (int c=0;c<C;c++) t.data()[r*C+c] = 2.0f;
+    auto &td = t.data();
+    for (int r=0;r<R;r++) for (int c=0;c<C;c++) td[r*C+c] = 2.0f;
 
     GT g(gm);
 
