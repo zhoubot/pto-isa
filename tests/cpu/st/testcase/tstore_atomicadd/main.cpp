@@ -3,31 +3,42 @@
 
 using namespace pto;
 
-TEST(TStoreAtomicAdd, ND_float_add_twice) {
+TEST(TStoreAtomicAdd, ND_float_acc_add_twice)
+{
     using T = float;
-    constexpr int R = 4;
-    constexpr int C = 8;
 
-    using TileT = Tile<TileType::Vec, T, R, C, BLayout::RowMajor>;
-    using GShape = Shape<1,1,1,R,C>;
-    using GStride = BaseShape2D<T, R, C, Layout::ND>;
+    // Destination GM is ND 2D (shape3 x shape4)
+    using GShape = Shape<1, 1, 1, 2, 128>;
+    using GStride = BaseShape2D<T, 2, 128, Layout::ND>;
     using GT = GlobalTensor<T, GShape, GStride, Layout::ND>;
 
-    alignas(64) T gm[C*R];
-    for (int i=0;i<R*C;i++) gm[i] = 1.0f;
+    alignas(64) T gm[2 * 128];
+    for (int i = 0; i < 2 * 128; ++i) {
+        gm[i] = 1.0f;
+    }
 
-    TileT t;
-    // fill tile with 2
+    // Acc tile is stored in fractal layout; allocate rows/cols aligned to 16.
+    constexpr int Rows = 16;
+    constexpr int Cols = 128;
+    using AccTile = Tile<TileType::Acc, T, Rows, Cols, BLayout::ColMajor, -1, -1, SLayout::RowMajor, 1024>;
+
+    AccTile t(2, 128);
+
+    // Fill valid region with 2.0 (use tile offset helper for fractal layout)
     auto &td = t.data();
-    for (int r=0;r<R;r++) for (int c=0;c<C;c++) td[r*C+c] = 2.0f;
+    for (int r = 0; r < 2; ++r) {
+        for (int c = 0; c < 128; ++c) {
+            td[GetTileElementOffset<AccTile>(r, c)] = 2.0f;
+        }
+    }
 
     GT g(gm);
 
-    // atomic add twice
-    TSTORE<TileT, GT, AtomicType::AtomicAdd>(g, t);
-    TSTORE<TileT, GT, AtomicType::AtomicAdd>(g, t);
+    // Atomic add twice: gm += t twice
+    TSTORE<AccTile, GT, AtomicType::AtomicAdd>(g, t);
+    TSTORE<AccTile, GT, AtomicType::AtomicAdd>(g, t);
 
-    for (int i=0;i<R*C;i++) {
+    for (int i = 0; i < 2 * 128; ++i) {
         EXPECT_FLOAT_EQ(gm[i], 1.0f + 2.0f + 2.0f);
     }
 }
