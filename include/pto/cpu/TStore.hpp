@@ -120,7 +120,6 @@ namespace pto {
                           "TSTORE(Acc): dst layout must be ND or NZ");
             static_assert(std::is_same_v<typename TileData::DType, int32_t> || std::is_same_v<typename TileData::DType, float>,
                           "TSTORE(Acc): src dtype must be int32_t or float");
-
             if constexpr (GlobalData::layout == pto::Layout::ND) {
                 PTO_CPU_ASSERT(validRow == gShape3 && validCol == gShape4,
                                "Fix: TSTORE(Acc,ND) requires validRow==shape3 and validCol==shape4");
@@ -135,38 +134,36 @@ namespace pto {
                     }
                 }
                 return;
-            }
+            } else if constexpr (GlobalData::layout == pto::Layout::NZ) {
+                PTO_CPU_ASSERT(validRow == gShape2 * gShape3 && validCol == gShape0 * gShape1 * gShape4,
+                               "Fix: TSTORE(Acc,NZ) requires validRow==shape2*shape3 and validCol==shape0*shape1*shape4");
+                static_assert(GlobalData::staticShape[3] == FRACTAL_NZ_ROW,
+                              "Fix: GlobalTensor NZ requires second-to-last dim = 16");
 
-            // NZ
-            PTO_CPU_ASSERT(validRow == gShape2 * gShape3 && validCol == gShape0 * gShape1 * gShape4,
-                           "Fix: TSTORE(Acc,NZ) requires validRow==shape2*shape3 and validCol==shape0*shape1*shape4");
-            // Allow Acc tile in NZ layout mapping (tile offsets handle the layout).
-            static_assert(GlobalData::staticShape[3] == FRACTAL_NZ_ROW,
-                          "Fix: GlobalTensor NZ requires second-to-last dim = 16");
-
-            for (std::size_t r = 0; r < static_cast<std::size_t>(validRow); ++r) {
-                const std::size_t idx2 = r / static_cast<std::size_t>(gShape3);
-                const std::size_t idx3 = r % static_cast<std::size_t>(gShape3);
-                for (std::size_t c = 0; c < static_cast<std::size_t>(validCol); ++c) {
-                    const std::size_t denom = static_cast<std::size_t>(gShape1) * static_cast<std::size_t>(gShape4);
-                    const std::size_t idx0 = c / denom;
-                    const std::size_t rem = c % denom;
-                    const std::size_t idx1 = rem / static_cast<std::size_t>(gShape4);
-                    const std::size_t idx4 = rem % static_cast<std::size_t>(gShape4);
-                    const std::size_t gd_idx =
-                        idx0 * static_cast<std::size_t>(gStride0) +
-                        idx1 * static_cast<std::size_t>(gStride1) +
-                        idx2 * static_cast<std::size_t>(gStride2) +
-                        idx3 * static_cast<std::size_t>(gStride3) +
-                        idx4 * static_cast<std::size_t>(gStride4);
-                    if constexpr (atomicType == AtomicType::AtomicAdd) {
-                        dst[gd_idx] += src[GetTileElementOffset<TileData>(r, c)];
-                    } else {
-                        dst[gd_idx] = src[GetTileElementOffset<TileData>(r, c)];
+                for (std::size_t r = 0; r < static_cast<std::size_t>(validRow); ++r) {
+                    const std::size_t idx2 = r / static_cast<std::size_t>(gShape3);
+                    const std::size_t idx3 = r % static_cast<std::size_t>(gShape3);
+                    for (std::size_t c = 0; c < static_cast<std::size_t>(validCol); ++c) {
+                        const std::size_t denom = static_cast<std::size_t>(gShape1) * static_cast<std::size_t>(gShape4);
+                        const std::size_t idx0 = c / denom;
+                        const std::size_t rem = c % denom;
+                        const std::size_t idx1 = rem / static_cast<std::size_t>(gShape4);
+                        const std::size_t idx4 = rem % static_cast<std::size_t>(gShape4);
+                        const std::size_t gd_idx =
+                            idx0 * static_cast<std::size_t>(gStride0) +
+                            idx1 * static_cast<std::size_t>(gStride1) +
+                            idx2 * static_cast<std::size_t>(gStride2) +
+                            idx3 * static_cast<std::size_t>(gStride3) +
+                            idx4 * static_cast<std::size_t>(gStride4);
+                        if constexpr (atomicType == AtomicType::AtomicAdd) {
+                            dst[gd_idx] += src[GetTileElementOffset<TileData>(r, c)];
+                        } else {
+                            dst[gd_idx] = src[GetTileElementOffset<TileData>(r, c)];
+                        }
                     }
                 }
+                return;
             }
-            return;
         }
 
         if constexpr (GlobalData::layout == pto::Layout::NZ) {
