@@ -22,8 +22,20 @@ function(pto_cpu_sim_st NAME)
         ${PROJECT_SOURCE_DIR}/../../common
     )
 
+    if(TARGET GTest::gtest)
+        set(_GTEST_LIB GTest::gtest)
+    else()
+        set(_GTEST_LIB gtest)
+    endif()
+    if(TARGET GTest::gtest_main)
+        set(_GTEST_MAIN GTest::gtest_main)
+    else()
+        set(_GTEST_MAIN gtest_main)
+    endif()
+
     target_link_libraries(${NAME} PRIVATE
-        GTest::gtest_main
+        ${_GTEST_LIB}
+        ${_GTEST_MAIN}
         Threads::Threads
     )
     if (UNIX)
