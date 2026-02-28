@@ -13,6 +13,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #include <unistd.h>
 #include <cassert>
+#include <pto/common/type.hpp>
 #include "pto/cpu/parallel.hpp"
 
 namespace pto {
@@ -154,6 +155,16 @@ namespace pto {
                       "Source dtype must be same with dst dtype");
         static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN , "Only ND and DN GLobal Tensors are currently supported");
         TLoad<TileData, GlobalData>(dst.data(),
+
+        // Strict contract: empty valid region is NOT allowed.
+        PTO_CPU_ASSERT(dst.GetValidRow() > 0 && dst.GetValidCol() > 0,
+                       "Fix: TLOAD requires dst validRow/validCol > 0");
+        PTO_CPU_ASSERT(src.GetShape(pto::GlobalTensorDim::DIM_0) > 0 &&
+                       src.GetShape(pto::GlobalTensorDim::DIM_1) > 0 &&
+                       src.GetShape(pto::GlobalTensorDim::DIM_2) > 0 &&
+                       src.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
+                       src.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
+                       "Fix: TLOAD requires all src shape dims > 0");
             src.data(),
             src.GetShape(pto::GlobalTensorDim::DIM_0),
             src.GetShape(pto::GlobalTensorDim::DIM_1),
