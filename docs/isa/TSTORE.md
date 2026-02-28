@@ -39,6 +39,11 @@ PTO_INST RecordEvent TSTORE_FP(GlobalData& dst, TileData& src, FpTileData& fp, W
 
 ## Constraints
 
+### CPU_SIM (strict crosscheck)
+
+- Supports `GlobalTensor` layouts: ND / DN / NZ.
+- Strict contract: `dst.GetShape(dim)>0` for all dims, and `src.GetValidRow()>0 && src.GetValidCol()>0`.
+
 - **Implementation checks (A2A3)**:
   - Source tile location must be one of: `TileType::Vec`, `TileType::Mat`, `TileType::Acc`.
   - Runtime: all `dst.GetShape(dim)` values and `src.GetValidRow()/GetValidCol()` must be `> 0`.
