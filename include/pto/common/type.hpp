@@ -22,6 +22,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 // for pto internal implementation
 #define PTO_INTERNAL AICORE PTO_INLINE
 
+#include <cstdint>
+
 #define OP_NAME(Name) __attribute__((vf_name(#Name)))
 #define OP_TYPE(TypeName) __attribute__((vf_kind(#TypeName)))
 
@@ -117,15 +119,20 @@ namespace pto {
 }
 
 #if defined(__CPU_SIM)
-    // Note: clang version should be >=15 and gcc version should be >=14
+    // CPU-SIM needs a 16-bit float type.
+    // Prefer <stdfloat> when available; otherwise fall back to compiler extensions.
     #if defined(__has_include) && __has_include(<stdfloat>) && !(defined(__clang__))
         #include <stdfloat>
         typedef std::float16_t half;
         typedef std::float16_t bfloat16_t;
         typedef std::float16_t aclFloat16;
+    #elif defined(__GNUC__) && !(defined(__clang__))
+        // GCC (e.g. 10.x) may not support _Float16 in C++ mode, but supports __fp16.
+        typedef __fp16 half;
+        typedef __fp16 bfloat16_t;
+        typedef __fp16 aclFloat16;
     #else
-        // macOS libc++ (and some other toolchains) may not ship <stdfloat> yet.
-        // For CPU simulation, a best-effort 16-bit float type is sufficient.
+        // Clang and some other toolchains support _Float16.
         typedef _Float16 half;
         typedef _Float16 bfloat16_t;
         typedef _Float16 aclFloat16;

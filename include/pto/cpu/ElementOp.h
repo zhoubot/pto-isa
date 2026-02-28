@@ -74,7 +74,7 @@ namespace pto {
     template<typename DType, ElementOp op>
     struct ElementOpCal {
         static void apply(DType &dst, DType &src0, DType &src1, size_t) {
-            static_assert(false, "Unsupport element op.");
+            PTO_CPU_ASSERT(false, "Unsupport element op.");
         }
     };
 
@@ -413,7 +413,7 @@ namespace pto {
                     dst = (src <= scalar);
                     break;
                 default:
-                    static_assert(false, "Unsupport CMP_MODE.");
+                    PTO_CPU_ASSERT(false, "Unsupport CMP_MODE.");
                     break;
             }
         }

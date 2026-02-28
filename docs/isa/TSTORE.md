@@ -43,6 +43,7 @@ PTO_INST RecordEvent TSTORE_FP(GlobalData& dst, TileData& src, FpTileData& fp, W
 
 - Supports `GlobalTensor` layouts: ND / DN / NZ.
 - Strict contract: `dst.GetShape(dim)>0` for all dims, and `src.GetValidRow()>0 && src.GetValidCol()>0`.
+- `AtomicType::AtomicAdd` is supported with deterministic semantics (CPU_SIM uses a sequential reference path).
 
 - **Implementation checks (A2A3)**:
   - Source tile location must be one of: `TileType::Vec`, `TileType::Mat`, `TileType::Acc`.

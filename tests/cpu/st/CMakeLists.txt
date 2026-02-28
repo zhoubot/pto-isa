@@ -11,7 +11,13 @@
 cmake_minimum_required(VERSION 3.16)
 project(pto_test_cpu_sim)
 
-set(CMAKE_CXX_STANDARD 23)
+# CMake 3.22 (common on some A3 boxes) may not know how to enable C++23.
+# Fall back to C++20 in that case so CPU-SIM ST can run.
+if(CMAKE_VERSION VERSION_LESS "3.25")
+  set(CMAKE_CXX_STANDARD 20)
+else()
+  set(CMAKE_CXX_STANDARD 23)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -50,7 +56,7 @@ endif()
 
 add_compile_options(
     -D_FORTIFY_SOURCE=2
-    -std=c++23
+    -std=c++20
     -Wno-macro-redefined -Wno-ignored-attributes
     -fstack-protector-strong
 )

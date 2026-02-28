@@ -31,7 +31,8 @@ namespace pto {
             return subTileR*TileData::Cols*TileData::InnerRows +
                 subTileC*TileData::InnerNumel + innerR*TileData::InnerCols + innerC;
         } else {
-            static_assert(false, "Invalid layout");
+            PTO_CPU_ASSERT(false, "Invalid layout");
+            return 0;
         }
     }
 
