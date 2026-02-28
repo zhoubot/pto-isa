@@ -34,6 +34,7 @@ enum class ElementOp
     OP_MIN,
     OP_CMP, // compare mode need extra parameters
     OP_PRELU,
+    OP_EXPDIF,
     // unary operation
     OP_EXP,
     OP_ABS,
@@ -202,11 +203,21 @@ struct ElementOpCal<DType, ElementOp::OP_MAX> {
     {
         dst = std::max(src0, src1);
     }
+
+    static void apply(DType &dst, const DType &src0, const DType &src1)
+    {
+        dst = std::max(src0, src1);
+    }
 };
 
 template <typename DType>
 struct ElementOpCal<DType, ElementOp::OP_MIN> {
     static void apply(DType &dst, DType &src0, DType &src1, size_t)
+    {
+        dst = std::min(src0, src1);
+    }
+
+    static void apply(DType &dst, const DType &src0, const DType &src1)
     {
         dst = std::min(src0, src1);
     }
@@ -247,6 +258,14 @@ struct ElementOpCal<DType, ElementOp::OP_PRELU> {
     static void apply(DType &dst, DType &src0, DType &src1, size_t)
     {
         dst = ((src0 > static_cast<DType>(0)) ? src0 : (src0 * src1));
+    }
+};
+
+template <typename DType>
+struct ElementOpCal<DType, ElementOp::OP_EXPDIF> {
+    static void apply(DType &dst, const DType &src0, const DType &src1)
+    {
+        dst = static_cast<DType>(std::exp(static_cast<double>(src0 - src1)));
     }
 };
 

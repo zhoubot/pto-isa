@@ -17,11 +17,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <string>
 #include <iostream>
 
+#include <pto/pto-inst.hpp>
 #include "pto/comm/pto_comm_inst.hpp"
 #include "pto/common/pto_tile.hpp"
 #include "../common.hpp"
-
-#include <pto/pto-inst.hpp>
 
 #define ENABLE_DEBUG_PRINT 1
 
@@ -30,13 +29,14 @@ See LICENSE in the root of the software repository for the full text of the Lice
 // All ranks perform atomic add 1 to rank 0's counter
 // The final counter value should equal n_ranks
 // ============================================================================
-__global__ AICORE void TNotifyAtomicAddKernel(__gm__ int32_t *shmem_counter, int nranks)
+__global__ AICORE void TNotifyAtomicAddKernel(__gm__ int32_t *shmem_counter, __gm__ HcclDeviceContext *hcclCtx,
+                                              int nranks)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int target_rank = 0; // All ranks notify rank 0
 
-    // Get remote PE's counter address using ShmemPtr
-    __gm__ int32_t *remote_counter = ShmemPtr(shmem_counter, target_rank);
+    // Get remote PE's counter address using HcclRemotePtr
+    __gm__ int32_t *remote_counter = HcclRemotePtr(hcclCtx, shmem_counter, target_rank);
 
     // Create GlobalTensor pointing to rank 0's counter
     pto::comm::Signal counterSignal(remote_counter);
@@ -45,9 +45,7 @@ __global__ AICORE void TNotifyAtomicAddKernel(__gm__ int32_t *shmem_counter, int
     pto::comm::TNOTIFY(counterSignal, 1, pto::comm::NotifyOp::AtomicAdd);
 
     // Ensure remote operation completes
-    ShmemDeviceQuiet();
-    // Global synchronization
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
@@ -55,15 +53,15 @@ __global__ AICORE void TNotifyAtomicAddKernel(__gm__ int32_t *shmem_counter, int
 // Each rank sets the next rank's signal to its own rank_id + 100
 // Ring notification: rank i -> rank (i+1) % n_ranks
 // ============================================================================
-__global__ AICORE void TNotifySetKernel(__gm__ int32_t *shmem_signals, int nranks)
+__global__ AICORE void TNotifySetKernel(__gm__ int32_t *shmem_signals, __gm__ HcclDeviceContext *hcclCtx, int nranks)
 {
     if (nranks <= 0)
         return;
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int next_rank = (my_rank + 1) % nranks;
 
-    // Get remote PE's signal address using ShmemPtr
-    __gm__ int32_t *remote_signal = ShmemPtr(shmem_signals, next_rank);
+    // Get remote PE's signal address using HcclRemotePtr
+    __gm__ int32_t *remote_signal = HcclRemotePtr(hcclCtx, shmem_signals, next_rank);
 
     // Create GlobalTensor pointing to next rank's signal
     pto::comm::Signal nextSignal(remote_signal);
@@ -73,9 +71,7 @@ __global__ AICORE void TNotifySetKernel(__gm__ int32_t *shmem_signals, int nrank
     pto::comm::TNOTIFY(nextSignal, value, pto::comm::NotifyOp::Set);
 
     // Ensure remote operation completes
-    ShmemDeviceQuiet();
-    // Global synchronization
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
@@ -84,13 +80,14 @@ __global__ AICORE void TNotifySetKernel(__gm__ int32_t *shmem_signals, int nrank
 // scoreboard[rank_id] = rank_id + 1000
 // ============================================================================
 template <size_t numSlots>
-__global__ AICORE void TNotifyScoreboardKernel(__gm__ int32_t *shmem_scoreboard, int nranks)
+__global__ AICORE void TNotifyScoreboardKernel(__gm__ int32_t *shmem_scoreboard, __gm__ HcclDeviceContext *hcclCtx,
+                                               int nranks)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int target_rank = 0;
 
     // Get remote PE's scoreboard base address
-    __gm__ int32_t *remote_scoreboard = ShmemPtr(shmem_scoreboard, target_rank);
+    __gm__ int32_t *remote_scoreboard = HcclRemotePtr(hcclCtx, shmem_scoreboard, target_rank);
 
     // Calculate own slot offset in scoreboard
     __gm__ int32_t *my_slot = remote_scoreboard + my_rank;
@@ -103,63 +100,60 @@ __global__ AICORE void TNotifyScoreboardKernel(__gm__ int32_t *shmem_scoreboard,
     pto::comm::TNOTIFY(slotSignal, value, pto::comm::NotifyOp::Set);
 
     // Ensure remote operation completes
-    ShmemDeviceQuiet();
-    // Global synchronization
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
 // Kernel 4: Runtime NotifyOp Test
 // Test runtime-specified NotifyOp version
 // ============================================================================
-__global__ AICORE void TNotifyRuntimeOpKernel(__gm__ int32_t *shmem_counter, int nranks)
+__global__ AICORE void TNotifyRuntimeOpKernel(__gm__ int32_t *shmem_counter, __gm__ HcclDeviceContext *hcclCtx,
+                                              int nranks)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int target_rank = 0;
 
     // Get remote PE's counter address
-    __gm__ int32_t *remote_counter = ShmemPtr(shmem_counter, target_rank);
+    __gm__ int32_t *remote_counter = HcclRemotePtr(hcclCtx, shmem_counter, target_rank);
     pto::comm::Signal counterSignal(remote_counter);
 
     // Use runtime-specified NotifyOp (Set operation)
     pto::comm::TNOTIFY(counterSignal, my_rank + 1, pto::comm::NotifyOp::Set);
 
     // Ensure remote operation completes
-    ShmemDeviceQuiet();
-    // Global synchronization
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
 // Host-side Test Implementation
 // ============================================================================
 
-bool RunNotifyAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunNotifyAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                              const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8785", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    // Allocate symmetric memory as counter
-    int32_t *shmem_counter = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_counter == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    // Allocate window memory as counter
+    int32_t *shmem_counter = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
 
     // Initialize counter to 0
     int32_t zero = 0;
     aclrtMemcpy(shmem_counter, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
     // Wait for all ranks to complete initialization
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     // Execute kernel
-    TNotifyAtomicAddKernel<<<1, nullptr, ctx.stream>>>(shmem_counter, n_ranks);
+    TNotifyAtomicAddKernel<<<1, nullptr, ctx.stream>>>(shmem_counter, ctx.deviceCtx, n_ranks);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     // Host-side global synchronization to ensure all ranks' kernels have completed
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
@@ -182,39 +176,36 @@ bool RunNotifyAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first
 #endif
     }
 
-    ShmemFree(shmem_counter);
-
     return ctx.Finalize() && is_ok;
 }
 
-bool RunNotifySetKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunNotifySetKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8856", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    // Allocate symmetric memory as signal
-    int32_t *shmem_signal = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_signal == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    // Allocate window memory as signal
+    int32_t *shmem_signal = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
 
     // Initialize signal to 0
     int32_t zero = 0;
     aclrtMemcpy(shmem_signal, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
     // Wait for all ranks to complete initialization
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     // Execute kernel
-    TNotifySetKernel<<<1, nullptr, ctx.stream>>>(shmem_signal, n_ranks);
+    TNotifySetKernel<<<1, nullptr, ctx.stream>>>(shmem_signal, ctx.deviceCtx, n_ranks);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     // Host-side global synchronization to ensure all ranks' kernels have completed
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
@@ -243,28 +234,22 @@ bool RunNotifySetKernel(int rank_id, int n_ranks, int n_devices, int first_devic
     }
 #endif
 
-    ShmemFree(shmem_signal);
-
     return ctx.Finalize() && is_ok;
 }
 
 template <size_t numSlots>
-bool RunNotifyScoreboardKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunNotifyScoreboardKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                               const HcclRootInfo *rootInfo)
 {
-    // Use different ports to avoid conflicts
-    char ipPort[64];
-    snprintf(ipPort, sizeof(ipPort), "tcp://127.0.0.1:%d", 8857 + static_cast<int>(numSlots));
-
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, ipPort, 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    // Allocate symmetric memory as scoreboard
-    int32_t *shmem_scoreboard = (int32_t *)ShmemMalloc(numSlots * sizeof(int32_t));
-    if (shmem_scoreboard == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    // Allocate window memory as scoreboard
+    int32_t *shmem_scoreboard = (int32_t *)WindowAlloc(localWinBase, winOffset, numSlots * sizeof(int32_t));
 
     // Initialize scoreboard to 0
     std::vector<int32_t> zeros(numSlots, 0);
@@ -272,14 +257,14 @@ bool RunNotifyScoreboardKernel(int rank_id, int n_ranks, int n_devices, int firs
                 ACL_MEMCPY_HOST_TO_DEVICE);
 
     // Wait for all ranks to complete initialization
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     // Execute kernel
-    TNotifyScoreboardKernel<numSlots><<<1, nullptr, ctx.stream>>>(shmem_scoreboard, n_ranks);
+    TNotifyScoreboardKernel<numSlots><<<1, nullptr, ctx.stream>>>(shmem_scoreboard, ctx.deviceCtx, n_ranks);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     // Host-side global synchronization to ensure all ranks' kernels have completed
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
@@ -318,37 +303,35 @@ bool RunNotifyScoreboardKernel(int rank_id, int n_ranks, int n_devices, int firs
 #endif
     }
 
-    ShmemFree(shmem_scoreboard);
-
     return ctx.Finalize() && is_ok;
 }
 
-bool RunNotifyRuntimeOpKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunNotifyRuntimeOpKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                              const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8860", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    // Allocate symmetric memory as counter
-    int32_t *shmem_counter = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_counter == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    // Allocate window memory as counter
+    int32_t *shmem_counter = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
 
     // Initialize counter to 0
     int32_t zero = 0;
     aclrtMemcpy(shmem_counter, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
     // Wait for all ranks to complete initialization
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     // Execute kernel
-    TNotifyRuntimeOpKernel<<<1, nullptr, ctx.stream>>>(shmem_counter, n_ranks);
+    TNotifyRuntimeOpKernel<<<1, nullptr, ctx.stream>>>(shmem_counter, ctx.deviceCtx, n_ranks);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     // Host-side global synchronization
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
@@ -374,8 +357,6 @@ bool RunNotifyRuntimeOpKernel(int rank_id, int n_ranks, int n_devices, int first
 #endif
     }
 
-    ShmemFree(shmem_counter);
-
     return ctx.Finalize() && is_ok;
 }
 
@@ -385,30 +366,35 @@ bool RunNotifyRuntimeOpKernel(int rank_id, int n_ranks, int n_devices, int first
 
 bool RunNotifyAtomicAdd(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunNotifyAtomicAddKernel(rankId, n_ranks, n_devices, first_device_id);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunNotifyAtomicAddKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 bool RunNotifySet(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id,
-                      [&](int rankId) { return RunNotifySetKernel(rankId, n_ranks, n_devices, first_device_id); });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunNotifySetKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 template <size_t numSlots>
 bool RunNotifyScoreboard(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunNotifyScoreboardKernel<numSlots>(rankId, n_ranks, n_devices, first_device_id);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunNotifyScoreboardKernel<numSlots>(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 bool RunNotifyRuntimeOp(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunNotifyRuntimeOpKernel(rankId, n_ranks, n_devices, first_device_id);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunNotifyRuntimeOpKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 // Explicit instantiations

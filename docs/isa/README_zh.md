@@ -73,6 +73,7 @@
 
 ## 轴归约 / 扩展
 - [TROWSUM](TROWSUM_zh.md) - 通过对列求和来归约每一行。
+- [TROWPROD](TROWPROD_zh.md) - 通过跨列乘积来归约每一行。
 - [TCOLSUM](TCOLSUM_zh.md) - 通过对行求和来归约每一列。
 - [TCOLPROD](TCOLPROD_zh.md) - 通过跨行乘积来归约每一列。
 - [TCOLMAX](TCOLMAX_zh.md) - 通过取行间最大值来归约每一列。

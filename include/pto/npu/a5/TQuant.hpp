@@ -26,6 +26,12 @@ enum class QuantType
     INT8_ASYM
 };
 
+enum class VecStoreMode
+{
+    ND,
+    NZ
+};
+
 PTO_INTERNAL void AbsReduceMax_Naive(__ubuf__ float *srcPtr, __ubuf__ float *maxPtr, unsigned total_elements_count,
                                      unsigned vl_count, unsigned elementsPerRepeat, MaskReg &preg_lower32,
                                      MaskReg &preg_upper32)
@@ -216,26 +222,45 @@ PTO_INTERNAL void CalcQuantizedFP8Values_Unroll2(__ubuf__ float *srcPtr, __ubuf_
     }
 }
 
-// TQuant: fp32 -> mxed fp8(e4m3) quantization ND only so far
-template <typename TileDataOut, typename TileDataSrc, typename TileDataExp, typename TileDataMax>
-__tf__ PTO_INTERNAL void TQuant_MXFP8(typename TileDataOut::TileDType __out__ dst,
-                                      typename TileDataExp::TileDType __out__ exp,
-                                      typename TileDataMax::TileDType __out__ max,
-                                      typename TileDataMax::TileDType __out__ scaling,
-                                      typename TileDataSrc::TileDType __in__ src, unsigned validRows,
-                                      unsigned validCols)
+PTO_INTERNAL void ReorderB8IndicesZZ(__ubuf__ uint8_t *E8m0ZZPtr, __ubuf__ uint8_t *e8m0Ptr,
+                                     __ubuf__ uint8_t *vgather_idx_ptr, unsigned b8_exp_count)
+{
+    vector_u16 vb16_e8m0, vb16_vgather_idx, vb16_e8m0_zz;
+    __ubuf__ uint16_t *idxPtr_u16 = (__ubuf__ uint16_t *)vgather_idx_ptr;
+    __ubuf__ uint16_t *expPtr_u16 = (__ubuf__ uint16_t *)e8m0Ptr;
+    __ubuf__ uint16_t *zzPtr_u16 = (__ubuf__ uint16_t *)E8m0ZZPtr;
+    unsigned b16_exp_count = CeilDivision(b8_exp_count, 2);
+    unsigned loop_count = CeilDivision(b16_exp_count, REPEAT_BYTE / sizeof(uint16_t));
+    for (uint16_t i = 0; i < (uint16_t)loop_count; ++i) {
+        MaskReg preg_b16 = CreatePredicate<uint16_t>(b16_exp_count);
+        vlds(vb16_vgather_idx, idxPtr_u16, 128, NORM, POST_UPDATE);
+        vgather2(vb16_e8m0_zz, expPtr_u16, vb16_vgather_idx, preg_b16);
+        vsts(vb16_e8m0_zz, zzPtr_u16, 128, NORM_B16, preg_b16, POST_UPDATE);
+    }
+}
+
+// TQuant: fp32 -> mxed fp8(e4m3) quantization, supports ND and NZ store modes
+template <VecStoreMode store_mode, typename TileDataOut, typename TileDataSrc, typename TileDataExp,
+          typename TileDataMax, typename TileDataIdx>
+__tf__ PTO_INTERNAL void TQuant_MXFP8(
+    typename TileDataOut::TileDType __out__ dst, typename TileDataExp::TileDType __out__ exp,
+    typename TileDataMax::TileDType __out__ max, typename TileDataMax::TileDType __out__ scaling,
+    typename TileDataExp::TileDType __out__ exp_zz, typename TileDataIdx::TileDType __in__ vgather_idx,
+    typename TileDataSrc::TileDType __in__ src, unsigned validRows, unsigned validCols)
 {
     using T = typename TileDataSrc::DType; // fp32
     using U = typename TileDataExp::DType; // f8e8m0
     using V = typename TileDataOut::DType; // f8e4m3
+    using I = typename TileDataIdx::DType; // uint16
     __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
     __ubuf__ U *expPtr = (__ubuf__ U *)__cce_get_tile_ptr(exp);
+    __ubuf__ U *expZZPtr = (__ubuf__ U *)__cce_get_tile_ptr(exp_zz);
     __ubuf__ V *dstPtr = (__ubuf__ V *)__cce_get_tile_ptr(dst);
     __ubuf__ T *maxPtr = (__ubuf__ T *)__cce_get_tile_ptr(max);
     __ubuf__ T *maxPtr_backup = (__ubuf__ T *)__cce_get_tile_ptr(max);
     __ubuf__ T *scalingPtr = (__ubuf__ T *)__cce_get_tile_ptr(scaling);
-    set_ctrl(static_cast<uint64_t>(1)
-             << 50); // set SPR.CTRL[50] to 1, to allow data clipping into MAX_NORM range for VCVTf32->f8 conversion
+    __ubuf__ I *gatherIdxPtr = (__ubuf__ I *)__cce_get_tile_ptr(vgather_idx);
+    set_ctrl(static_cast<uint64_t>(1) << 50); // set SPR.CTRL[50] to 1, to allow data clipping into MAX_NORM
     __VEC_SCOPE__
     {
         constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(T);
@@ -253,27 +278,26 @@ __tf__ PTO_INTERNAL void TQuant_MXFP8(typename TileDataOut::TileDType __out__ ds
                                preg_upper32);
         } else if ((validRows * validCols) % 2048 == 0) {
             AbsReduceMax_f32_opt_largesizes(srcPtr, maxPtr, vl_count, elementsPerRepeat, total_elements_count);
-        } else { // unroll by 4
+        } else
             AbsReduceMax_f32_opt(srcPtr, maxPtr, vl_count, elementsPerRepeat, total_elements_count);
-        }
         mem_bar(VST_VLD);
         maxPtr = maxPtr_backup; // reset maxPtr
-
-        // use unrolled way if static size is large
         constexpr unsigned total_static_size = TileDataSrc::Rows * TileDataSrc::Cols;
         constexpr bool unroll_condition = (total_static_size > 1024) && (total_static_size % 256 == 0);
         ExtractB8ExponentAndScaling<unroll_condition>(maxPtr, expPtr, scalingPtr, exp_max_loop_count,
                                                       total_elements_count, elementsPerRepeat);
         mem_bar(VST_VLD);
-        if constexpr (unroll_condition) {
+        if constexpr (unroll_condition)
             CalcQuantizedFP8Values_Unroll2(srcPtr, scalingPtr, (__ubuf__ uint8_t *)dstPtr, vl_count, elementsPerRepeat,
                                            total_elements_count);
-        } else {
+        else
             CalcQuantizedFP8Values(srcPtr, scalingPtr, (__ubuf__ uint8_t *)dstPtr, vl_count, elementsPerRepeat,
                                    total_elements_count, preg_lower32, preg_upper32);
-        }
+        unsigned b8_exp_count = CeilDivision(TileDataSrc::Rows * TileDataSrc::Cols, 32);
+        if constexpr (store_mode == VecStoreMode::NZ)
+            ReorderB8IndicesZZ(expZZPtr, expPtr, (__ubuf__ uint8_t *)gatherIdxPtr, b8_exp_count);
     }
-}
+} // namespace pto
 
 template <typename TileDataOut, typename TileDataSrc, typename TileDataPara>
 __tf__ PTO_INTERNAL void TQuant_Int8Sym(typename TileDataOut::TileDType __out__ dst,
@@ -366,7 +390,7 @@ PTO_INTERNAL void TQUANT_IMPL(TileDataOut &dst, TileDataSrc &src, TileDataPara &
     }
 }
 
-// TQuant Interface for FP32/FP16/BF16->MXFP8/4
+// TQuant Interface for FP32/FP16/BF16->MXFP8/4 (ND mode)
 template <QuantType quant_type, typename TileDataOut, typename TileDataSrc, typename TileDataExp, typename TileDataMax>
 PTO_INTERNAL void TQUANT_IMPL(TileDataOut &dst, TileDataSrc &src, TileDataExp *exp, TileDataMax *max,
                               TileDataSrc *scaling)
@@ -374,8 +398,23 @@ PTO_INTERNAL void TQUANT_IMPL(TileDataOut &dst, TileDataSrc &src, TileDataExp *e
     using T = typename TileDataSrc::DType;
     static_assert(std::is_same<T, float32_t>::value, "Fix: Input has to be float 32");
 
-    TQuant_MXFP8<TileDataOut, TileDataSrc, TileDataExp, TileDataMax>(
-        dst.data(), exp->data(), max->data(), scaling->data(), src.data(), src.GetValidRow(), src.GetValidCol());
+    TQuant_MXFP8<VecStoreMode::ND, TileDataOut, TileDataSrc, TileDataExp, TileDataMax, TileDataExp>(
+        dst.data(), exp->data(), max->data(), scaling->data(), exp->data(), exp->data(), src.data(), src.GetValidRow(),
+        src.GetValidCol());
+}
+
+// TQuant Interface for FP32/FP16/BF16->MXFP8/4 (NZ mode, with ZZ exponent reordering)
+template <QuantType quant_type, VecStoreMode store_mode, typename TileDataOut, typename TileDataSrc,
+          typename TileDataExp, typename TileDataMax, typename TileDataIdx>
+PTO_INTERNAL void TQUANT_IMPL(TileDataOut &dst, TileDataSrc &src, TileDataExp *exp, TileDataMax *max,
+                              TileDataSrc *scaling, TileDataExp *exp_zz, TileDataIdx *vgather_idx)
+{
+    using T = typename TileDataSrc::DType;
+    static_assert(std::is_same<T, float32_t>::value, "Fix: Input has to be float 32");
+
+    TQuant_MXFP8<store_mode, TileDataOut, TileDataSrc, TileDataExp, TileDataMax, TileDataIdx>(
+        dst.data(), exp->data(), max->data(), scaling->data(), exp_zz->data(), vgather_idx->data(), src.data(),
+        src.GetValidRow(), src.GetValidCol());
 }
 } // namespace pto
 #endif // TQUANT_HPP

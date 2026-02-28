@@ -64,9 +64,22 @@ def nd2nz_mxfp8(data_fp8, tile_m, tile_n):
 
 
 def nd2zz_e8m0(e8m0, tile_m, tile_n_div_32):
+    ## make an index array, with the same size as e8m0
+    index_array = np.arange(e8m0.size).reshape(e8m0.shape)
+    index_reshaped = index_array.reshape(int(math.ceil(tile_m / 16)), 16, int(math.ceil(tile_n_div_32 / 2)), 2)
+    index_zz = (np.transpose(index_reshaped, [0, 2, 1, 3])).flatten()
+    # index_zz_b16 should be index_zz/2, then selecting one element every 2 elements
+    index_zz_b16 = index_zz // 2
+    index_zz_b16_selected = index_zz_b16[::2].astype(np.uint16)
+    index_zz_b16_selected.tofile("index_vselr_b16.bin")
+    print(f"Index ZZ B16 Selected: {index_zz_b16_selected}")
     ## make the divisions here round up
     e8m0_reshaped = e8m0.reshape(int(math.ceil(tile_m / 16)), 16, int(math.ceil(tile_n_div_32 / 2)), 2)
     e8m0_zz = np.transpose(e8m0_reshaped, [0, 2, 1, 3]).astype(np.uint8)
+    # print the index nd against the zz indices
+    print(f"Index ND: {index_array}")
+    
+    
     return e8m0_zz
 
 
@@ -212,6 +225,8 @@ if __name__ == "__main__":
         TQuantParams("mxfp8", 128, 128, mode="nd"),
         TQuantParams("mxfp8", 32, 64, mode="nz"),
         TQuantParams("mxfp8", 64, 128, mode="nz"),
+        TQuantParams("mxfp8", 64, 256, mode="nz"),
+        TQuantParams("mxfp8", 64, 512, mode="nz"),
         TQuantParams("mxfp8", 128, 128, mode="nz"),
         TQuantParams("s8", 64, 128, mode="nd"),
         TQuantParams("s8", 128, 128, mode="nd"),

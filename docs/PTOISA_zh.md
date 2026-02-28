@@ -72,6 +72,7 @@
 | Tile-标量 / Tile-立即数 | [`TADDSC`](isa/TADDSC_zh.md) | 与标量和第二个 Tile 的融合逐元素加法：`src0 + scalar + src1`。 |
 | Tile-标量 / Tile-立即数 | [`TSUBSC`](isa/TSUBSC_zh.md) | 融合逐元素运算：`src0 - scalar + src1`。 |
 | 轴归约 / 扩展 | [`TROWSUM`](isa/TROWSUM_zh.md) | 通过对列求和来归约每一行。 |
+| 轴归约 / 扩展 | [`TROWPROD`](isa/TROWPROD_zh.md) | 通过跨列乘积来归约每一行。 |
 | 轴归约 / 扩展 | [`TCOLSUM`](isa/TCOLSUM_zh.md) | 通过对行求和来归约每一列。 |
 | 轴归约 / 扩展 | [`TCOLPROD`](isa/TCOLPROD_zh.md) | 通过跨行乘积来归约每一列。 |
 | 轴归约 / 扩展 | [`TCOLMAX`](isa/TCOLMAX_zh.md) | 通过取行间最大值来归约每一列。 |

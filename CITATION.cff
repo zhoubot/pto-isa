@@ -1,0 +1,36 @@
+cff-version: "1.2.0"
+title: PTO Tile Library
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - name: "Ascend CANN"
+    email: "cann@huawei.com"
+    website: "https://www.hiascend.com/"
+
+repository-code: "https://gitcode.com/cann/pto-isa"
+license: "CANN-Open-Software-License-Agreement-2.0"
+
+abstract: |
+  PTO (Parallel Tile Operation) is a virtual instruction set architecture 
+  designed by Ascend CANN, focusing on tile-level operations. This repository 
+  offers high-performance, cross-platform tile operations across Ascend platforms.
+
+keywords:
+  - "PTO"
+  - "Parallel Tile Operation"
+  - "Ascend"
+  - "NPU"
+  - "ISA"
+  - "Tile"
+  - "High Performance Computing"
+  - "Deep Learning"
+
+platforms:
+  - "Linux"
+  - "macOS"
+  - "Windows"
+
+license-url: "https://gitcode.com/cann/pto-isa/blob/main/LICENSE"
+
+version: "9.0.0"
+date-released: "2025-12-27"

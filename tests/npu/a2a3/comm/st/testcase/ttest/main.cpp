@@ -8,7 +8,7 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
-// Test TTEST (non-blocking signal test) operations via PTO (Shmem backend)
+// Test TTEST (non-blocking signal test) operations via PTO (HCCL backend)
 // TTEST returns true if signal meets comparison condition, false otherwise
 
 #include <cstddef>

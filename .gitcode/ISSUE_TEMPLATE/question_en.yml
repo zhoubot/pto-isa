@@ -1,0 +1,29 @@
+name: Question ❓
+description: Ask a question about PTO Tile Library
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? We're here to help! Please provide as much context as possible.
+  - type: textarea
+    attributes:
+      label: Your Question
+      value: |
+        ### Question
+        <!-- What would you like to know? -->
+
+        ### Context
+        <!-- Provide context about what you're trying to do -->
+
+        ### What have you already tried?
+        <!-- Describe any solutions you've attempted -->
+
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Environment
+      description: What environment are you working in?
+      placeholder: e.g., Ascend A3, Ubuntu 22.04, CANN 8.5

@@ -31,6 +31,7 @@ set(CMAKE_C_COMPILER ${CMAKE_COMPILER})
 set(CMAKE_CXX_COMPILER ${CMAKE_COMPILER})
 
 find_package(GTest REQUIRED)
+get_target_property(GTEST_INCLUDE GTest::gtest INTERFACE_INCLUDE_DIRECTORIES)
 
 set(PTO_GLIBCXX_USE_CXX11_ABI "auto" CACHE STRING "Force _GLIBCXX_USE_CXX11_ABI (auto/0/1) for linking with system libs such as GTest.")
 set_property(CACHE PTO_GLIBCXX_USE_CXX11_ABI PROPERTY STRINGS auto 0 1)
@@ -70,14 +71,49 @@ add_link_options(
 )
 
 set(CCE_AICORE_ARCH dav-l311)
-set(CMAKE_CCE_COMPILE_OPTIONS
+if(RUN_MODE STREQUAL "npu")
+    if(NOT DEFINED ENV{NATIVE})
+        message(FATAL_ERROR "Cannot find NATIVE, please set the Environment Variable.")
+    else()
+        set(NATIVE $ENV{NATIVE})
+    endif()
+
+    if (NOT DEFINED ENV{ARM_GTEST})
+        message(FATAL_ERROR "Cannot find ARM_GTEST, please set the Environment Variable.")
+    else()
+        set(ARM_GTEST $ENV{ARM_GTEST})
+    endif()
+    set(CMAKE_CCE_COMPILE_OPTIONS
+        -xcce
+        -DPTO_NPU_ARCH_KIRIN9030
+        -cce-kernel-launch=aclrtLaunch
+        --target=aarch64-linux-ohos
+        --sysroot=${NATIVE}/sysroot
+        -I${NATIVE}/sysroot/usr/include/aarch64-linux-ohos
+        -I${NATIVE}/llvm/include/libcxx-ohos/include/c++/v1
+        "SHELL:-mllvm -cce-aicore-function-stack-size=0x4000"
+        "SHELL:-mllvm -cce-aicore-addr-transform"
+    )
+
+    include_directories(
+        ${PROJECT_SOURCE_DIR}/../../../../../include 
+        ${ASCEND_HOME_PATH}/ohos
+        ${ASCEND_DRIVER_PATH}/kernel/inc
+    )
+else()
+    set(CMAKE_CCE_COMPILE_OPTIONS
     -xcce
     -DPTO_NPU_ARCH_KIRIN9030
     "SHELL:-mllvm -cce-aicore-function-stack-size=0x4000"
     "SHELL:-mllvm -cce-aicore-addr-transform"
-)
-if(RUN_MODE STREQUAL "npu")
-    set(CMAKE_CCE_COMPILE_OPTIONS "${CMAKE_CCE_COMPILE_OPTIONS} -cce-kernel-launch=aclrtLaunch")
+    )
+
+    include_directories(
+        ${PROJECT_SOURCE_DIR}/../../../../../include 
+        ${ASCEND_HOME_PATH}/include
+        ${ASCEND_DRIVER_PATH}/kernel/inc
+    )
+
 endif()
 
 
@@ -93,10 +129,5 @@ set(CMAKE_CPP_COMPILE_OPTIONS
     "SHELL:-include stddef.h"
 )
 
-include_directories(
-    ${PROJECT_SOURCE_DIR}/../../../../../include 
-    ${ASCEND_HOME_PATH}/include
-    ${ASCEND_DRIVER_PATH}/kernel/inc
-)
 
 add_subdirectory(testcase)

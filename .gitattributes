@@ -1,0 +1,38 @@
+# Set default behavior to normalize line endings
+* text=auto
+
+# Force binary files to be stored as-is (no line ending conversion)
+*.svg binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.whl binary
+*.tar binary
+*.tar.gz binary
+*.zip binary
+
+# Text files that should always use LF
+*.md text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.cmake text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+
+# C/C++ files
+*.h text eol=lf
+*.hpp text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+
+# Documentation files
+docs/* text eol=lf
+
+# Build files
+CMakeLists.txt text eol=lf
+build.sh text eol=lf

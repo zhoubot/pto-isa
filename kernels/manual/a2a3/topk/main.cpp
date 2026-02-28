@@ -18,7 +18,7 @@ template <typename T>
 void launchTopk(uint8_t *out, uint8_t *index, uint8_t *src, uint8_t *inIdx, void *stream);
 
 template <typename T>
-AICORE inline bool ValidateDataResults(size_t outFileSize)
+inline bool ValidateDataResults(size_t outFileSize)
 {
     std::vector<T> golden(outFileSize);
     std::vector<T> devFinal(outFileSize);
@@ -35,7 +35,7 @@ AICORE inline bool ValidateDataResults(size_t outFileSize)
     return ret;
 }
 
-AICORE inline bool ValidateIndexResults(size_t indexFileSize)
+inline bool ValidateIndexResults(size_t indexFileSize)
 {
     std::vector<uint32_t> golden_i(indexFileSize);
     std::vector<uint32_t> devFinal_i(indexFileSize);

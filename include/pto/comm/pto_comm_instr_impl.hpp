@@ -13,7 +13,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 // Native implementation of communication instructions
 // Each instruction is implemented directly using Ascend intrinsics
-#ifndef __CPU_SIM
+#if defined(PTO_NPU_ARCH_A2A3) && !defined(__CPU_SIM)
 // Point-to-Point Communication (Synchronous)
 #include "pto/comm/TPut.hpp"
 #include "pto/comm/TGet.hpp"

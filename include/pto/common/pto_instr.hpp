@@ -14,6 +14,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/common/debug.h"
 #include "pto/common/event.hpp"
 #include "pto/common/pto_instr_impl.hpp"
+#include "pto/comm/comm_types.hpp"
 
 #define MAP_INSTR_IMPL(API, ...) API##_IMPL(__VA_ARGS__)
 
@@ -954,6 +955,14 @@ PTO_INST RecordEvent TROWSUM(TileDataOut &dst, TileDataIn &src, TileDataTmp &tmp
     return {};
 }
 
+template <typename TileDataOut, typename TileDataIn, typename TileDataTmp, typename... WaitEvents>
+PTO_INST RecordEvent TROWPROD(TileDataOut &dst, TileDataIn &src, TileDataTmp &tmp, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TROWPROD, dst, src, tmp);
+    return {};
+}
+
 template <typename TileDataOut, typename TileDataIn, typename... WaitEvents>
 PTO_INST RecordEvent TCOLSUM(TileDataOut &dst, TileDataIn &src, WaitEvents &... events)
 {
@@ -1316,6 +1325,24 @@ PTO_INST RecordEvent TSCATTER(TileDataD &dst, TileDataS &src, TileDataI &indexes
     return {};
 }
 
+template <typename ParallelGroupType, typename GlobalSrcData, typename TileData, typename... WaitEvents>
+PTO_INST RecordEvent TBROADCAST(ParallelGroupType &parallelGroup, GlobalSrcData &srcGlobalData,
+                                TileData &stagingTileData, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TBROADCAST, parallelGroup, srcGlobalData, stagingTileData);
+    return {};
+}
+
+template <typename ParallelGroupType, typename GlobalSrcData, typename TileData, typename... WaitEvents>
+PTO_INST RecordEvent TBROADCAST(ParallelGroupType &parallelGroup, GlobalSrcData &srcGlobalData, TileData &pingTile,
+                                TileData &pongTile, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TBROADCAST, parallelGroup, srcGlobalData, pingTile, pongTile);
+    return {};
+}
+
 template <typename TileDataDst, typename TileDataSrc, typename... WaitEvents>
 PTO_INST RecordEvent TCOLEXPAND(TileDataDst &dst, TileDataSrc &src, WaitEvents &... events)
 {
@@ -1429,6 +1456,24 @@ PTO_INST RecordEvent TFMOD(TileDataDst &dst, TileDataSrc0 &src0, TileDataSrc1 &s
     return {};
 }
 
+#ifdef __CPU_SIM
+template <typename PipeProd, typename TileData, typename DataFifo, typename... WaitEvents>
+PTO_INST RecordEvent TPUSH(PipeProd &prod, TileData &tile, DataFifo &fifo, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TPUSH, prod, tile, fifo);
+    return {};
+}
+
+template <typename PipeCon, typename TileData, typename DataFifo, typename... WaitEvents>
+PTO_INST RecordEvent TPOP(PipeCon &cons, TileData &tile, DataFifo &fifo, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TPOP, cons, tile, fifo);
+    return {};
+}
+#endif
+
 #ifdef PTO_NPU_ARCH_A5
 template <auto quant_type, typename TileDataOut, typename TileDataSrc, typename TileDataExp, typename TileDataMax,
           typename... WaitEvents>
@@ -1437,6 +1482,17 @@ PTO_INST RecordEvent TQUANT(TileDataOut &dst, TileDataSrc &src, TileDataExp *exp
 {
     TSYNC(events...);
     TQUANT_IMPL<quant_type, TileDataOut, TileDataSrc, TileDataExp, TileDataMax>(dst, src, exp, max, scaling);
+    return {};
+}
+
+template <auto quant_type, auto store_mode, typename TileDataOut, typename TileDataSrc, typename TileDataExp,
+          typename TileDataMax, typename TileDataIdx, typename... WaitEvents>
+PTO_INST RecordEvent TQUANT(TileDataOut &dst, TileDataSrc &src, TileDataExp *exp, TileDataMax *max,
+                            TileDataSrc *scaling, TileDataExp *exp_zz, TileDataIdx *vgather_idx, WaitEvents &... events)
+{
+    TSYNC(events...);
+    TQUANT_IMPL<quant_type, store_mode, TileDataOut, TileDataSrc, TileDataExp, TileDataMax, TileDataIdx>(
+        dst, src, exp, max, scaling, exp_zz, vgather_idx);
     return {};
 }
 #endif
@@ -1462,7 +1518,7 @@ template <typename GlobalDstData, typename GlobalSrcData, typename TileData, typ
 PTO_INST RecordEvent TGET(GlobalDstData &dst, GlobalSrcData &src, TileData &stagingTileData, WaitEvents &... events)
 {
     TSYNC(events...);
-    MAP_INSTR_IMPL(TGET, dst, src, stagingTileData);
+    MAP_INSTR_IMPL(pto::comm::TGET, dst, src, stagingTileData);
     return {};
 }
 
@@ -1471,7 +1527,7 @@ PTO_INST RecordEvent TGET(GlobalDstData &dst, GlobalSrcData &src, TileData &ping
                           WaitEvents &... events)
 {
     TSYNC(events...);
-    MAP_INSTR_IMPL(TGET, dst, src, pingTile, pongTile);
+    MAP_INSTR_IMPL(pto::comm::TGET, dst, src, pingTile, pongTile);
     return {};
 }
 
@@ -1479,7 +1535,7 @@ template <typename GlobalDstData, typename GlobalSrcData, typename TileData, typ
 PTO_INST RecordEvent TPUT(GlobalDstData &dst, GlobalSrcData &src, TileData &stagingTileData, WaitEvents &... events)
 {
     TSYNC(events...);
-    MAP_INSTR_IMPL(TPUT, dst, src, stagingTileData);
+    MAP_INSTR_IMPL(pto::comm::TPUT, dst, src, stagingTileData);
     return {};
 }
 
@@ -1488,7 +1544,7 @@ PTO_INST RecordEvent TPUT(GlobalDstData &dst, GlobalSrcData &src, TileData &stag
                           WaitEvents &... events)
 {
     TSYNC(events...);
-    MAP_INSTR_IMPL(TPUT, dst, src, stagingTileData, atomicType);
+    MAP_INSTR_IMPL(pto::comm::TPUT, dst, src, stagingTileData, atomicType);
     return {};
 }
 
@@ -1497,10 +1553,47 @@ PTO_INST RecordEvent TPUT(GlobalDstData &dst, GlobalSrcData &src, TileData &ping
                           WaitEvents &... events)
 {
     TSYNC(events...);
-    MAP_INSTR_IMPL(TPUT, dst, src, pingTile, pongTile);
+    MAP_INSTR_IMPL(pto::comm::TPUT, dst, src, pingTile, pongTile);
+    return {};
+}
+
+template <pto::comm::DmaEngine engine = pto::comm::DmaEngine::SDMA, typename GlobalDstData, typename GlobalSrcData,
+          typename... WaitEvents>
+PTO_INST AsyncEvent TGET_ASYNC(GlobalDstData &dst, GlobalSrcData &src, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(pto::comm::TGET_ASYNC, dst, src);
+    return {};
+}
+
+template <pto::comm::DmaEngine engine = pto::comm::DmaEngine::SDMA, typename GlobalDstData, typename GlobalSrcData,
+          typename... WaitEvents>
+PTO_INST AsyncEvent TPUT_ASYNC(GlobalDstData &dst, GlobalSrcData &src, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(pto::comm::TPUT_ASYNC, dst, src);
     return {};
 }
 #endif
+
+template <typename ParallelGroupType, typename GlobalDstData, typename TileData, typename... WaitEvents>
+PTO_INST RecordEvent TREDUCE(ParallelGroupType &parallelGroup, GlobalDstData &dstGlobalData, TileData &accTileData,
+                             TileData &recvTileData, pto::comm::ReduceOp op, WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TREDUCE, parallelGroup, dstGlobalData, accTileData, recvTileData, op);
+    return {};
+}
+
+template <typename ParallelGroupType, typename GlobalDstData, typename TileData, typename... WaitEvents>
+PTO_INST RecordEvent TREDUCE(ParallelGroupType &parallelGroup, GlobalDstData &dstGlobalData, TileData &accTileData,
+                             TileData &pingTileData, TileData &pongTileData, pto::comm::ReduceOp op,
+                             WaitEvents &... events)
+{
+    TSYNC(events...);
+    MAP_INSTR_IMPL(TREDUCE, parallelGroup, dstGlobalData, accTileData, pingTileData, pongTileData, op);
+    return {};
+}
 
 } // namespace pto
 #endif

@@ -8,7 +8,7 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
-// Test TWAIT and TTEST operations via PTO (Shmem backend)
+// Test TWAIT and TTEST operations via PTO (HCCL backend)
 // TWAIT: Blocking wait for signal condition
 // TTEST: Non-blocking test of signal condition
 

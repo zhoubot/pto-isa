@@ -1,4 +1,4 @@
-# include/
+# 头文件
 
 PTO Tile Lib 对外的 C/C++ 头文件（以模板化、基本 header-only 为主）。上层框架/算子可以通过这些头文件生成 PTO ISA 的 Tile 指令序列。
 
@@ -109,6 +109,7 @@ PTO Tile Lib 对外的 C/C++ 头文件（以模板化、基本 header-only 为�
 | [`TROWMAX`](../docs/isa/TROWMAX_zh.md) | 是 | 是 | 是 | 是 |
 | [`TROWMIN`](../docs/isa/TROWMIN_zh.md) | 是 | 是 | 是 | 是 |
 | [`TROWSUM`](../docs/isa/TROWSUM_zh.md) | 是 | 是 | 是 | 是 |
+| [`TROWPROD`](../docs/isa/TROWPROD_zh.md) | TODO | 是 | 是 | TODO |
 | [`TRSQRT`](../docs/isa/TRSQRT_zh.md) | 是 | 是 | 是 | 是 |
 | [`TSCATTER`](../docs/isa/TSCATTER_zh.md) | 是 | 是 | 是 | 是 |
 | [`TSEL`](../docs/isa/TSEL_zh.md) | 是 | 是 | 是 | 是 |

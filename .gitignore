@@ -1,6 +1,7 @@
 .git
 .idea
 .vscode
+.trae
 .DS_Store
 out
 build

@@ -1,129 +1,230 @@
-site_name: PTO Virtual ISA Architectural Manual
+site_name: PTO Virtual ISA Manual
+site_description: >
+  PTO (Parallel Tile Operation) is a virtual instruction set architecture 
+  designed by Ascend CANN, focusing on tile-level operations.
+site_author: Ascend CANN
+site_url: https://pto-isa.gitcode.com
 
+# Repository links
+repo_name: PTO-ISA
+repo_url: https://gitcode.com/cann/pto-isa
+edit_uri: edit/main/docs/mkdocs/src/
+
+# Theme configuration
 theme:
-  name: readthedocs
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.share
+    - search.suggest
+    - header.autohide
+  icon:
+    repo: fontawesome/brands/gitlab
+  palette:
+    primary: deep blue
+    accent: light blue
 
+# Build settings
 docs_dir: src
 site_dir: ../../site
 
+# Plugins
 plugins:
-  - search
+  - search:
+      lang: en
+      prebuild_index: true
+  - redirects:
+      redirect_maps:
+        'manual/index.md': 'manual/01-overview.md'
+        'coding/intro.md': 'docs/coding/ProgrammingModel.md'
   - gen-files:
       scripts:
         - gen_pages.py
 
+# Markdown extensions
 markdown_extensions:
   - toc:
       permalink: true
+      baselevel: 1
   - pymdownx.arithmatex:
       generic: true
       inline_syntax: [dollar, round]
       block_syntax: [dollar, square]
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.critic
+  - pymdownx.codelite
+  - pymdownx.mark
+  - attr_list
+  - def_list
 
+# Extra JavaScript for math rendering
 extra_javascript:
   - assets/javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - assets/javascripts/language-switcher.js
 
+# Social links
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ascend/pto-isa
+      title: GitHub
+    - icon: fontawesome/brands/gitlab
+      link: https://gitcode.com/cann/pto-isa
+      title: GitCode
+
+# Copyright
+copyright: >
+  &copy; 2025-2026 Ascend CANN. 
+  Licensed under CANN Open Software License Agreement Version 2.0.
+
+# Navigation structure - PTX-style organization
 nav:
-  - Home: index.md
-  - PTO Virtual ISA Manual:
-      - Preface: manual/index.md
+  # =============================================================================
+  # GETTING STARTED
+  # =============================================================================
+  - Getting Started:
+      - Home: index.md
       - Overview: manual/01-overview.md
+      - Quick Start: manual/08-programming.md
+      - Setup Guide: ../../docs/getting-started.md
+
+  # =============================================================================
+  # VIRTUAL ISA MANUAL (Chaptered Reference)
+  # =============================================================================
+  - Virtual ISA Manual:
+      - Preface: manual/index.md
       - Execution Model: manual/02-machine-model.md
       - State and Types: manual/03-state-and-types.md
       - Tiles and GlobalTensor: manual/04-tiles-and-globaltensor.md
       - Synchronization: manual/05-synchronization.md
-      - PTO Assembly (PTO-AS): manual/06-assembly.md
-      - Instruction Set (overview): manual/07-instructions.md
-      - Programming Guide: manual/08-programming.md
+      - Assembly (PTO-AS): manual/06-assembly.md
+      - Instruction Overview: manual/07-instructions.md
       - Virtual ISA and IR: manual/09-virtual-isa-and-ir.md
       - Bytecode and Toolchain: manual/10-bytecode-and-toolchain.md
-      - Memory Ordering and Consistency: manual/11-memory-ordering-and-consistency.md
-      - Backend Profiles and Conformance: manual/12-backend-profiles-and-conformance.md
-      - Glossary: manual/appendix-a-glossary.md
-      - Instruction Contract Template: manual/appendix-b-instruction-contract-template.md
-      - Diagnostics Taxonomy: manual/appendix-c-diagnostics-taxonomy.md
-      - Instruction Family Matrix: manual/appendix-d-instruction-family-matrix.md
-  - PTO Virtual ISA Manual (ZH):
-      - 前言: manual/index_zh.md
-      - 总览: manual/01-overview_zh.md
-      - 执行模型: manual/02-machine-model_zh.md
-      - 状态与类型: manual/03-state-and-types_zh.md
-      - Tile 与 GlobalTensor: manual/04-tiles-and-globaltensor_zh.md
-      - 同步: manual/05-synchronization_zh.md
-      - PTO 汇编 (PTO-AS): manual/06-assembly_zh.md
-      - 指令体系: manual/07-instructions_zh.md
-      - 编程指南: manual/08-programming_zh.md
-      - 虚拟 ISA 与 IR: manual/09-virtual-isa-and-ir_zh.md
-      - 字节码与工具链: manual/10-bytecode-and-toolchain_zh.md
-      - 内存顺序与一致性: manual/11-memory-ordering-and-consistency_zh.md
-      - 后端画像与一致性: manual/12-backend-profiles-and-conformance_zh.md
-      - 术语表: manual/appendix-a-glossary_zh.md
-      - 指令契约模板: manual/appendix-b-instruction-contract-template_zh.md
-      - 诊断分类体系: manual/appendix-c-diagnostics-taxonomy_zh.md
-      - 指令族矩阵: manual/appendix-d-instruction-family-matrix_zh.md
-  - Programming Model:
+      - Memory Ordering: manual/11-memory-ordering-and-consistency.md
+      - Backend Profiles: manual/12-backend-profiles-and-conformance.md
+
+  # =============================================================================
+  # REFERENCE - ISA INSTRUCTIONS
+  # =============================================================================
+  - ISA Reference:
+      - ISA Overview: docs/isa/README.md
+      - Conventions: docs/isa/conventions.md
+      - Instruction Table: docs/PTOISA.md
+      - Synchronization:
+          - TSYNC: docs/isa/TSYNC.md
+      - Resource Binding:
+          - TASSIGN: docs/isa/TASSIGN.md
+          - TSETHF32MODE: docs/isa/TSETHF32MODE.md
+          - TSETTF32MODE: docs/isa/TSETTF32MODE.md
+      - Elementwise:
+          - TADD: docs/isa/TADD.md
+          - TSUB: docs/isa/TSUB.md
+          - TMUL: docs/isa/TMUL.md
+          - TDIV: docs/isa/TDIV.md
+          - TCMP: docs/isa/TCMP.md
+      - Tile-Scalar:
+          - TADDS: docs/isa/TADDS.md
+          - TCMPS: docs/isa/TCMPS.md
+          - TEXPANDS: docs/isa/TEXPANDS.md
+      - Reduction:
+          - TROWSUM: docs/isa/TROWSUM.md
+          - TCOLSUM: docs/isa/TCOLSUM.md
+          - TROWMAX: docs/isa/TROWMAX.md
+          - TCOLMAX: docs/isa/TCOLMAX.md
+      - Memory:
+          - TLOAD: docs/isa/TLOAD.md
+          - TSTORE: docs/isa/TSTORE.md
+          - MGATHER: docs/isa/MGATHER.md
+          - MSCATTER: docs/isa/MSCATTER.md
+      - Matrix Multiply:
+          - TMATMUL: docs/isa/TMATMUL.md
+          - TMATMUL_ACC: docs/isa/TMATMUL_ACC.md
+          - TMATMUL_BIAS: docs/isa/TMATMUL_BIAS.md
+          - TMATMUL_MX: docs/isa/TMATMUL_MX.md
+      - Data Movement:
+          - TEXTRACT: docs/isa/TEXTRACT.md
+          - TINSERT: docs/isa/TINSERT.md
+          - TMOV: docs/isa/TMOV.md
+          - TTRANS: docs/isa/TTRANS.md
+
+  # =============================================================================
+  # REFERENCE - IR OPERATIONS
+  # =============================================================================
+  - IR Reference:
+      - IR Overview: docs/ir/README.md
+      - Tile Operations: docs/ir/PTO-IR-ops.md
+      - Auxiliary Functions: docs/ir/PTO-IR-ops.md
+      - Scalar Operations: docs/ir/PTO-IR-scalar-arith-ops.md
+      - Control Flow: docs/ir/PTO-IR-control-flow-ops.md
+
+  # =============================================================================
+  # PROGRAMMING GUIDE
+  # =============================================================================
+  - Programming Guide:
       - Overview: docs/coding/ProgrammingModel.md
-      - Tile: docs/coding/Tile.md
-      - GlobalTensor: docs/coding/GlobalTensor.md
-      - Scalar: docs/coding/Scalar.md
-      - Event: docs/coding/Event.md
-      - Tutorial: docs/coding/tutorial.md
-      - Tutorials: docs/coding/tutorials/README.md
-      - "教程（中文）": docs/coding/tutorials/README_zh.md
-      - "Example: Vec Add": docs/coding/tutorials/vec-add.md
-      - "Example: Row Softmax": docs/coding/tutorials/row-softmax.md
-      - "Example: GEMM": docs/coding/tutorials/gemm.md
-      - "Example: GEMM256 Compilation": docs/coding/tutorials/gemm256-compilation.md
-      - "示例：GEMM256 编译流程（中文）": docs/coding/tutorials/gemm256-compilation_zh.md
+      - Tile API: docs/coding/Tile.md
+      - GlobalTensor API: docs/coding/GlobalTensor.md
+      - Scalar Types: docs/coding/Scalar.md
+      - Event API: docs/coding/Event.md
       - Optimization: docs/coding/opt.md
       - Debugging: docs/coding/debug.md
-  - Programming Model (ZH):
-      - 总览: docs/coding/README_zh.md
-      - 编程模型: docs/coding/ProgrammingModel_zh.md
-      - Tile: docs/coding/Tile_zh.md
-      - GlobalTensor: docs/coding/GlobalTensor_zh.md
-      - Scalar: docs/coding/Scalar_zh.md
-      - Event: docs/coding/Event_zh.md
-      - 快速上手: docs/coding/tutorial_zh.md
-      - 教程索引: docs/coding/tutorials/README_zh.md
-      - "示例：向量加": docs/coding/tutorials/vec-add_zh.md
-      - "示例：行 Softmax": docs/coding/tutorials/row-softmax_zh.md
-      - "示例：GEMM": docs/coding/tutorials/gemm_zh.md
-      - 优化指南: docs/coding/opt_zh.md
-  - ISA Reference:
-      - ISA index: docs/isa/README.md
-      - ISA index (ZH): docs/isa/README_zh.md
-      - PTO IR ops index: docs/ir/README.md
-      - PTO IR ops index (ZH): docs/ir/README_zh.md
-      - PTO IR ops (L1/L2): docs/ir/PTO-IR-ops.md
-      - PTO IR ops (L1/L2, ZH): docs/ir/PTO-IR-ops_zh.md
-      - ISA conventions: docs/isa/conventions.md
-      - ISA conventions (ZH): docs/isa/conventions_zh.md
-      - PTO ISA table: docs/PTOISA.md
-      - PTO ISA table (ZH): docs/PTOISA_zh.md
-      - Intrinsics header: docs/reference/pto-intrinsics-header.md
-      - Intrinsics header (ZH): docs/reference/pto-intrinsics-header_zh.md
-      - PTO-AS spec: docs/grammar/PTO-AS.md
-      - PTO-AS spec (ZH): docs/grammar/PTO-AS_zh.md
-      - Grammar conventions: docs/grammar/conventions.md
-      - Grammar conventions (ZH): docs/grammar/conventions_zh.md
-      - Grammar index: docs/grammar/README.md
-      - Grammar index (ZH): docs/grammar/README_zh.md
+
+  # =============================================================================
+  # TUTORIALS
+  # =============================================================================
+  - Tutorials:
+      - Index: docs/coding/tutorials/README.md
+      - Vector Addition: docs/coding/tutorials/vec-add.md
+      - Row Softmax: docs/coding/tutorials/row-softmax.md
+      - GEMM: docs/coding/tutorials/gemm.md
+
+  # =============================================================================
+  # MACHINE MODEL
+  # =============================================================================
   - Machine Model:
-      - Abstract machine: docs/machine/abstract-machine.md
-      - Machine index: docs/machine/README.md
-  - Examples:
-      - Kernels index: kernels/README.md
-      - GEMM performance kernel: kernels/manual/a2a3/gemm_performance/README.md
-      - Flash Attention kernel: kernels/manual/a2a3/flash_atten/README.md
-      - Baseline add demo: demos/baseline/add/README.md
-      - Baseline GEMM demo: demos/baseline/gemm_basic/README.md
-      - Tests index: tests/README.md
-      - Test scripts: tests/script/README.md
-  - Documentation:
-      - Docs index: docs/README.md
-      - Docs index (ZH): docs/README_zh.md
-      - Build this site: docs/website.md
-      - Root README: README.md
-  - Full Index: all-pages.md
+      - Abstract Machine: docs/machine/abstract-machine.md
+      - Architecture: docs/machine/README.md
+
+  # =============================================================================
+  # ASSEMBLY AND GRAMMAR
+  # =============================================================================
+  - Assembly Reference:
+      - PTO-AS Spec: docs/grammar/PTO-AS.md
+      - BNF Grammar: docs/grammar/PTO-AS.bnf
+      - Conventions: docs/grammar/conventions.md
+
+  # =============================================================================
+  # APPENDICES
+  # =============================================================================
+  - Appendices:
+      - Glossary: manual/appendix-a-glossary.md
+      - Instruction Template: manual/appendix-b-instruction-contract-template.md
+      - Diagnostics: manual/appendix-c-diagnostics-taxonomy.md
+      - Family Matrix: manual/appendix-d-instruction-family-matrix.md
+
+  # =============================================================================
+  # EXTERNAL RESOURCES
+  # =============================================================================
+  - Resources:
+      - Kernel Examples: ../../kernels/README.md
+      - GEMM Performance: ../../kernels/manual/a2a3/gemm_performance/README.md
+      - Flash Attention: ../../kernels/manual/a2a3/flash_atten/README.md
+      - Tests: ../../tests/README.md
+      - Build Guide: ../../docs/website.md
+
+  # =============================================================================
+  # FULL INDEX
+  # =============================================================================
+  - Index: all-pages.md

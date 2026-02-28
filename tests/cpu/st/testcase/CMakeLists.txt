@@ -52,6 +52,7 @@ tmov
 tmrgsort
 trowsum
 trowexpand
+trowexpandop
 tadd
 texp
 tgather
@@ -101,7 +102,9 @@ tmins
 trowmin
 tcolmin
 tcolexpand
+tcolexpandop
 tscatter
+tbroadcast
 mgather
 mscatter
 hashfind
@@ -111,6 +114,9 @@ tget
 tput
 tnotify
 twait
+tloadconv
+treduce
+tpushpop
 )
 
 foreach(TESTCASE ${ALL_TESTCASES})

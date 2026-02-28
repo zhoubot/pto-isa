@@ -1,0 +1,43 @@
+# CODEOWNERS - PTO Tile Library
+
+# Default owners for everything in the repository
+* @cann-pto-isa/maintainers
+
+# Core components
+/include/pto/          @cann-pto-isa/core-team
+/include/pto/npu/      @cann-pto-isa/npu-team
+/include/pto/cpu/      @cann-pto-isa/cpu-team
+
+# Kernels
+/kernels/              @cann-pto-isa/kernel-team
+/kernels/manual/       @cann-pto-isa/kernel-team
+/kernels/custom/       @cann-pto-isa/kernel-team
+
+# Documentation
+/docs/                 @cann-pto-isa/docs-team
+/docs/mkdocs/          @cann-pto-isa/docs-team
+
+# Testing
+/tests/                @cann-pto-isa/test-team
+
+# PTODSL (Python DSL)
+/PTODSL/               @cann-pto-isa/ptodsl-team
+
+# Build system
+/cmake/                @cann-pto-isa/build-team
+/build.sh              @cann-pto-isa/build-team
+
+# Scripts
+/scripts/              @cann-pto-isa/build-team
+
+# CI/CD
+/.github/              @cann-pto-isa/devops-team
+
+# Configuration files
+CMakeLists.txt         @cann-pto-isa/build-team
+pyproject.toml         @cann-pto-isa/build-team
+.clang-format          @cann-pto-isa/core-team
+
+# Release management
+/version.cmake         @cann-pto-isa/release-team
+/ReleaseNote.md        @cann-pto-isa/release-team

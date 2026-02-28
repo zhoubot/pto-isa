@@ -2,214 +2,170 @@
   <img src="figures/pto_logo.svg" alt="PTO Tile Lib" width="200" />
 </p>
 
-# PTO ISA Documentation
+<div align="center">
 
-This directory contains comprehensive documentation for the PTO ISA (Instruction Set Architecture) used by PTO Tile Library.
+[![License](https://img.shields.io/badge/License-CANN%20Open%20Software%20License%202.0-blue.svg)](../LICENSE)
+[![Version](https://img.shields.io/badge/Version-9.0.0-green.svg)](../version.cmake)
 
-## Documentation Overview
+</div>
 
-| Section | Description | Path |
-|---------|-------------|------|
-| **ISA Reference** | Complete instruction reference with specifications | [`docs/isa/`](isa/) |
-| **PTO-AS Grammar** | Assembly language specification (textual format) | [`docs/grammar/`](grammar/) |
-| **PTO-BC Bytecode** | Binary encoding specification | [`docs/bytecode/`](bytecode/) |
-| **PTO-IR** | Non-ISA operations (L1/L2) | [`docs/ir/`](ir/) |
-| **Programming Guide** | Developer guides and tutorials | [`docs/coding/`](coding/) |
-| **Tutorials** | Step-by-step tutorials for common operations | [`docs/coding/tutorials/`](coding/tutorials/) |
-| **Machine Model** | Abstract machine architecture | [`docs/machine/`](machine/) |
+# PTO ISA Guide
 
-## Quick Navigation
-
-### For New Users
-
-- **Getting Started**: [getting-started.md](../getting-started.md)
-- **Programming Model**: [coding/ProgrammingModel.md](coding/ProgrammingModel.md)
-- **Beginner Tutorial**: [coding/tutorial.md](coding/tutorial.md)
-- **Tutorials**: [coding/tutorials/](coding/tutorials/)
-  - [Vector Add](coding/tutorials/vec-add.md)
-  - [GEMM Operation](coding/tutorials/gemm.md)
-  - [Row Softmax](coding/tutorials/row-softmax.md)
-
-### For ISA Reference
-
-- **Instruction Index**: [isa/README.md](isa/README.md)
-- **Common Conventions**: [isa/conventions.md](isa/conventions.md)
-- **PTO-AS Specification**: [grammar/PTO-AS.md](grammar/PTO-AS.md)
-- **PTO-BC Bytecode**: [bytecode/pto-bc.md](bytecode/pto-bc.md)
-
-### For Advanced Topics
-
-- **Abstract Machine Model**: [machine/abstract-machine.md](machine/abstract-machine.md)
-- **Optimization Guide**: [coding/opt.md](coding/opt.md)
-- **Debugging Guide**: [coding/debug.md](coding/debug.md)
-
-## Key Concepts
-
-### PTO ISA
-
-The PTO (Parallel Tile Operation) ISA defines over 90 standard tile-level operations. Key instructions include:
-
-- **Memory Operations**: `TLOAD`, `TSTORE`, `TGATHER`, `TSCATTER`
-- **Arithmetic Operations**: `TADD`, `TSUB`, `TMUL`, `TDIV`
-- **Matrix Operations**: `TMATMUL`, `TEXTRACT`
-- **Reduction Operations**: `TROWSUM`, `TCOLSUM`, `TROWMAX`, `TCOLMAX`
-
-See: [PTOISA.md](PTOISA.md) for complete instruction list.
-
-### PTO-AS (PTO Assembly)
-
-PTO-AS is the **textual assembly format** for PTO. It provides:
-
-- Readable, instruction-centric syntax
-- MLIR-like type system
-- Support for both SSA and destination-passing styles
-
-See: [grammar/PTO-AS.md](grammar/PTO-AS.md) for specification.
-
-### PTO-BC (PTO Bytecode)
-
-PTO-BC is the **binary bytecode encoding** for PTO programs. It provides:
-
-- Compact binary representation
-- Forward compatibility
-- MLIR-independent decoding (optional)
-
-See: [bytecode/pto-bc.md](bytecode/pto-bc.md) for specification.
-
-### Programming Models
-
-PTO supports two programming models:
-
-1. **Auto Mode** (CPU Simulation Only): Automatic buffer allocation and synchronization
-2. **Manual Mode**: Explicit buffer management and pipeline control
-
-See: [coding/ProgrammingModel.md](coding/ProgrammingModel.md) for details.
-
-## How the PTO Flow Works
-
-The PTO toolchain transforms user kernels into executable code for Ascend NPUs or CPU simulation:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           1. User Kernel Development                                │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │      pyPTO      │  │     PTODSL      │  │  TileLang Ascend │  │  PTO-Lang   │ │
-│  │  (Python DSL)  │  │   (Python DSL)  │  │  (High-level)   │  │  (Generic)  │ │
-│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘  └──────┬─────┘ │
-└───────────┼─────────────────────┼─────────────────────┼─────────────────────┼────────┘
-            │                     │                     │                     │
-            ▼                     ▼                     ▼                     ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           2. PTO Text Format (.pto files)                          │
-│  Textual representation of tile operations: tadd, tload, tmatmul, tstore, etc.    │
-│  Example:                                                                            │
-│  ```pto                                                                              │
-│  func.func @gemm(%a: !pto.tensor<16x16xf16>, %b: !pto.tensor<16x16xf16>) {       │
-│    %tA = pto.tload %a : !pto.tensor<16x16xf16>                                    │
-│    %tB = pto.tload %b : !pto.tensor<16x16xf16>                                    │
-│    %tC = pto.tmatmul %tA, %tB : (!pto.MatTile, !pto.RightTile) -> !pto.AccTile  │
-│    pto.tstore %c, %tC : !pto.tensor<16x16xf16>                                    │
-│    return                                                                            │
-│  }                                                                                  │
-│  ```                                                                                │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-            │
-            ▼ (ptoas assembler)
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           3. ptoas - PTO Assembler                                  │
-│  Compiles PTO text to AscendC C++ kernel code                                      │
-│                                                                                     │
-│  Usage: `ptoas input.pto -o output.cpp`                                           │
-│  Tool: [`PTOAS/`](../PTOAS/) (submodule)                                         │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-            │
-            ├──────────────────────────────────┬─────────────────────────────────────┐
-            │                                  │                                     │
-            ▼ (optional)                       ▼ (optional)                          │
-┌─────────────────────────────┐   ┌─────────────────────────────────────────────────┐
-│    4a. PTO-C++ Output     │   │    4b. ptobc - PTO Bytecode Encoder           │
-│    Generated AscendC C++   │   │    Binary encoding for PTO programs            │
-│    kernel code             │   │                                                 │
-│                             │   │    Usage: `ptobc encode input.pto -o out.ptobc│
-│                             │   │    Tool: [`tools/ptobc/`](../tools/ptobc/)  │
-└──────────────┬──────────────┘   └─────────────────────┬───────────────────────┘
-               │                                        │
-               ▼                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           5. PTO ISA (90+ Tile Operations)                          │
-│  Core instruction set: TADD, TMATMUL, TLOAD, TSTORE, TGATHER, TSCATTER, etc.      │
-│  Headers: [`include/pto/`](../include/pto/)                                       │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                           6. Backend Execution                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐  │
-│  │  Ascend A2   │  │  Ascend A3   │  │  Ascend A5   │  │        CPU          │  │
-│  │   (910B)    │  │   (910C)    │  │   (950)     │  │   (x86_64/AArch64)│  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └─────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Quick Start: Compiling a PTO Kernel
-
-```bash
-# Step 1: Write your kernel in PTO text format (example.pto)
-# Step 2: Compile with ptoas
-ptoas example.pto -o example.cpp
-
-# Step 3: Compile the generated C++ with AscendC compiler
-aicompile example.cpp -o example.o
-
-# Step 4: Link and run on NPU
-```
-
-```bash
-# Alternative: Encode to PTO-BC bytecode
-ptobc encode example.pto -o example.ptobc
-```
-
-## PTO Ecosystem
-
-```
-User Kernels (pyPTO / PTODSL / TileLang)
-         │
-         ▼
-   PTO Text (.pto)
-         │
-    ┌────┴────┐
-    │         │
-  ptoas    ptobc
-    │         │
-    ▼         ▼
-  C++     PTO-BC
-    │         │
-    └────┬────┘
-         │
-         ▼
-    PTO ISA
-```
-
-## Related Documentation
-
-| Document | Description |
-|----------|-------------|
-| [include/README.md](../include/README.md) | C++ API and header files |
-| [kernels/README.md](../kernels/README.md) | Kernel implementations |
-| [tests/README.md](../tests/README.md) | Test suite documentation |
-| [PTOAS submodule](../PTOAS/) | Assembler and MLIR dialect |
-| [PTODSL submodule](../PTODSL/) | Python DSL for kernel authoring |
-| [tools/ptobc/](../tools/ptobc/) | PTO-BC encoder/decoder |
-
-## External Resources
-
-| Project | Description | Link |
-|---------|-------------|------|
-| **pyPTO** | Python-first frontend for PTO kernels | [GitCode](https://gitcode.com/cann/pypto/) |
-| **PTODSL** | Python DSL for kernel authoring | [GitHub](https://github.com/huawei-csl/pto-dsl) |
-| **PTOAS** | Assembler and MLIR dialect | [GitHub](https://github.com/zhangstevenunity/PTOAS) |
-| **TileLang Ascend** | High-level framework for Ascend | [GitHub](https://github.com/tile-ai/tilelang-ascend/) |
+This directory contains the authoritative documentation for the **PTO (Parallel Tile Operation) Virtual Instruction Set Architecture** used by PTO Tile Library. This guide explains instruction naming conventions, common notation, and how to navigate the per-instruction reference pages.
 
 ---
 
-For the main project README, see: [README.md](../README.md)
+## Quick Links
+
+| Resource | Description |
+|----------|-------------|
+| [🏠 Main README](../README.md) | Project overview and quick start |
+| [📖 Virtual ISA Manual](PTO-Virtual-ISA-Manual.md) | Complete manual with 12 chapters |
+| [🚀 Getting Started](getting-started.md) | Setup guide for CPU simulation and NPU |
+| [💻 PTODSL](../PTODSL/README.md) | Pythonic programming interface |
+
+---
+
+## Naming Conventions
+
+### Fundamental Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Tile** | Fundamental data type for small 2D tensors | `MatTile`, `LeftTile`, `RightTile`, `VecTile` |
+| **GlobalTensor** | A tensor stored in global memory (GM) | Used with `TLOAD`/`TSTORE` |
+| **Scalar** | Immediate values and enumerations | `%R` register, comparison modes |
+| **Event** | Explicit dependency tokens | Used for pipeline synchronization |
+
+### Instruction Prefixes
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `T` | Tile operation (fundamental) | `TADD`, `TMATMUL`, `TLOAD` |
+| `M` | Memory operation (complex) | `MGATHER`, `MSCATTER` |
+
+### Notation
+
+- **`%R`**: A scalar immediate register
+- **Shape and alignment**: Enforced by compile-time constraints and runtime assertions
+- **Valid region**: Defined by `Rv` (valid rows) and `Cv` (valid columns)
+
+---
+
+## Documentation Structure
+
+### 1. Virtual ISA Manual (Chapters)
+
+The complete manual is organized into 12 chapters plus appendices:
+
+| Chapter | Title | Description |
+|---------|-------|-------------|
+| 1 | [Overview](mkdocs/src/manual/01-overview.md) | Design goals, architectural identity |
+| 2 | [Machine Model](mkdocs/src/manual/02-machine-model.md) | Abstract execution model |
+| 3 | [State and Types](mkdocs/src/manual/03-state-and-types.md) | Architectural state, data types |
+| 4 | [Tiles and GlobalTensor](mkdocs/src/manual/04-tiles-and-globaltensor.md) | Core data structures |
+| 5 | [Synchronization](mkdocs/src/manual/05-synchronization.md) | Event-based ordering |
+| 6 | [PTO Assembly](mkdocs/src/manual/06-assembly.md) | Assembly syntax (PTO-AS) |
+| 7 | [Instructions](mkdocs/src/manual/07-instructions.md) | ISA overview |
+| 8 | [Programming Guide](mkdocs/src/manual/08-programming.md) | Development patterns |
+| 9 | [Virtual ISA and IR](mkdocs/src/manual/09-virtual-isa-and-ir.md) | IR contracts |
+| 10 | [Bytecode and Toolchain](mkdocs/src/manual/10-bytecode-and-toolchain.md) | Compilation pipeline |
+| 11 | [Memory Ordering](mkdocs/src/manual/11-memory-ordering-and-consistency.md) | Consistency model |
+| 12 | [Backend Profiles](mkdocs/src/manual/12-backend-profiles-and-conformance.md) | Platform conformance |
+
+### 2. ISA Reference
+
+| Resource | Description |
+|----------|-------------|
+| [ISA Index](isa/README.md) | Complete instruction listing by category |
+| [PTOISA.md](PTOISA.md) | ISA quick reference table |
+| [Conventions](isa/conventions.md) | Operand, event, and modifier notation |
+
+### 3. IR Reference
+
+| Resource | Description |
+|----------|-------------|
+| [IR Index](ir/README.md) | PTO IR operations |
+| [PTO-IR-Ops.md](ir/PTO-IR-ops.md) | L1/L2 IR operation reference |
+
+### 4. Programming Guide
+
+| Resource | Description |
+|----------|-------------|
+| [Programming Model](coding/ProgrammingModel.md) | Core concepts and architecture |
+| [Tile API](coding/Tile.md) | Tile type system |
+| [GlobalTensor API](coding/GlobalTensor.md) | Memory view abstraction |
+| [Scalar Types](coding/Scalar.md) | Immediate values |
+| [Event API](coding/Event.md) | Synchronization |
+| [Tutorial](coding/tutorial.md) | Writing your first kernel |
+
+### 5. Assembly and Grammar
+
+| Resource | Description |
+|----------|-------------|
+| [PTO-AS Spec](grammar/PTO-AS.md) | Assembly syntax reference |
+| [BNF Grammar](grammar/PTO-AS.bnf) | Formal grammar definition |
+| [Conventions](grammar/conventions.md) | Grammar notation |
+
+### 6. Machine Model
+
+| Resource | Description |
+|----------|-------------|
+| [Abstract Machine](machine/abstract-machine.md) | Core/device/host model |
+| [Machine Index](machine/README.md) | Machine architecture |
+
+---
+
+## Architecture Contracts
+
+### Source of Truth
+
+| Source | Location |
+|--------|----------|
+| Per-op semantics | `docs/isa/*.md` |
+| Public API | `include/pto/common/pto_instr.hpp` |
+| Assembly grammar | `docs/grammar/PTO-AS.md`, `docs/grammar/PTO-AS.bnf` |
+
+### Instruction Semantics
+
+Each instruction document follows a standardized format:
+
+1. **Operation diagram** - Visual representation
+2. **Math interpretation** - Formal specification
+3. **Assembly syntax** - PTO-AS and MLIR forms
+4. **C++ intrinsic** - Programmatic interface
+5. **Constraints** - Implementation requirements
+6. **Examples** - Auto and Manual mode usage
+
+---
+
+## Implementation Notes
+
+### Backend Support
+
+| Backend | Path | Status |
+|---------|------|--------|
+| CPU (simulation) | `include/pto/cpu/` | ✅ Stable |
+| Ascend A2/A3 | `include/pto/npu/a2a3/` | ✅ Stable |
+| Ascend A5 | `include/pto/npu/a5/` | ✅ Stable |
+
+### Extending PTO
+
+For developers contributing new instructions, see:
+
+- [Instruction Contract Template](mkdocs/src/manual/appendix-b-instruction-contract-template.md)
+- [Coding README](coding/README.md)
+
+---
+
+## Navigation Tips
+
+1. **New to PTO?** Start with [Chapter 1: Overview](mkdocs/src/manual/01-overview.md)
+2. **Want to write code?** See [Programming Model](coding/ProgrammingModel.md)
+3. **Need instruction details?** Browse [ISA Reference](isa/README.md)
+4. **Understanding the toolchain?** See [Chapter 10: Bytecode and Toolchain](mkdocs/src/manual/10-bytecode-and-toolchain.md)
+
+---
+
+*For setup and installation, see [Getting Started](getting-started.md).*
+

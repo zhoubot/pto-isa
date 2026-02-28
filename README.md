@@ -2,194 +2,155 @@
   <img src="docs/figures/pto_logo.svg" alt="PTO Tile Lib" width="220" />
 </p>
 
-# PTO Tile Library
-
-High-performance **tile-level** operations for Ascend platforms, implemented against the **PTO (Parallel Tile Operation) virtual ISA**.
+<div align="center">
 
 [![License](https://img.shields.io/badge/License-CANN%20Open%20Software%20License%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Ascend%20A2%20%7C%20A3%20%7C%20A5%20%7C%20CPU-green.svg)](#platform-support)
-[![Docs](https://img.shields.io/badge/Docs-MkDocs%20Site-blue.svg)](https://your-docs-url.github.io)
+[![Version](https://img.shields.io/badge/Version-9.0.0-green.svg)](version.cmake)
+[![Platform](https://img.shields.io/badge/Platform-Ascend%20A2%2FA3%2FA5%20%2B%20CPU-orange.svg)](docs/getting-started.md)
+[![C++](https://img.shields.io/badge/C%2B%2B-20-yellow.svg)](include/README.md)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-yellow.svg)](PTODSL/README.md)
 
-- **Docs**: `docs/` (start at [`docs/README.md`](docs/README.md))
-- **Getting started** (Windows/Linux/macOS): [`docs/getting-started.md`](docs/getting-started.md)
-- **ISA / headers**: [`include/README.md`](include/README.md)
-- **中文文档**: [`README_zh.md`](README_zh.md)
+# PTO Tile Library
+
+**Parallel Tile Operation (PTO)** is a virtual instruction set architecture designed by **Ascend CANN**, focusing on tile-level operations. This repository offers high-performance, cross-platform tile operations across Ascend platforms. By porting to PTO instruction sequences, users can migrate Ascend hardware more easily.
+
+</div>
 
 ## News
 
-- **2026-02**: Added PTO-BC bytecode
-- **2026-02**: Integrated PTOAS and PTODSL
-- **2025-12-27**: PTO Tile Library becomes publicly available.
+* **2025-12-27**: PTO Tile Library becomes publicly available.
+* **2026-02-28**: Added PTO-DSL - In-core level Pythonic programming language for PTO-ISA.
 
-## What is PTO?
+## Quick Links
 
-Ascend hardware evolves significantly across generations, and the underlying instruction sets change accordingly. **PTO** raises the abstraction level to a stable, tile-centric virtual ISA:
+| Resource | Description |
+|----------|-------------|
+| [🚀 Getting Started](docs/getting-started.md) | Setup guide for CPU simulation and NPU |
+| [📘 ISA Manual](docs/PTO-Virtual-ISA-Manual.md) | Complete PTO ISA reference |
+| [🐍 PTO-DSL](PTODSL/README.md) | In-core level Pythonic programming language |
+| [🐍 PyPTO](https://gitcode.com/cann/pypto/) | Formal Pythonic programming interface |
+| [📚 TileLang Ascend](https://github.com/tile-ai/tilelang-ascend/) | High-level DSL for Ascend NPUs |
+| [🧩 Examples](kernels/README.md) | Kernel implementations and demos |
+| [🔧 Contributing](CONTRIBUTING.md) | How to contribute to this project |
 
-- Provides **90+ standard tile operations** (ISA definition)
-- Bridges hardware generations while keeping **backward compatibility**
-- Still exposes **performance tuning levers** (tile size/shape, instruction ordering, pipelining choices, etc.)
+## Overview
 
-This repository implements a growing subset of PTO operations with performance-oriented kernels, CPU simulation, and tests.
+The PTO ISA (Instruction Set Architecture) is built on Ascend’s underlying hardware and software abstractions, providing over 90 standard tile-level operations.
 
-## PTO Ecosystem & Toolchain
+Ascend hardware architectures have significantly evolved over generations, leading to major changes in the instruction sets. The PTO instruction set bridges these hardware differences by raising the abstraction level. We ensure that these PTO instructions work correctly across platforms while maintaining backward compatibility. However, this abstraction does not hide performance tuning opportunities. Users can still fine-tune performance by adjusting tile sizes, tile shapes, instruction order, etc. This provides sufficient control to fine-tune internal pipeline flows.
 
-This is the central repository for the PTO ecosystem. It connects multiple components:
+Our goal is to offer users a simplified, yet powerful way to optimize performance, enabling them to write high-performance code with PTO instructions.
 
-<img src="docs/figures/pto_toolchain.svg" alt="PTO Toolchain Architecture" width="100%" />
+Currently, PTO instructions are integrated into the following frameworks:
 
-### Compilation Flow (PTODSL -> PTOAS -> CPU sim)
+| Framework | Description | Repository |
+|-----------|-------------|------------|
+| **PyPTO** | Formal Pythonic programming interface with Python bindings | https://gitcode.com/cann/pypto/ |
+| **PTO-DSL** | In-core level Pythonic programming language (included in this repo) | [PTODSL/](PTODSL/README.md) |
+| **TileLang Ascend** | High-level DSL for Ascend NPUs | https://github.com/tile-ai/tilelang-ascend/ |
+| **More languages** | Additional language bindings coming soon | - |
 
-The SVG above now matches the validated demo pipeline in
-[`demos/ptodsl_ptoas_cpu/add_static/run.sh`](demos/ptodsl_ptoas_cpu/add_static/run.sh):
+## Who Is This For?
 
-1. Ensure `ptodsl` is importable in the selected Python environment.
-2. Generate PTO text IR: `add_builder.py -> add.pto`.
-3. Compile PTO IR with PTOAS: `ptoas --enable-insert-sync add.pto -o add.cpp`.
-4. Compile host+kernel for CPU simulation:
-   `g++ -std=c++20 -O2 -D__CPU_SIM -D__DAV_VEC__ runner.cpp add.cpp -o run_cpu`.
-5. Run `./run_cpu` and verify `PASS`.
+PTO Tile Lib is designed for **intermediate to advanced developers**. It's ideal for:
 
-Example invocation:
+| User Type | Use Case |
+|-----------|----------|
+| **Backend Developers** | Building frameworks that directly interface with Ascend hardware |
+| **Framework Integrators** | Implementing kernel libraries on Ascend NPUs |
+| **Performance Engineers** | Developing high-performance operators with manual optimization |
+| **Researchers** | Exploring novel tile-based parallel algorithms |
 
-```bash
-export PTOAS_BIN=/path/to/ptoas
-export PYTHON=/path/to/python
-export PYTHONPATH=/path/to/mlir_core:$PYTHONPATH
-bash demos/ptodsl_ptoas_cpu/add_static/run.sh
-```
+> **Note:** If you're new to NPU programming, we recommend starting with [PTO-DSL](PTODSL/README.md) - our in-core level Pythonic programming language that provides automatic software pipelining.
 
-### Related Projects
+## Performance
 
-| Project | Description | Location |
-|---------|-------------|----------|
-| **PTOAS** | PTO Assembler - MLIR-based compiler for PTO | [`PTOAS/`](PTOAS/) (submodule) |
-| **PTODSL** | Python DSL for PTO kernel authoring | [`PTODSL/`](PTODSL/) (submodule) |
-| **pyPTO** | Python-first frontend for PTO kernels | [External](https://gitcode.com/cann/pypto/) |
-| **TileLang Ascend** | High-level framework integration | [External](https://github.com/tile-ai/tilelang-ascend/) |
+This repository includes performance-oriented kernels with reference measurements and reproducible setups.For performance testing tools, please refer to the [msprof tool](https://www.hiascend.com/document/detail/zh/canncommercial/850/devaids/Profiling/atlasprofiling_16_0010.html).
 
-### Tools
+### GEMM (A2/A3 reference)
 
-| Tool | Description | Usage |
-|------|-------------|-------|
-| `ptoas` | PTO Assembler - compiles PTO text to C++ | `ptoas input.pto -o output.cpp` |
-| `ptobc` | PTO Bytecode encoder/decoder | `ptobc encode input.pto -o out.ptobc` |
+- Kernel: `kernels/manual/a2a3/gemm_performance/`
 
-For performance profiling, refer to the [msprof tool](https://www.hiascend.com/document/detail/zh/canncommercial/850/devaids/Profiling/atlasprofiling_16_0010.html).
+Measured on Ascend A3 (24 cores) with fp16 inputs → fp32 output:
 
-## Intended Audience
+| Parameter | TMATMUL (Cube) Ratio | TEXTRACT Ratio | TLOAD Ratio | TSTORE Ratio | Execution time (ms) |
+| --- | --- | --- | --- | --- | --- |
+| `m=1536` `k=1536` `n=1536` | 54.5% | 42.2% | 72.2% | 7.7% | 0.0388 |
+| `m=3072` `k=3072` `n=3072` | 79.0% | 62.0% | 90.9% | 5.8% | 0.2067 |
+| `m=6144` `k=6144` `n=6144` | 86.7% | 68.1% | 95.2% | 3.1% | 1.5060 |
+| `m=7680` `k=7680` `n=7680` | 80.6% | 63.0% | 98.4% | 2.4% | 3.1680 |
 
-PTO Tile Lib is not aimed at beginner-level users. It is intended for:
+Detailed analysis and tuning notes: `kernels/manual/a2a3/gemm_performance/README.md`.
 
-- Framework backends interfacing directly with Ascend hardware
-- Cross-platform application developers targeting multiple Ascend generations
-- High-performance operator/kernel developers (manual implementations)
+![GEMM performance reference (Ascend A3, 24 cores)](docs/figures/performance/gemm_performance_a3.svg)
+
+### Flash Attention (A2/A3 reference)
+
+- Kernel: `kernels/manual/a2a3/flash_atten/`
+
+Detailed analysis and tuning notes: `kernels/manual/a2a3/flash_atten/README.md`.
+
+![Flash Attention normalized TFLOPS (A2/A3)](docs/figures/performance/fa_normalized_tflops_a2a3.svg)
+
+## Coming Soon
+
+The following features will be released in the future:
+
+| Feature | Description | Scope |
+| --- | --- | --- |
+| PTO Auto Mode | BiSheng compiler support to automatically allocate tile buffers and insert synchronization. | Compiler / toolchain |
+| PTO Tile Fusion | BiSheng compiler support to fuse tile operations automatically. | Compiler / toolchain |
+| PTO-AS | Byte Code Support for PTO ISA. | Compiler / toolchain |
+| **Convolution extension** | PTO ISA support for convolution kernels. | ISA Extension |
+| **Collective communication extension** | PTO ISA support for collective communication. | ISA Extension |
+| **System schedule extension** | PTO ISA support for SPMD/MPMD programming. | ISA Extension |
+
+
+## How to Use PTO Tile Library
+
+PTO instructions support two modes: **Auto Mode (Available only in CPU simulation)** (where the user does not allocate buffers or manage pipelining) and **Manual Mode** (where the user must allocate buffer addresses and manage pipelining). We recommend the following steps for optimizing operators:
+
+1. Develop the operator based on Auto Mode, generating PTO instruction sequences according to the algorithm logic.
+2. Verify functionality and correctness in CPU simulation.
+3. Port the code to Ascend hardware to ensure correctness and collect performance data.
+4. Identify performance bottlenecks (CUBE Bound, MTE Bound, Vector Bound) and begin optimization and tuning.
+
+We ensure that each PTO instruction, when implemented within a fixed tile shape, fully leverages the capabilities of the underlying hardware. We encapsulate low-level hardware implementations into the tile abstractions and utilize expert knowledge to create a variety of tile templates. During static compilation, the compiler selects the best assembly implementation for the current shape based on template parameters. By merging different PTO instructions, we achieve optimal performance.
+
+In this repository, we demonstrate how standard tile operations can be mapped to various pipelines through template parameters:
+
+* Static tile Shape (Row, Col)
+* Dynamic tile Mask (Valid Mask)
+* Event Record & Wait (Set wait flag)
+* Specialized Fixed Function (SFU)
+* Fixed Pipeline (FIXP)
+
+PTO ISA defines over 90 standard operations. This repository implements a growing subset of them, with ongoing efforts to add more.
 
 ## Platform Support
 
-- Ascend A2 (Ascend 910B)
-- Ascend A3 (Ascend 910C)
-- Ascend A5 (Ascend 950)
-- CPU simulator (x86_64 / AArch64)
+* Ascend A2 (Ascend 910B)
+* Ascend A3 (Ascend 910C)
+* Ascend A5 (Ascend 950)
+* CPU (x86_64 / AArch64)
 
-For details, see: [Released PTO ISA](include/README.md)
+For more details please refer to [Released PTO ISA](include/README.md)
 
-## Requirements
+## Quickstart Guide
 
-### CPU simulator
+For detailed, OS-specific setup (Windows / Linux / macOS), see: [docs/getting-started.md](docs/getting-started.md).
 
-- C++ toolchain (Clang/GCC/MSVC)
-- CMake
-- Python 3
+### Build Documentation (MkDocs)
 
-### Ascend (NPU / simulator)
-
-If you wish to directly browse the PTO ISA documentation online:
+If you wish to directly access the PTO ISA documentation, you can refer to the following links for complete content:
 
 - [Documentation Center](https://pto-isa.gitcode.com)
 
-To build the documentation locally, see the **Documentation Site (MkDocs)** section below.
+If you prefer to build the documentation locally, you may follow the steps below.
 
-- Ascend CANN toolkit **>= 8.3** (see `version.info`)
-- A working runtime environment (`setenv.bash` sourced)
+This repository includes an MkDocs (Read the Docs theme) site under `docs/mkdocs/`.
 
-## Quickstart (CPU simulator)
-
-CPU simulation is cross-platform and does **not** require Ascend drivers/CANN.
-
-Run the full CPU flow:
-
-```bash
-python3 tests/run_cpu.py --clean --verbose
-```
-
-Run a demo (optional):
-
-```bash
-python3 tests/run_cpu.py --demo gemm --verbose
-python3 tests/run_cpu.py --demo flash_attn --verbose
-```
-
-Run CPU simulation tests:
-
-```bash
-chmod +x ./tests/run_cpu_tests.sh
-./tests/run_cpu_tests.sh
-```
-
-## Quickstart (Ascend ST)
-
-> ST requires a working Ascend CANN environment and is typically Linux-only.
-
-1) Configure CANN environment variables:
-
-```bash
-# root install
-source /usr/local/Ascend/cann/bin/setenv.bash
-
-# or non-root install
-source $HOME/Ascend/cann/bin/setenv.bash
-```
-
-2) Run recommended suites:
-
-```bash
-chmod +x ./tests/run_st.sh
-./tests/run_st.sh a5 npu simple
-./tests/run_st.sh a3 sim all
-```
-
-3) Run a single ST test case:
-
-```bash
-python3 tests/script/run_st.py -r [sim|npu] -v [a3|a5] -t [TEST_CASE] -g [GTEST_FILTER_CASE]
-
-# examples
-python3 tests/script/run_st.py -r npu -v a3 -t tmatmul -g TMATMULTest.case1
-python3 tests/script/run_st.py -r sim -v a5 -t tmatmul -g TMATMULTest.case1
-```
-
-Note: the `a3` backend covers the A2/A3 family (`include/pto/npu/a2a3`).
-
-## Build / Package
-
-One-click build & run:
-
-```bash
-chmod +x build.sh
-
-# Run Full ST tests
-./build.sh --run_all --a3 --sim
-
-# Run Simplified ST tests
-./build.sh --run_simple --a5 --npu
-
-# Packaging
-./build.sh --pkg
-```
-
-## Documentation Site (MkDocs)
-
-An MkDocs (Read the Docs theme) site is available under `docs/mkdocs/`.
+Install mkdocs first:
 
 ```bash
 python -m pip install -r docs/mkdocs/requirements.txt
@@ -209,85 +170,132 @@ cmake -S docs -B build/docs -DPython3_EXECUTABLE=$PWD/.venv-mkdocs/bin/python
 cmake --build build/docs --target pto_docs
 ```
 
-## Documentation Overview
+### Run CPU Simulator (recommended first step)
 
-| Section | Description | Path |
-|---------|-------------|------|
-| **ISA Reference** | Complete instruction reference | [`docs/isa/`](docs/isa/) |
-| **PTO-AS Grammar** | Assembly language specification | [`docs/grammar/PTO-AS.md`](docs/grammar/PTO-AS.md) |
-| **PTO-BC Bytecode** | Binary encoding specification | [`docs/bytecode/pto-bc.md`](docs/bytecode/pto-bc.md) |
-| **PTO-IR** | Non-ISA operations (L1/L2) | [`docs/ir/`](docs/ir/) |
-| **Programming Guide** | Developer guides and tutorials | [`docs/coding/`](docs/coding/) |
-| **Machine Model** | Abstract machine architecture | [`docs/machine/`](docs/machine/) |
+CPU simulation is cross-platform and does not require Ascend drivers/CANN:
 
-## Performance References
+```bash
+python3 tests/run_cpu.py --clean --verbose
+```
 
-This repository includes performance-oriented kernels with reference measurements and reproducible setups.
+Build & run the GEMM demo (optional):
 
-### GEMM (A2/A3 reference)
+```bash
+python3 tests/run_cpu.py --demo gemm --verbose
+```
 
-- Kernel: `kernels/manual/a2a3/gemm_performance/`
-- Tuning notes: `kernels/manual/a2a3/gemm_performance/README.md`
+Build & run the Flash Attention demo (optional):
 
-Measured on Ascend A3 (24 cores) with fp16 inputs → fp32 output:
+```bash
+python3 tests/run_cpu.py --demo flash_attn --verbose
+```
 
-| Parameter | TMATMUL (Cube) Ratio | TEXTRACT Ratio | TLOAD Ratio | TSTORE Ratio | Execution time (ms) |
-| --- | --- | --- | --- | --- | --- |
-| `m=1536` `k=1536` `n=1536` | 54.5% | 42.2% | 72.2% | 7.7% | 0.0388 |
-| `m=3072` `k=3072` `n=3072` | 79.0% | 62.0% | 90.9% | 5.8% | 0.2067 |
-| `m=6144` `k=6144` `n=6144` | 86.7% | 68.1% | 95.2% | 3.1% | 1.5060 |
-| `m=7680` `k=7680` `n=7680` | 80.6% | 63.0% | 98.4% | 2.4% | 3.1680 |
+### Running a Single ST Test Case
 
-![GEMM performance reference (Ascend A3, 24 cores)](docs/figures/performance/gemm_performance_a3.svg)
+Running ST requires a working Ascend CANN environment and is typically Linux-only.
 
-### Flash Attention (A2/A3 reference)
+```bash
+python3 tests/script/run_st.py -r [sim|npu] -v [a3|a5] -t [TEST_CASE] -g [GTEST_FILTER_CASE]
+```
 
-- Kernel: `kernels/manual/a2a3/flash_atten/`
-- Tuning notes: `kernels/manual/a2a3/flash_atten/README.md`
+Note: the `a3` backend covers the A2/A3 family (`include/pto/npu/a2a3`).
 
-![Flash Attention normalized TFLOPS (A2/A3)](docs/figures/performance/fa_normalized_tflops_a2a3.svg)
+Example:
 
-## Roadmap
+```bash
+python3 tests/script/run_st.py -r npu -v a3 -t tmatmul -g TMATMULTest.case1
+python3 tests/script/run_st.py -r sim -v a5 -t tmatmul -g TMATMULTest.case1
+```
 
-| Feature | Description | Scope |
-| --- | --- | --- |
-| PTO Auto Mode | BiSheng compiler support to automatically allocate tile buffers and insert synchronization. | Compiler / toolchain |
-| PTO Tile Fusion | BiSheng compiler support to fuse tile operations automatically. | Compiler / toolchain |
-| PTO-AS | Byte code support for PTO ISA. | Compiler / toolchain |
-| Convolution extension | PTO ISA support for convolution kernels. | ISA extension |
-| Collective communication extension | PTO ISA support for collective communication kernels. | ISA extension |
-| System schedule extension | PTO ISA support for SPMD/MPMD programming. | ISA extension |
+### Running Recommended Test Suites
+
+```bash
+# Execute the following commands from the project root directory:
+chmod +x ./tests/run_st.sh
+./tests/run_st.sh a5 npu simple
+./tests/run_st.sh a3 sim all
+```
+
+### Running CPU Simulation Tests
+
+```bash
+# Execute the following commands from the project root directory:
+chmod +x ./tests/run_cpu_tests.sh
+./tests/run_cpu_tests.sh
+
+python3 tests/run_cpu.py --verbose
+```
+
+## Build / Run Instructions
+
+### Configuring Environment Variables (Ascend CANN)
+
+For example, if you use the CANN community package and install to the default path:
+
+- Default path (installed as root)
+
+    ```bash
+    source /usr/local/Ascend/cann/bin/setenv.bash
+    ```
+
+- Default path (installed as a non-root user)
+    ```bash
+    source $HOME/Ascend/cann/bin/setenv.bash
+    ```
+
+If you install to `install-path`, use:
+
+```bash
+source ${install-path}/cann/bin/setenv.bash
+```
+
+### One-click Build and Run
+
+* Run Full ST Tests:
+
+  ```bash
+  chmod +x build.sh
+  ./build.sh --run_all --a3 --sim
+  ```
+* Run Simplified ST Tests:
+
+  ```bash
+  chmod +x build.sh
+  ./build.sh --run_simple --a5 --npu
+  ```
+* Packaging:
+
+  ```bash
+  chmod +x build.sh
+  ./build.sh --pkg
+  ```
+
+## Documentation
+
+* ISA Guide and Instruction Navigation: [docs/README.md](docs/README.md)
+* Agent Quick Context (repo map + run commands): [docs/agent.md](docs/agent.md)
+* ISA Instruction Documentation Index: [docs/isa/README.md](docs/isa/README.md)
+* Developer Coding Documentation Index: [docs/coding/README.md](docs/coding/README.md)
+* Getting Started Guide (recommended to run on CPU before moving to NPU): [docs/getting-started.md](docs/getting-started.md)
+* Security and Disclosure Process: [SECURITY.md](SECURITY.md)
+* Directory-level Reading (Code Organization):
+
+  * Build and Packaging (CMake): [cmake/README.md](cmake/README.md)
+  * External Header Files and APIs: [include/README.md](include/README.md), [include/pto/README.md](include/pto/README.md)
+  * NPU Implementation (Split by SoC): [include/pto/npu/README.md](include/pto/npu/README.md), [include/pto/npu/a2a3/README.md](include/pto/npu/a2a3/README.md), [include/pto/npu/a5/README.md](include/pto/npu/a5/README.md)
+  * Kernel/Custom Operators: [kernels/README.md](kernels/README.md), [kernels/custom/README.md](kernels/custom/README.md)
+  * Testing and Use Cases: [tests/README.md](tests/README.md), [tests/script/README.md](tests/script/README.md)
+  * Packaging Scripts: [scripts/README.md](scripts/README.md), [scripts/package/README.md](scripts/package/README.md)
 
 ## Repository Structure
 
-- `include/`: PTO C++ header files (see [include/README.md](include/README.md))
-- `PTOAS/`: PTO Assembler and MLIR dialect (submodule)
-- `PTODSL/`: Python DSL for kernel authoring (submodule)
-- `kernels/`: Custom operators and kernel implementations (see [kernels/README.md](kernels/README.md))
-- `docs/`: ISA instructions, API guidelines, and examples (see [docs/README.md](docs/README.md))
-- `docs/grammar/`: PTO-AS assembly language specification
-- `docs/bytecode/`: PTO-BC bytecode specification
-- `docs/coding/tutorials/`: Step-by-step tutorials
-- `tools/ptobc/`: PTO-BC encoder/decoder tool
-- `tools/scripts/`: Packaging and release scripts
-- `demos/`: Example kernels and demonstrations (see [demos/README.md](demos/README.md))
-- `tests/`: ST/CPU test scripts and use cases (see [tests/README.md](tests/README.md))
-- `build.sh`, `tests/run_st.sh`: Build, package, and run entry points
-
-## Contributing
-
-See: [CONTRIBUTING.md](CONTRIBUTING.md)
-
-## Security
-
-See: [SECURITY.md](SECURITY.md)
+* `include/`: PTO C++ header files (see [include/README.md](include/README.md))
+* `kernels/`: Custom operators and kernel implementations (see [kernels/README.md](kernels/README.md))
+* `docs/`: ISA instructions, API guidelines, and examples (see [docs/README.md](docs/README.md))
+* `tests/`: ST/CPU test scripts and use cases (see [tests/README.md](tests/README.md))
+* `scripts/`: Packaging and release scripts (see [scripts/README.md](scripts/README.md))
+* `build.sh`, `tests/run_st.sh`: Build, package, and example run entry points
 
 ## License
 
-This project is licensed under the CANN Open Software License Agreement Version 2.0. See the [LICENSE](LICENSE) file for details.
-
----
-
-<p align="center">
-  <strong>PTO Tile Library</strong> — Enabling high-performance tile operations across Ascend platforms
-</p>
+This project is licensed under the CANN Open Software License Agreement Version 2.0. See the `LICENSE` file for details.

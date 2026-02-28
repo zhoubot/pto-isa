@@ -12,11 +12,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <cstdint>
 #include <iostream>
 
+#include <pto/pto-inst.hpp>
 #include "pto/comm/pto_comm_inst.hpp"
 #include "pto/common/pto_tile.hpp"
 #include "../common.hpp"
-
-#include <pto/pto-inst.hpp>
 
 #define ENABLE_DEBUG_PRINT 1
 
@@ -24,7 +23,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 // 1D Vector Tile Test Kernel
 // ============================================================================
 template <typename T, size_t count>
-__global__ AICORE void TPutKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                      __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
@@ -32,14 +32,12 @@ __global__ AICORE void TPutKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *sh
     using StrideDyn = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using Global = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
 
-    // UB Tile definition: 1D Vector Tile
     using TileData = pto::Tile<pto::TileType::Vec, T, 1, count, pto::BLayout::RowMajor, -1, -1>;
 
     ShapeDyn shape(1, 1, 1, 1, count);
     StrideDyn stride(count, count, count, count, 1);
 
-    int my_rank = shmem_my_pe();
-    int next_rank = (my_rank + 1) % nranks;
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
@@ -47,58 +45,48 @@ __global__ AICORE void TPutKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *sh
     __gm__ T *send_shmem = (__gm__ T *)((__gm__ T *)shmem_data + 0);
     __gm__ T *recv_shmem = (__gm__ T *)((__gm__ T *)shmem_data + count);
 
-    Global srcG(src, shape, stride);
-    Global dstG(dst, shape, stride);
+    if (phase == 0) {
+        Global srcG(src, shape, stride);
+        Global sendG(send_shmem, shape, stride);
 
-    Global sendG(send_shmem, shape, stride);
-    Global recvG(recv_shmem, shape, stride);
+        TileData stagingTile(1, count);
+        TASSIGN(stagingTile, 0x0);
 
-    // Allocate UB tiles for data staging
-    TileData stagingTile(1, count);
-    TileData resultTile(1, count);
+        TLOAD(stagingTile, srcG);
+        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        TSTORE(sendG, stagingTile);
+        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
 
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, shape, stride);
 
-    // Load local data to UB, then store to local shared memory
-    TLOAD(stagingTile, srcG);
-    set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    TSTORE(sendG, stagingTile);
-    set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
+        pipe_barrier(PIPE_ALL);
+    } else {
+        Global dstG(dst, shape, stride);
+        Global recvG(recv_shmem, shape, stride);
 
-    // Get remote PE's recv buffer address
-    // This converts local symmetric heap offset to actual remote address mapping
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, shape, stride);
+        TileData resultTile(1, count);
+        TASSIGN(resultTile, 0x0);
 
-    // TPUT: write local sendG to remote recvG (previous rank's recv buffer)
-    // Returns RecordEvent for dependency tracking (can be ignored for simple cases)
-    pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
-
-    // Ensure all remote operations from this PE are complete
-    ShmemDeviceQuiet();
-    // Then synchronize all PEs
-    ShmemDeviceBarrierAll();
-
-    // Now recvG on my rank should have data from next rank
-    // Load from local recvG to UB, then store to local dstG
-    TLOAD(resultTile, recvG);
-    set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    TSTORE(dstG, resultTile);
-    set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        TLOAD(resultTile, recvG);
+        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        TSTORE(dstG, resultTile);
+        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+    }
 }
 
 template <typename T, size_t count>
-bool RunPutRingKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutRingKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -126,21 +114,25 @@ bool RunPutRingKernel(int rank_id, int n_ranks, int n_devices, int first_device_
 
     aclrtMemcpy(input_ptr, count * sizeof(T), input_host, count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    // Allocate symmetric heap memory for shared buffer (sync buffer + data buffer)
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    // Allocate window memory for shared buffer (sync buffer + data buffer)
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * count * sizeof(T));
 
-    // Barrier to ensure all ranks have initialized
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
-    TPutKernelImpl<T, count><<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
+    // Phase 0: copy src to window + TPUT to remote
+    TPutKernelImpl<T, count>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
+
+    // Barrier: wait for all ranks' TPUTs to land
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: read from local recv buffer to dst
+    TPutKernelImpl<T, count>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
-
-    // Barrier after kernel execution
-    ShmemBarrierAll();
 
     aclrtMemcpy(output_host, count * sizeof(T), output_ptr, count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -181,7 +173,6 @@ bool RunPutRingKernel(int rank_id, int n_ranks, int n_devices, int first_device_
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -189,9 +180,10 @@ bool RunPutRingKernel(int rank_id, int n_ranks, int n_devices, int first_device_
 template <typename T, size_t count>
 bool RunPutRing(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRingKernel<T, count>(rankId, n_ranks, n_devices, first_device_id, 1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunPutRingKernel<T, count>(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 // Explicit instantiations for 1D tests
@@ -204,7 +196,8 @@ template bool RunPutRing<uint8_t, 512>(int n_ranks, int n_devices, int first_ran
 // Multiple ranks perform atomic add to rank 0's remote buffer
 // ============================================================================
 template <typename T, size_t count>
-__global__ AICORE void TPutAtomicAddKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutAtomicAddKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                               __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     using ShapeDyn = pto::Shape<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using StrideDyn = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
@@ -215,48 +208,46 @@ __global__ AICORE void TPutAtomicAddKernelImpl(__gm__ T *dst, __gm__ T *src, __g
     ShapeDyn shape(1, 1, 1, 1, count);
     StrideDyn stride(count, count, count, count, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
     __gm__ T *recv_shmem = reinterpret_cast<__gm__ T *>(shmem_bytes + 64 * sizeof(int32_t));
 
-    Global srcG(src, shape, stride);
-    Global dstG(dst, shape, stride);
-    Global recvG(recv_shmem, shape, stride);
+    if (phase == 0) {
+        Global srcG(src, shape, stride);
 
-    TileData stagingTile(1, count);
-    TileData resultTile(1, count);
+        TileData stagingTile(1, count);
+        TASSIGN(stagingTile, 0x0);
 
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, 0);
+        Global remoteRecvG(remote_recv_shmem, shape, stride);
 
-    // recvG is zero-initialized from host side
-    ShmemDeviceBarrierAll();
+        pto::comm::TPUT<pto::AtomicType::AtomicAdd>(remoteRecvG, srcG, stagingTile);
 
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, 0);
-    Global remoteRecvG(remote_recv_shmem, shape, stride);
+        pipe_barrier(PIPE_ALL);
+    } else {
+        Global dstG(dst, shape, stride);
+        Global recvG(recv_shmem, shape, stride);
 
-    // AtomicAdd to rank 0's receive buffer
-    pto::comm::TPUT<pto::AtomicType::AtomicAdd>(remoteRecvG, srcG, stagingTile);
+        TileData resultTile(1, count);
+        TASSIGN(resultTile, 0x10000);
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
-
-    if (my_rank == 0) {
-        TLOAD(resultTile, recvG);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(dstG, resultTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        if (my_rank == 0) {
+            TLOAD(resultTile, recvG);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(dstG, resultTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
     }
 }
 
 template <typename T, size_t count>
-bool RunPutAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -283,23 +274,27 @@ bool RunPutAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_de
 
     aclrtMemcpy(input_ptr, count * sizeof(T), input_host, count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + count * sizeof(T));
 
     // Zero-initialize the recv buffer in shmem (only rank 0 needs this, but all do for simplicity)
     uint8_t *shmem_data = reinterpret_cast<uint8_t *>(shmem_ptr) + 64 * sizeof(int32_t);
     aclrtMemset(shmem_data, count * sizeof(T), 0, count * sizeof(T));
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: TPUT AtomicAdd to remote
     TPutAtomicAddKernelImpl<T, count>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: read from recv buffer
+    TPutAtomicAddKernelImpl<T, count>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     bool is_ok = true;
     if (rank_id == 0) {
@@ -339,7 +334,6 @@ bool RunPutAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_de
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -347,9 +341,10 @@ bool RunPutAtomicAddKernel(int rank_id, int n_ranks, int n_devices, int first_de
 template <typename T, size_t count>
 bool RunPutAtomicAdd(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutAtomicAddKernel<T, count>(rankId, n_ranks, n_devices, first_device_id, 1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunPutAtomicAddKernel<T, count>(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 // Explicit instantiations for AtomicAdd tests
@@ -361,7 +356,8 @@ template bool RunPutAtomicAdd<int32_t, 256>(int n_ranks, int n_devices, int firs
 // Uses Vec Tile because Mat Tile uses L1 cache which may not be supported
 // ============================================================================
 template <typename T, size_t rows, size_t cols>
-__global__ AICORE void TPutKernel2DImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutKernel2DImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                        __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
@@ -371,16 +367,12 @@ __global__ AICORE void TPutKernel2DImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *
     using StrideDyn = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using Global = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
 
-    // UB Tile definition: 2D Vec Tile (rows x cols) stored in Unified Buffer
-    // Note: TileType::Vec stores data in UB (__ubuf__), which is required for MTE transfer
-    //       TileType::Mat stores data in L1 cache (__cbuf__), which may not be supported
     using TileData = pto::Tile<pto::TileType::Vec, T, rows, cols, pto::BLayout::RowMajor, -1, -1>;
 
-    // 2D GlobalTensor shape: [1, 1, 1, rows, cols]
     ShapeDyn shape(1, 1, 1, rows, cols);
     StrideDyn stride(total_count, total_count, total_count, cols, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int next_rank = (my_rank + 1) % nranks;
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
@@ -389,59 +381,51 @@ __global__ AICORE void TPutKernel2DImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *
     __gm__ T *send_shmem = (__gm__ T *)((__gm__ T *)shmem_data + 0);
     __gm__ T *recv_shmem = (__gm__ T *)((__gm__ T *)shmem_data + total_count);
 
-    Global srcG(src, shape, stride);
-    Global dstG(dst, shape, stride);
+    if (phase == 0) {
+        Global srcG(src, shape, stride);
+        Global sendG(send_shmem, shape, stride);
 
-    Global sendG(send_shmem, shape, stride);
-    Global recvG(recv_shmem, shape, stride);
+        TileData stagingTile(rows, cols);
+        TASSIGN(stagingTile, 0x0);
 
-    // Allocate UB tiles for data staging - 2D Vec Tiles (rows x cols)
-    TileData stagingTile(rows, cols);
-    TileData resultTile(rows, cols);
+        TLOAD(stagingTile, srcG);
+        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        TSTORE(sendG, stagingTile);
+        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
 
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, shape, stride);
 
-    // Load local data to UB, then store to local shared memory
-    TLOAD(stagingTile, srcG);
-    set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    TSTORE(sendG, stagingTile);
-    set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
 
-    // Get remote PE's recv buffer address
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, shape, stride);
+        pipe_barrier(PIPE_ALL);
+    } else {
+        Global dstG(dst, shape, stride);
+        Global recvG(recv_shmem, shape, stride);
 
-    // TPUT: write local sendG to remote recvG (previous rank's recv buffer)
-    // Returns RecordEvent for dependency tracking (can be ignored for simple cases)
-    pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
+        TileData resultTile(rows, cols);
+        TASSIGN(resultTile, 0x0);
 
-    // Ensure all remote operations from this PE are complete
-    ShmemDeviceQuiet();
-    // Then synchronize all PEs
-    ShmemDeviceBarrierAll();
-
-    // Now recvG on my rank should have data from next rank
-    // Load from local recvG to UB, then store to local dstG
-    TLOAD(resultTile, recvG);
-    set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-    TSTORE(dstG, resultTile);
-    set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        TLOAD(resultTile, recvG);
+        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+        TSTORE(dstG, resultTile);
+        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+    }
 }
 
 template <typename T, size_t rows, size_t cols>
-bool RunPutRing2DKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutRing2DKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     constexpr size_t total_count = rows * cols;
 
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -472,22 +456,25 @@ bool RunPutRing2DKernel(int rank_id, int n_ranks, int n_devices, int first_devic
 
     aclrtMemcpy(input_ptr, total_count * sizeof(T), input_host, total_count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    // Allocate symmetric heap memory for shared buffer (sync buffer + data buffer)
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    // Allocate window memory for shared buffer (sync buffer + data buffer)
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
 
     // Barrier to ensure all ranks have initialized
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: copy src to send_shmem + TPUT to remote
     TPutKernel2DImpl<T, rows, cols>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    // Barrier after kernel execution
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: read recv_shmem to dst
+    TPutKernel2DImpl<T, rows, cols>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     aclrtMemcpy(output_host, total_count * sizeof(T), output_ptr, total_count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -532,7 +519,6 @@ bool RunPutRing2DKernel(int rank_id, int n_ranks, int n_devices, int first_devic
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -540,9 +526,10 @@ bool RunPutRing2DKernel(int rank_id, int n_ranks, int n_devices, int first_devic
 template <typename T, size_t rows, size_t cols>
 bool RunPutRing2D(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRing2DKernel<T, rows, cols>(rankId, n_ranks, n_devices, first_device_id, 1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunPutRing2DKernel<T, rows, cols>(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 // Explicit instantiations for 2D shape tests
@@ -557,7 +544,8 @@ template bool RunPutRing2D<int32_t, 4, 64>(int n_ranks, int n_devices, int first
 // where total_rows > tile_rows, triggering automatic chunking in TPUT_IMPL
 // ============================================================================
 template <typename T, size_t total_rows, size_t cols, size_t tile_rows>
-__global__ AICORE void TPutLargeShapeKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutLargeShapeKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                                __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
@@ -570,16 +558,14 @@ __global__ AICORE void TPutLargeShapeKernelImpl(__gm__ T *dst, __gm__ T *src, __
     using Global = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
     using TileData = pto::Tile<pto::TileType::Vec, T, tile_rows, cols, pto::BLayout::RowMajor, -1, -1>;
 
-    // Full shape for the large GlobalTensor
     ShapeDyn fullShape(1, 1, 1, total_rows, cols);
     StrideDyn fullStride(total_count, total_count, total_count, cols, 1);
 
-    // Chunk shape for manual TLOAD/TSTORE of setup/readback
     constexpr size_t chunk_count = tile_rows * cols;
     ShapeDyn chunkShape(1, 1, 1, tile_rows, cols);
     StrideDyn chunkStride(chunk_count, chunk_count, chunk_count, cols, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
@@ -587,56 +573,55 @@ __global__ AICORE void TPutLargeShapeKernelImpl(__gm__ T *dst, __gm__ T *src, __
     __gm__ T *send_shmem = shmem_data;
     __gm__ T *recv_shmem = shmem_data + total_count;
 
-    Global sendG(send_shmem, fullShape, fullStride);
-    Global recvG(recv_shmem, fullShape, fullStride);
+    if (phase == 0) {
+        Global sendG(send_shmem, fullShape, fullStride);
 
-    TileData stagingTile(tile_rows, cols);
-    TileData resultTile(tile_rows, cols);
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        TileData stagingTile(tile_rows, cols);
+        TASSIGN(stagingTile, 0x0);
 
-    // Setup: copy src → send_shmem (manually chunked since src is larger than tile)
-    for (size_t off = 0; off < total_count; off += chunk_count) {
-        Global srcChunk(src + off, chunkShape, chunkStride);
-        Global sendChunk(send_shmem + off, chunkShape, chunkStride);
-        TLOAD(stagingTile, srcChunk);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(sendChunk, stagingTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    }
+        for (size_t off = 0; off < total_count; off += chunk_count) {
+            Global srcChunk(src + off, chunkShape, chunkStride);
+            Global sendChunk(send_shmem + off, chunkShape, chunkStride);
+            TLOAD(stagingTile, srcChunk);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(sendChunk, stagingTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
 
-    // TPUT: send_shmem → remote recv_shmem (automatically chunked by TPUT_IMPL)
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
-    pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
+        pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
+    } else {
+        TileData resultTile(tile_rows, cols);
+        TASSIGN(resultTile, 0x0);
 
-    // Readback: recv_shmem → dst (manually chunked)
-    for (size_t off = 0; off < total_count; off += chunk_count) {
-        Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
-        Global dstChunk(dst + off, chunkShape, chunkStride);
-        TLOAD(resultTile, recvChunk);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(dstChunk, resultTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        for (size_t off = 0; off < total_count; off += chunk_count) {
+            Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
+            Global dstChunk(dst + off, chunkShape, chunkStride);
+            TLOAD(resultTile, recvChunk);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(dstChunk, resultTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
     }
 }
 
 template <typename T, size_t total_rows, size_t cols, size_t tile_rows>
-bool RunPutRingLargeShapeKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutRingLargeShapeKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                                const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     constexpr size_t total_count = total_rows * cols;
 
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -662,19 +647,23 @@ bool RunPutRingLargeShapeKernel(int rank_id, int n_ranks, int n_devices, int fir
 
     aclrtMemcpy(input_ptr, total_count * sizeof(T), input_host, total_count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: setup copy + TPUT
     TPutLargeShapeKernelImpl<T, total_rows, cols, tile_rows>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: readback from recv to dst
+    TPutLargeShapeKernelImpl<T, total_rows, cols, tile_rows>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     aclrtMemcpy(output_host, total_count * sizeof(T), output_ptr, total_count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -716,7 +705,6 @@ bool RunPutRingLargeShapeKernel(int rank_id, int n_ranks, int n_devices, int fir
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -724,10 +712,11 @@ bool RunPutRingLargeShapeKernel(int rank_id, int n_ranks, int n_devices, int fir
 template <typename T, size_t total_rows, size_t cols, size_t tile_rows>
 bool RunPutRingLargeShape(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRingLargeShapeKernel<T, total_rows, cols, tile_rows>(rankId, n_ranks, n_devices, first_device_id,
-                                                                          1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(n_ranks, first_rank_id, first_device_id,
+                                      [&](int rankId, const HcclRootInfo *rootInfo) {
+                                          return RunPutRingLargeShapeKernel<T, total_rows, cols, tile_rows>(
+                                              rankId, n_ranks, n_devices, first_device_id, rootInfo);
+                                      });
 }
 
 // Explicit instantiations for large shape tests
@@ -760,7 +749,8 @@ template bool RunPutRingLargeShape<int32_t, 4096, 64, 128>(int n_ranks, int n_de
 // TPUT_IMPL iterates outer dims (d0 x d1 x d2) and chunks d3 by tile_rows
 // ============================================================================
 template <typename T, size_t d0, size_t d1, size_t d2, size_t d3, size_t cols, size_t tile_rows>
-__global__ AICORE void TPutMultiDimKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutMultiDimKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                              __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
@@ -773,7 +763,6 @@ __global__ AICORE void TPutMultiDimKernelImpl(__gm__ T *dst, __gm__ T *src, __gm
     using Global = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
     using TileData = pto::Tile<pto::TileType::Vec, T, tile_rows, cols, pto::BLayout::RowMajor, -1, -1>;
 
-    // ND strides for contiguous row-major
     constexpr size_t s4 = 1;
     constexpr size_t s3 = cols;
     constexpr size_t s2 = d3 * cols;
@@ -783,12 +772,11 @@ __global__ AICORE void TPutMultiDimKernelImpl(__gm__ T *dst, __gm__ T *src, __gm
     ShapeDyn fullShape(d0, d1, d2, d3, cols);
     StrideDyn fullStride(s0, s1, s2, s3, s4);
 
-    // Chunk shape for manual TLOAD/TSTORE of setup/readback
     constexpr size_t chunk_count = tile_rows * cols;
     ShapeDyn chunkShape(1, 1, 1, tile_rows, cols);
     StrideDyn chunkStride(chunk_count, chunk_count, chunk_count, cols, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
@@ -796,57 +784,55 @@ __global__ AICORE void TPutMultiDimKernelImpl(__gm__ T *dst, __gm__ T *src, __gm
     __gm__ T *send_shmem = shmem_data;
     __gm__ T *recv_shmem = shmem_data + total_count;
 
-    Global sendG(send_shmem, fullShape, fullStride);
-    Global recvG(recv_shmem, fullShape, fullStride);
+    if (phase == 0) {
+        Global sendG(send_shmem, fullShape, fullStride);
 
-    TileData stagingTile(tile_rows, cols);
-    TileData resultTile(tile_rows, cols);
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        TileData stagingTile(tile_rows, cols);
+        TASSIGN(stagingTile, 0x0);
 
-    // Setup: copy src → send_shmem (flat chunked iteration over contiguous data)
-    for (size_t off = 0; off < total_count; off += chunk_count) {
-        Global srcChunk(src + off, chunkShape, chunkStride);
-        Global sendChunk(send_shmem + off, chunkShape, chunkStride);
-        TLOAD(stagingTile, srcChunk);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(sendChunk, stagingTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    }
+        for (size_t off = 0; off < total_count; off += chunk_count) {
+            Global srcChunk(src + off, chunkShape, chunkStride);
+            Global sendChunk(send_shmem + off, chunkShape, chunkStride);
+            TLOAD(stagingTile, srcChunk);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(sendChunk, stagingTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
 
-    // TPUT: send_shmem → remote recv_shmem (automatically chunked by TPUT_IMPL)
-    // TPUT_IMPL iterates outer dims (d0 x d1 x d2) and chunks d3 by tile_rows
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
-    pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
+        pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
+    } else {
+        TileData resultTile(tile_rows, cols);
+        TASSIGN(resultTile, 0x0);
 
-    // Readback: recv_shmem → dst (flat chunked iteration)
-    for (size_t off = 0; off < total_count; off += chunk_count) {
-        Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
-        Global dstChunk(dst + off, chunkShape, chunkStride);
-        TLOAD(resultTile, recvChunk);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(dstChunk, resultTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        for (size_t off = 0; off < total_count; off += chunk_count) {
+            Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
+            Global dstChunk(dst + off, chunkShape, chunkStride);
+            TLOAD(resultTile, recvChunk);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(dstChunk, resultTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
     }
 }
 
 template <typename T, size_t d0, size_t d1, size_t d2, size_t d3, size_t cols, size_t tile_rows>
-bool RunPutRingMultiDimKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutRingMultiDimKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                              const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     constexpr size_t total_count = d0 * d1 * d2 * d3 * cols;
 
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -872,19 +858,23 @@ bool RunPutRingMultiDimKernel(int rank_id, int n_ranks, int n_devices, int first
 
     aclrtMemcpy(input_ptr, total_count * sizeof(T), input_host, total_count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: setup copy + TPUT
     TPutMultiDimKernelImpl<T, d0, d1, d2, d3, cols, tile_rows>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: readback from recv to dst
+    TPutMultiDimKernelImpl<T, d0, d1, d2, d3, cols, tile_rows>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     aclrtMemcpy(output_host, total_count * sizeof(T), output_ptr, total_count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -925,7 +915,6 @@ bool RunPutRingMultiDimKernel(int rank_id, int n_ranks, int n_devices, int first
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -933,10 +922,11 @@ bool RunPutRingMultiDimKernel(int rank_id, int n_ranks, int n_devices, int first
 template <typename T, size_t d0, size_t d1, size_t d2, size_t d3, size_t cols, size_t tile_rows>
 bool RunPutRingMultiDim(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRingMultiDimKernel<T, d0, d1, d2, d3, cols, tile_rows>(rankId, n_ranks, n_devices, first_device_id,
-                                                                            1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(n_ranks, first_rank_id, first_device_id,
+                                      [&](int rankId, const HcclRootInfo *rootInfo) {
+                                          return RunPutRingMultiDimKernel<T, d0, d1, d2, d3, cols, tile_rows>(
+                                              rankId, n_ranks, n_devices, first_device_id, rootInfo);
+                                      });
 }
 
 // Explicit instantiations for multi-dim tests
@@ -954,25 +944,23 @@ template bool RunPutRingMultiDim<int32_t, 4, 1, 1, 32, 64, 16>(int n_ranks, int 
 // The setup/readback loops also handle partial last chunks explicitly.
 // ============================================================================
 template <typename T, size_t total_rows, size_t cols, size_t tile_rows>
-__global__ AICORE void TPutIrregularShapeKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutIrregularShapeKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                                    __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
     constexpr size_t total_count = total_rows * cols;
     static_assert(total_rows > tile_rows, "total_rows must exceed tile_rows to test chunking");
-    // Note: total_rows % tile_rows may NOT be 0 — this is intentional for testing partial chunks!
 
     using ShapeDyn = pto::Shape<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using StrideDyn = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using Global = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
-    // Tile with DYNAMIC ValidRow (-1) to support partial last chunks
     using TileData = pto::Tile<pto::TileType::Vec, T, tile_rows, cols, pto::BLayout::RowMajor, -1, -1>;
 
-    // Full shape for the large GlobalTensor
     ShapeDyn fullShape(1, 1, 1, total_rows, cols);
     StrideDyn fullStride(total_count, total_count, total_count, cols, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
@@ -980,78 +968,73 @@ __global__ AICORE void TPutIrregularShapeKernelImpl(__gm__ T *dst, __gm__ T *src
     __gm__ T *send_shmem = shmem_data;
     __gm__ T *recv_shmem = shmem_data + total_count;
 
-    Global sendG(send_shmem, fullShape, fullStride);
-    Global recvG(recv_shmem, fullShape, fullStride);
+    if (phase == 0) {
+        Global sendG(send_shmem, fullShape, fullStride);
 
-    TileData stagingTile(tile_rows, cols);
-    TileData resultTile(tile_rows, cols);
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        TileData stagingTile(tile_rows, cols);
+        TASSIGN(stagingTile, 0x0);
 
-    // Setup: copy src → send_shmem (manually chunked with partial last chunk support)
-    for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
-        size_t currentRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
-        size_t off = rowOff * cols;
+        for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
+            size_t currentRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
+            size_t off = rowOff * cols;
 
-        // Dynamically adjust tile valid row for this chunk
-        stagingTile.RowMaskInternal = currentRows;
+            stagingTile.RowMaskInternal = currentRows;
 
-        ShapeDyn chunkShape(1, 1, 1, currentRows, cols);
-        StrideDyn chunkStride(currentRows * cols, currentRows * cols, currentRows * cols, cols, 1);
+            ShapeDyn chunkShape(1, 1, 1, currentRows, cols);
+            StrideDyn chunkStride(currentRows * cols, currentRows * cols, currentRows * cols, cols, 1);
 
-        Global srcChunk(src + off, chunkShape, chunkStride);
-        Global sendChunk(send_shmem + off, chunkShape, chunkStride);
-        TLOAD(stagingTile, srcChunk);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(sendChunk, stagingTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-    }
+            Global srcChunk(src + off, chunkShape, chunkStride);
+            Global sendChunk(send_shmem + off, chunkShape, chunkStride);
+            TLOAD(stagingTile, srcChunk);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(sendChunk, stagingTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
 
-    // Reset tile valid row before TPUT (TPUT_IMPL reads initial tileValidRow to determine chunk size)
-    stagingTile.RowMaskInternal = tile_rows;
+        stagingTile.RowMaskInternal = tile_rows;
 
-    // TPUT: send_shmem → remote recv_shmem (automatically chunked by TPUT_IMPL)
-    // TPUT_IMPL handles partial last chunk internally via DYNAMIC ValidRow
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
-    pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
+        pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
+    } else {
+        TileData resultTile(tile_rows, cols);
+        TASSIGN(resultTile, 0x0);
 
-    // Readback: recv_shmem → dst (manually chunked with partial last chunk support)
-    for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
-        size_t currentRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
-        size_t off = rowOff * cols;
+        for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
+            size_t currentRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
+            size_t off = rowOff * cols;
 
-        resultTile.RowMaskInternal = currentRows;
+            resultTile.RowMaskInternal = currentRows;
 
-        ShapeDyn chunkShape(1, 1, 1, currentRows, cols);
-        StrideDyn chunkStride(currentRows * cols, currentRows * cols, currentRows * cols, cols, 1);
+            ShapeDyn chunkShape(1, 1, 1, currentRows, cols);
+            StrideDyn chunkStride(currentRows * cols, currentRows * cols, currentRows * cols, cols, 1);
 
-        Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
-        Global dstChunk(dst + off, chunkShape, chunkStride);
-        TLOAD(resultTile, recvChunk);
-        set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-        TSTORE(dstChunk, resultTile);
-        set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-        wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
+            Global dstChunk(dst + off, chunkShape, chunkStride);
+            TLOAD(resultTile, recvChunk);
+            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+            TSTORE(dstChunk, resultTile);
+            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+        }
     }
 }
 
 template <typename T, size_t total_rows, size_t cols, size_t tile_rows>
 bool RunPutRingIrregularShapeKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
-                                    uint64_t local_mem_size)
+                                    const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     constexpr size_t total_count = total_rows * cols;
 
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -1077,19 +1060,23 @@ bool RunPutRingIrregularShapeKernel(int rank_id, int n_ranks, int n_devices, int
 
     aclrtMemcpy(input_ptr, total_count * sizeof(T), input_host, total_count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: setup copy + TPUT
     TPutIrregularShapeKernelImpl<T, total_rows, cols, tile_rows>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: readback from recv to dst
+    TPutIrregularShapeKernelImpl<T, total_rows, cols, tile_rows>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     aclrtMemcpy(output_host, total_count * sizeof(T), output_ptr, total_count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -1138,7 +1125,6 @@ bool RunPutRingIrregularShapeKernel(int rank_id, int n_ranks, int n_devices, int
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -1146,10 +1132,11 @@ bool RunPutRingIrregularShapeKernel(int rank_id, int n_ranks, int n_devices, int
 template <typename T, size_t total_rows, size_t cols, size_t tile_rows>
 bool RunPutRingIrregularShape(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRingIrregularShapeKernel<T, total_rows, cols, tile_rows>(rankId, n_ranks, n_devices,
-                                                                              first_device_id, 1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(n_ranks, first_rank_id, first_device_id,
+                                      [&](int rankId, const HcclRootInfo *rootInfo) {
+                                          return RunPutRingIrregularShapeKernel<T, total_rows, cols, tile_rows>(
+                                              rankId, n_ranks, n_devices, first_device_id, rootInfo);
+                                      });
 }
 
 // Explicit instantiations for irregular shape tests
@@ -1173,7 +1160,8 @@ template bool RunPutRingIrregularShape<float, 4095, 32, 128>(int n_ranks, int n_
 //   TPUT_IMPL automatically does 2D sliding over (total_rows × total_cols).
 // ============================================================================
 template <typename T, size_t total_rows, size_t total_cols, size_t tile_rows, size_t tile_cols>
-__global__ AICORE void TPut2DSlidingKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPut2DSlidingKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                               __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
@@ -1184,13 +1172,12 @@ __global__ AICORE void TPut2DSlidingKernelImpl(__gm__ T *dst, __gm__ T *src, __g
     using ShapeDyn = pto::Shape<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using StrideDyn = pto::Stride<pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC, pto::DYNAMIC>;
     using Global = pto::GlobalTensor<T, ShapeDyn, StrideDyn, pto::Layout::ND>;
-    // Tile with DYNAMIC ValidRow and DYNAMIC ValidCol for partial chunk support
     using TileData = pto::Tile<pto::TileType::Vec, T, tile_rows, tile_cols, pto::BLayout::RowMajor, -1, -1>;
 
     ShapeDyn fullShape(1, 1, 1, total_rows, total_cols);
     StrideDyn fullStride(total_count, total_count, total_count, total_cols, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
@@ -1198,84 +1185,82 @@ __global__ AICORE void TPut2DSlidingKernelImpl(__gm__ T *dst, __gm__ T *src, __g
     __gm__ T *send_shmem = shmem_data;
     __gm__ T *recv_shmem = shmem_data + total_count;
 
-    Global sendG(send_shmem, fullShape, fullStride);
-    Global recvG(recv_shmem, fullShape, fullStride);
+    if (phase == 0) {
+        Global sendG(send_shmem, fullShape, fullStride);
 
-    TileData stagingTile(tile_rows, tile_cols);
-    TileData resultTile(tile_rows, tile_cols);
-    TASSIGN(stagingTile, 0x0);
-    TASSIGN(resultTile, 0x10000);
+        TileData stagingTile(tile_rows, tile_cols);
+        TASSIGN(stagingTile, 0x0);
 
-    // Setup: 2D chunked copy src → send_shmem
-    for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
-        size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
-        stagingTile.RowMaskInternal = curRows;
+        for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
+            size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
+            stagingTile.RowMaskInternal = curRows;
 
-        for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
-            size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
-            stagingTile.ColMaskInternal = curCols;
+            for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
+                size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
+                stagingTile.ColMaskInternal = curCols;
 
-            size_t off = rowOff * total_cols + colOff;
-            ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
-            StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
+                size_t off = rowOff * total_cols + colOff;
+                ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
+                StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
 
-            Global srcChunk(src + off, chunkShape, chunkStride);
-            Global sendChunk(send_shmem + off, chunkShape, chunkStride);
-            TLOAD(stagingTile, srcChunk);
-            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            TSTORE(sendChunk, stagingTile);
-            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                Global srcChunk(src + off, chunkShape, chunkStride);
+                Global sendChunk(send_shmem + off, chunkShape, chunkStride);
+                TLOAD(stagingTile, srcChunk);
+                set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                TSTORE(sendChunk, stagingTile);
+                set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            }
         }
-    }
 
-    // Reset tile valid dims before TPUT (TPUT_IMPL reads initial values)
-    stagingTile.RowMaskInternal = tile_rows;
-    stagingTile.ColMaskInternal = tile_cols;
+        stagingTile.RowMaskInternal = tile_rows;
+        stagingTile.ColMaskInternal = tile_cols;
 
-    // TPUT: send_shmem → remote recv_shmem (auto 2D sliding by TPUT_IMPL)
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
-    pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
+        pto::comm::TPUT(remoteRecvG, sendG, stagingTile);
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
+    } else {
+        TileData resultTile(tile_rows, tile_cols);
+        TASSIGN(resultTile, 0x0);
 
-    // Readback: 2D chunked copy recv_shmem → dst
-    for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
-        size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
-        resultTile.RowMaskInternal = curRows;
+        for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
+            size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
+            resultTile.RowMaskInternal = curRows;
 
-        for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
-            size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
-            resultTile.ColMaskInternal = curCols;
+            for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
+                size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
+                resultTile.ColMaskInternal = curCols;
 
-            size_t off = rowOff * total_cols + colOff;
-            ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
-            StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
+                size_t off = rowOff * total_cols + colOff;
+                ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
+                StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
 
-            Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
-            Global dstChunk(dst + off, chunkShape, chunkStride);
-            TLOAD(resultTile, recvChunk);
-            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            TSTORE(dstChunk, resultTile);
-            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
+                Global dstChunk(dst + off, chunkShape, chunkStride);
+                TLOAD(resultTile, recvChunk);
+                set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                TSTORE(dstChunk, resultTile);
+                set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            }
         }
     }
 }
 
 template <typename T, size_t total_rows, size_t total_cols, size_t tile_rows, size_t tile_cols>
-bool RunPutRing2DSlidingKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutRing2DSlidingKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                               const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     constexpr size_t total_count = total_rows * total_cols;
 
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -1301,19 +1286,23 @@ bool RunPutRing2DSlidingKernel(int rank_id, int n_ranks, int n_devices, int firs
 
     aclrtMemcpy(input_ptr, total_count * sizeof(T), input_host, total_count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: 2D chunked copy + TPUT
     TPut2DSlidingKernelImpl<T, total_rows, total_cols, tile_rows, tile_cols>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: readback recv_shmem to dst
+    TPut2DSlidingKernelImpl<T, total_rows, total_cols, tile_rows, tile_cols>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     aclrtMemcpy(output_host, total_count * sizeof(T), output_ptr, total_count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -1364,7 +1353,6 @@ bool RunPutRing2DSlidingKernel(int rank_id, int n_ranks, int n_devices, int firs
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -1372,10 +1360,11 @@ bool RunPutRing2DSlidingKernel(int rank_id, int n_ranks, int n_devices, int firs
 template <typename T, size_t total_rows, size_t total_cols, size_t tile_rows, size_t tile_cols>
 bool RunPutRing2DSliding(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRing2DSlidingKernel<T, total_rows, total_cols, tile_rows, tile_cols>(
-            rankId, n_ranks, n_devices, first_device_id, 1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunPutRing2DSlidingKernel<T, total_rows, total_cols, tile_rows, tile_cols>(
+                rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 // Explicit instantiations for 2D sliding tests
@@ -1409,7 +1398,8 @@ template bool RunPutRing2DSliding<float, 65, 104, 16, 32>(int n_ranks, int n_dev
 //   Tile physical dims: (tile_rows, tile_cols), DYNAMIC ValidRow/ValidCol
 // ============================================================================
 template <typename T, size_t total_rows, size_t total_cols, size_t tile_rows, size_t tile_cols>
-__global__ AICORE void TPutPingPongKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks)
+__global__ AICORE void TPutPingPongKernelImpl(__gm__ T *dst, __gm__ T *src, __gm__ T *shmem, int nranks,
+                                              __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
     if (nranks <= 0)
         return;
@@ -1425,7 +1415,7 @@ __global__ AICORE void TPutPingPongKernelImpl(__gm__ T *dst, __gm__ T *src, __gm
     ShapeDyn fullShape(1, 1, 1, total_rows, total_cols);
     StrideDyn fullStride(total_count, total_count, total_count, total_cols, 1);
 
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
     int prev_rank = (my_rank + nranks - 1) % nranks;
 
     __gm__ uint8_t *shmem_bytes = reinterpret_cast<__gm__ uint8_t *>(shmem);
@@ -1433,92 +1423,88 @@ __global__ AICORE void TPutPingPongKernelImpl(__gm__ T *dst, __gm__ T *src, __gm
     __gm__ T *send_shmem = shmem_data;
     __gm__ T *recv_shmem = shmem_data + total_count;
 
-    Global sendG(send_shmem, fullShape, fullStride);
-    Global recvG(recv_shmem, fullShape, fullStride);
-
-    // Allocate two ping-pong staging tiles + one result tile for readback
-    // Each tile must occupy a separate UB region; compute offset from physical tile size
     constexpr size_t tileUBBytes = ((tile_rows * tile_cols * sizeof(T) + 1023) / 1024) * 1024;
-    TileData pingTile(tile_rows, tile_cols);
-    TileData pongTile(tile_rows, tile_cols);
-    TileData resultTile(tile_rows, tile_cols);
-    TASSIGN(pingTile, 0x0);
-    TASSIGN(pongTile, tileUBBytes);
-    TASSIGN(resultTile, 2 * tileUBBytes);
 
-    // Setup: 2D chunked copy src → send_shmem (using single tile, no ping-pong needed)
-    for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
-        size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
-        pingTile.RowMaskInternal = curRows;
+    if (phase == 0) {
+        Global sendG(send_shmem, fullShape, fullStride);
 
-        for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
-            size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
-            pingTile.ColMaskInternal = curCols;
+        TileData pingTile(tile_rows, tile_cols);
+        TileData pongTile(tile_rows, tile_cols);
+        TASSIGN(pingTile, 0x0);
+        TASSIGN(pongTile, tileUBBytes);
 
-            size_t off = rowOff * total_cols + colOff;
-            ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
-            StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
+        for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
+            size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
+            pingTile.RowMaskInternal = curRows;
 
-            Global srcChunk(src + off, chunkShape, chunkStride);
-            Global sendChunk(send_shmem + off, chunkShape, chunkStride);
-            TLOAD(pingTile, srcChunk);
-            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            TSTORE(sendChunk, pingTile);
-            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
+                size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
+                pingTile.ColMaskInternal = curCols;
+
+                size_t off = rowOff * total_cols + colOff;
+                ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
+                StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
+
+                Global srcChunk(src + off, chunkShape, chunkStride);
+                Global sendChunk(send_shmem + off, chunkShape, chunkStride);
+                TLOAD(pingTile, srcChunk);
+                set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                TSTORE(sendChunk, pingTile);
+                set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            }
         }
-    }
 
-    // Reset tile valid dims before TPUT
-    pingTile.RowMaskInternal = tile_rows;
-    pingTile.ColMaskInternal = tile_cols;
-    pongTile.RowMaskInternal = tile_rows;
-    pongTile.ColMaskInternal = tile_cols;
+        pingTile.RowMaskInternal = tile_rows;
+        pingTile.ColMaskInternal = tile_cols;
+        pongTile.RowMaskInternal = tile_rows;
+        pongTile.ColMaskInternal = tile_cols;
 
-    // TPUT with ping-pong: send_shmem → remote recv_shmem
-    // Uses the 4-parameter overload: TPUT(dst, src, pingTile, pongTile)
-    __gm__ T *remote_recv_shmem = ShmemPtr(recv_shmem, prev_rank);
-    Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
-    pto::comm::TPUT(remoteRecvG, sendG, pingTile, pongTile);
+        __gm__ T *remote_recv_shmem = HcclRemotePtr(hcclCtx, recv_shmem, prev_rank);
+        Global remoteRecvG(remote_recv_shmem, fullShape, fullStride);
+        pto::comm::TPUT(remoteRecvG, sendG, pingTile, pongTile);
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
+    } else {
+        TileData resultTile(tile_rows, tile_cols);
+        TASSIGN(resultTile, 2 * tileUBBytes);
 
-    // Readback: 2D chunked copy recv_shmem → dst (single tile)
-    for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
-        size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
-        resultTile.RowMaskInternal = curRows;
+        for (size_t rowOff = 0; rowOff < total_rows; rowOff += tile_rows) {
+            size_t curRows = (rowOff + tile_rows <= total_rows) ? tile_rows : (total_rows - rowOff);
+            resultTile.RowMaskInternal = curRows;
 
-        for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
-            size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
-            resultTile.ColMaskInternal = curCols;
+            for (size_t colOff = 0; colOff < total_cols; colOff += tile_cols) {
+                size_t curCols = (colOff + tile_cols <= total_cols) ? tile_cols : (total_cols - colOff);
+                resultTile.ColMaskInternal = curCols;
 
-            size_t off = rowOff * total_cols + colOff;
-            ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
-            StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
+                size_t off = rowOff * total_cols + colOff;
+                ShapeDyn chunkShape(1, 1, 1, curRows, curCols);
+                StrideDyn chunkStride(total_count, total_count, total_count, total_cols, 1);
 
-            Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
-            Global dstChunk(dst + off, chunkShape, chunkStride);
-            TLOAD(resultTile, recvChunk);
-            set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
-            TSTORE(dstChunk, resultTile);
-            set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
-            wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                Global recvChunk(recv_shmem + off, chunkShape, chunkStride);
+                Global dstChunk(dst + off, chunkShape, chunkStride);
+                TLOAD(resultTile, recvChunk);
+                set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                wait_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
+                TSTORE(dstChunk, resultTile);
+                set_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+                wait_flag(PIPE_MTE3, PIPE_MTE2, EVENT_ID0);
+            }
         }
     }
 }
 
 template <typename T, size_t total_rows, size_t total_cols, size_t tile_rows, size_t tile_cols>
-bool RunPutRingPingPongKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, uint64_t local_mem_size)
+bool RunPutRingPingPongKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                              const HcclRootInfo *rootInfo)
 {
     if (n_ranks <= 0)
         return false;
     constexpr size_t total_count = total_rows * total_cols;
 
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8769", local_mem_size))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
     void *input_ptr = nullptr;
@@ -1544,19 +1530,23 @@ bool RunPutRingPingPongKernel(int rank_id, int n_ranks, int n_devices, int first
 
     aclrtMemcpy(input_ptr, total_count * sizeof(T), input_host, total_count * sizeof(T), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    void *shmem_ptr = ShmemMalloc(64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
-    if (shmem_ptr == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+    void *shmem_ptr = WindowAlloc(localWinBase, winOffset, 64 * sizeof(int32_t) + 4 * total_count * sizeof(T));
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
+    // Phase 0: 2D chunked copy + ping-pong TPUT
     TPutPingPongKernelImpl<T, total_rows, total_cols, tile_rows, tile_cols>
-        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 0);
+    aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
+
+    // Phase 1: readback recv_shmem to dst
+    TPutPingPongKernelImpl<T, total_rows, total_cols, tile_rows, tile_cols>
+        <<<1, nullptr, ctx.stream>>>((T *)output_ptr, (T *)input_ptr, (T *)shmem_ptr, n_ranks, ctx.deviceCtx, 1);
+    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
     aclrtMemcpy(output_host, total_count * sizeof(T), output_ptr, total_count * sizeof(T), ACL_MEMCPY_DEVICE_TO_HOST);
 
@@ -1602,7 +1592,6 @@ bool RunPutRingPingPongKernel(int rank_id, int n_ranks, int n_devices, int first
     ctx.aclStatus |= aclrtFreeHost(output_host);
     ctx.aclStatus |= aclrtFree(input_ptr);
     ctx.aclStatus |= aclrtFree(output_ptr);
-    ShmemFree(shmem_ptr);
 
     return ctx.Finalize() && is_ok;
 }
@@ -1610,10 +1599,11 @@ bool RunPutRingPingPongKernel(int rank_id, int n_ranks, int n_devices, int first
 template <typename T, size_t total_rows, size_t total_cols, size_t tile_rows, size_t tile_cols>
 bool RunPutRingPingPong(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunPutRingPingPongKernel<T, total_rows, total_cols, tile_rows, tile_cols>(
-            rankId, n_ranks, n_devices, first_device_id, 1024ULL * 1024 * 1024);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunPutRingPingPongKernel<T, total_rows, total_cols, tile_rows, tile_cols>(rankId, n_ranks, n_devices,
+                                                                                             first_device_id, rootInfo);
+        });
 }
 
 // Explicit instantiations for ping-pong tests

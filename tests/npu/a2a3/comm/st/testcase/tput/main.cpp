@@ -8,7 +8,7 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
-// 验证通过 PTO TPut（Shmem 后端）进行环形互传：从前一 rank 拉取数据
+// 验证通过 PTO TPut（HCCL 后端）进行环形互传：从前一 rank 拉取数据
 #include <cstddef>
 #include <cstdint>
 #include <gtest/gtest.h>

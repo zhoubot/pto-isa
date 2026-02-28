@@ -21,6 +21,8 @@ namespace pto {
 template <typename TileDataOut, typename TileDataIn>
 PTO_INTERNAL void TRowExpandCheck(unsigned srcValidRow, unsigned srcValidCol, unsigned dstValidRow)
 {
+    static_assert(TileDataIn::ValidCol == 1 || TileDataIn::ValidCol == -1,
+                  "Fix: TROWEXPAND Src ValidCol must be 1 or -1");
     static_assert((sizeof(typename TileDataIn::DType) == 1) || (sizeof(typename TileDataIn::DType) == 2) ||
                       (sizeof(typename TileDataIn::DType) == 4),
                   "Fix: TROWEXPAND data type must be b8/b16/b32");
@@ -179,12 +181,50 @@ __tf__ PTO_INTERNAL OP_NAME(TROWEXPAND)
 }
 
 template <typename TileDataOut, typename TileDataIn>
+__tf__ PTO_INTERNAL void TRowExpand_ColMajor(typename TileDataOut::TileDType __out__ dst,
+                                             typename TileDataIn::TileDType __in__ src, unsigned dstValidRow,
+                                             unsigned dstValidCol)
+{
+    using T = typename TileDataOut::DType;
+    __ubuf__ T *dstPtr = (__ubuf__ T *)__cce_get_tile_ptr(dst);
+    __ubuf__ T *srcPtr = (__ubuf__ T *)__cce_get_tile_ptr(src);
+    constexpr unsigned elementsPerRepeat = REPEAT_BYTE / sizeof(T);
+    uint16_t repeatTimes = CeilDivision(dstValidCol, elementsPerRepeat);
+    constexpr unsigned srcRowStride = TileDataIn::Cols;
+    constexpr unsigned dstRowStride = TileDataOut::RowStride;
+    __VEC_SCOPE__
+    {
+        RegTensor<T> vreg1;
+        RegTensor<T> vreg_uld;
+        MaskReg preg;
+        vector_bool preg_b8_all = pset_b8(PAT_ALL);
+        vector_align ureg_1;
+        constexpr auto distValue =
+            std::integral_constant<::DistVST, static_cast<::DistVST>(GetDistVst<T, DistVST::DIST_NORM>())>();
+        for (uint16_t i = 0; i < (uint16_t)(dstValidRow); ++i) {
+            vldas(ureg_1, (__ubuf__ T *)(srcPtr + i * srcRowStride));
+            vldus(vreg_uld, ureg_1, (__ubuf__ T *)(srcPtr + i * srcRowStride));
+            vdup(vreg1, vreg_uld, preg_b8_all, POS_LOWEST, MODE_ZEROING);
+            uint32_t sreg = (uint32_t)(dstValidCol);
+            for (uint16_t j = 0; j < (uint16_t)repeatTimes; ++j) {
+                preg = CreatePredicate<T>(sreg);
+                vsts(vreg1, dstPtr, i * dstRowStride + j * elementsPerRepeat, distValue, preg);
+            }
+        }
+    }
+}
+
+template <typename TileDataOut, typename TileDataIn>
 PTO_INTERNAL void TROWEXPAND_IMPL(TileDataOut &dst, TileDataIn &src)
 {
     unsigned dstValidRow = dst.GetValidRow();
     unsigned dstValidCol = dst.GetValidCol();
     TRowExpandCheck<TileDataOut, TileDataIn>(src.GetValidRow(), src.GetValidCol(), dstValidRow);
-    TRowExpand<TileDataOut, TileDataIn>(dst.data(), src.data(), dstValidRow, dstValidCol);
+    if constexpr (TileDataIn::isRowMajor) {
+        TRowExpand<TileDataOut, TileDataIn>(dst.data(), src.data(), dstValidRow, dstValidCol);
+    } else {
+        TRowExpand_ColMajor<TileDataOut, TileDataIn>(dst.data(), src.data(), dstValidRow, dstValidCol);
+    }
 }
 } // namespace pto
 #endif

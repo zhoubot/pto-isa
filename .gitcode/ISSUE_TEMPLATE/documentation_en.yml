@@ -1,0 +1,34 @@
+name: Documentation 📄
+description: Report documentation issues or suggest improvements
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation! Please fill in the following template.
+  - type: textarea
+    attributes:
+      label: Documentation Issue
+      value: |
+        ### Page/Section
+        <!-- Which documentation page or section is affected? -->
+
+        ### Issue Type
+        <!--
+        - Typo or grammatical error
+        - Missing information
+        - Outdated information
+        - Unclear explanation
+        - Broken link
+        - Other
+        -->
+
+        ### Description
+        <!-- Describe the issue in detail -->
+
+        ### Suggested Fix
+        <!-- If you have a suggestion, describe it here -->
+
+    validations:
+      required: true

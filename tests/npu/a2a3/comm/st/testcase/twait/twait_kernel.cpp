@@ -17,11 +17,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include <string>
 #include <iostream>
 
+#include <pto/pto-inst.hpp>
 #include "pto/comm/pto_comm_inst.hpp"
 #include "pto/common/pto_tile.hpp"
 #include "../common.hpp"
-
-#include <pto/pto-inst.hpp>
 
 #define ENABLE_DEBUG_PRINT 1
 
@@ -30,88 +29,71 @@ See LICENSE in the root of the software repository for the full text of the Lice
 // Rank 0 sends signal to rank 1, rank 1 waits for the signal
 // Tests blocking wait functionality
 // ============================================================================
-__global__ AICORE void TWaitBasicKernel(__gm__ int32_t *shmem_signal)
+__global__ AICORE void TWaitBasicKernel(__gm__ int32_t *shmem_signal, __gm__ HcclDeviceContext *hcclCtx)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
     if (my_rank == 0) {
-        // Rank 0: Send signal to rank 1
-        __gm__ int32_t *remote_signal = ShmemPtr(shmem_signal, 1);
+        __gm__ int32_t *remote_signal = HcclRemotePtr(hcclCtx, shmem_signal, 1);
         pto::comm::Signal targetSignal(remote_signal);
 
-        // Set signal value to 42
         pto::comm::TNOTIFY(targetSignal, 42, pto::comm::NotifyOp::Set);
-        ShmemDeviceQuiet();
-        ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
     } else if (my_rank == 1) {
-        ShmemDeviceBarrierAll();
-        // Rank 1: Wait for signal to equal 42
         pto::comm::Signal localSignal(shmem_signal);
 
-        // Blocking wait until signal == 42
         pto::comm::TWAIT(localSignal, 42, pto::comm::WaitCmp::EQ);
     }
-    // Global synchronization
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
 // Kernel 2: TWAIT with different comparison operators
 // Tests EQ, NE, GT, GE, LT, LE comparisons
 // ============================================================================
-__global__ AICORE void TWaitCompareKernel(__gm__ int32_t *shmem_signal, int32_t notifyValue)
+__global__ AICORE void TWaitCompareKernel(__gm__ int32_t *shmem_signal, int32_t notifyValue,
+                                          __gm__ HcclDeviceContext *hcclCtx)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
     if (my_rank == 0) {
-        // Rank 0: Send signal with specified value to rank 1
-        __gm__ int32_t *remote_signal = ShmemPtr(shmem_signal, 1);
+        __gm__ int32_t *remote_signal = HcclRemotePtr(hcclCtx, shmem_signal, 1);
         pto::comm::Signal targetSignal(remote_signal);
 
         pto::comm::TNOTIFY(targetSignal, notifyValue, pto::comm::NotifyOp::Set);
-        ShmemDeviceQuiet();
+        pipe_barrier(PIPE_ALL);
     } else if (my_rank == 1) {
-        // Rank 1: Wait for signal >= 100
         pto::comm::Signal localSignal(shmem_signal);
 
-        // Blocking wait until signal >= 100
         pto::comm::TWAIT(localSignal, 100, pto::comm::WaitCmp::GE);
     }
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
 // Kernel 3: TWAIT with multi-rank atomic add
 // Multiple ranks atomically add to rank 0's counter, rank 0 waits for threshold
 // ============================================================================
-__global__ AICORE void TWaitAtomicKernel(__gm__ int32_t *shmem_counter, int threshold, int iters)
+__global__ AICORE void TWaitAtomicKernel(__gm__ int32_t *shmem_counter, int threshold, int iters,
+                                         __gm__ HcclDeviceContext *hcclCtx)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
-    __gm__ int32_t *remote_counter = ShmemPtr(shmem_counter, 0);
+    __gm__ int32_t *remote_counter = HcclRemotePtr(hcclCtx, shmem_counter, 0);
     pto::comm::Signal counterSignal(remote_counter);
 
-    ShmemDeviceBarrierAll();
-
     if (my_rank != 0) {
-        // Non-rank-0: atomically add multiple times
         for (int i = 0; i < iters; ++i) {
             pto::comm::TNOTIFY(counterSignal, 1, pto::comm::NotifyOp::AtomicAdd);
         }
-        ShmemDeviceQuiet();
-        ShmemDeviceBarrierAll();
+        pipe_barrier(PIPE_ALL);
     } else {
-        // Rank 0: Wait until counter >= threshold
         pto::comm::Signal localCounter(shmem_counter);
-        ShmemDeviceBarrierAll();
         pto::comm::TWAIT(localCounter, threshold, pto::comm::WaitCmp::GE);
     }
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
@@ -119,12 +101,12 @@ __global__ AICORE void TWaitAtomicKernel(__gm__ int32_t *shmem_counter, int thre
 // Rank 0 sets a 2D signal matrix for rank 1, rank 1 waits on the matrix
 // ============================================================================
 template <int Rows, int Cols>
-__global__ AICORE void TWaitMatrixKernel(__gm__ int32_t *shmem_matrix)
+__global__ AICORE void TWaitMatrixKernel(__gm__ int32_t *shmem_matrix, __gm__ HcclDeviceContext *hcclCtx)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
     if (my_rank == 0) {
-        __gm__ int32_t *remote_matrix = ShmemPtr(shmem_matrix, 1);
+        __gm__ int32_t *remote_matrix = HcclRemotePtr(hcclCtx, shmem_matrix, 1);
         for (int r = 0; r < Rows; ++r) {
             for (int c = 0; c < Cols; ++c) {
                 __gm__ int32_t *remote_elem = remote_matrix + r * Cols + c;
@@ -137,8 +119,7 @@ __global__ AICORE void TWaitMatrixKernel(__gm__ int32_t *shmem_matrix)
         pto::comm::TWAIT(localMatrix, 1, pto::comm::WaitCmp::EQ);
     }
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
@@ -147,17 +128,15 @@ __global__ AICORE void TWaitMatrixKernel(__gm__ int32_t *shmem_matrix)
 // Rank 1 uses Signal2D with stride to wait on just that sub-region
 // ============================================================================
 template <int FullCols, int SubRows, int SubCols>
-__global__ AICORE void TWaitSubRegionKernel(__gm__ int32_t *shmem_matrix)
+__global__ AICORE void TWaitSubRegionKernel(__gm__ int32_t *shmem_matrix, __gm__ HcclDeviceContext *hcclCtx)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
-    // Sub-region starts at row=2, col=4 within the FullCols-wide grid
     constexpr int startRow = 2;
     constexpr int startCol = 4;
 
     if (my_rank == 0) {
-        __gm__ int32_t *remote_matrix = ShmemPtr(shmem_matrix, 1);
-        // Set only the sub-region elements
+        __gm__ int32_t *remote_matrix = HcclRemotePtr(hcclCtx, shmem_matrix, 1);
         for (int r = 0; r < SubRows; ++r) {
             for (int c = 0; c < SubCols; ++c) {
                 __gm__ int32_t *elem = remote_matrix + (startRow + r) * FullCols + (startCol + c);
@@ -166,91 +145,76 @@ __global__ AICORE void TWaitSubRegionKernel(__gm__ int32_t *shmem_matrix)
             }
         }
     } else if (my_rank == 1) {
-        // Wait on sub-region: ptr offset to (startRow, startCol), stride = FullCols
         __gm__ int32_t *subPtr = shmem_matrix + startRow * FullCols + startCol;
         pto::comm::Signal2D<SubRows, SubCols> subRegion(subPtr, FullCols);
         pto::comm::TWAIT(subRegion, 1, pto::comm::WaitCmp::EQ);
     }
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
 // Kernel 5: TWAIT Multi-Phase
 // Rank 0 updates signal in phases, rank 1 waits in phases
 // ============================================================================
-__global__ AICORE void TWaitMultiPhaseKernel(__gm__ int32_t *shmem_signal)
+__global__ AICORE void TWaitMultiPhaseKernel(__gm__ int32_t *shmem_signal, __gm__ HcclDeviceContext *hcclCtx, int phase)
 {
-    int my_rank = shmem_my_pe();
+    int my_rank = static_cast<int>(hcclCtx->rankId);
 
     if (my_rank == 0) {
-        __gm__ int32_t *remote_signal = ShmemPtr(shmem_signal, 1);
+        __gm__ int32_t *remote_signal = HcclRemotePtr(hcclCtx, shmem_signal, 1);
         pto::comm::Signal targetSignal(remote_signal);
 
-        pto::comm::TNOTIFY(targetSignal, 1, pto::comm::NotifyOp::Set);
-        ShmemDeviceQuiet();
-        ShmemDeviceBarrierAll();
-
-        pto::comm::TNOTIFY(targetSignal, 3, pto::comm::NotifyOp::Set);
-        ShmemDeviceQuiet();
-        ShmemDeviceBarrierAll();
-
-        pto::comm::TNOTIFY(targetSignal, 5, pto::comm::NotifyOp::Set);
-        ShmemDeviceQuiet();
-        ShmemDeviceBarrierAll();
+        if (phase == 0) {
+            pto::comm::TNOTIFY(targetSignal, 1, pto::comm::NotifyOp::Set);
+        } else if (phase == 1) {
+            pto::comm::TNOTIFY(targetSignal, 3, pto::comm::NotifyOp::Set);
+        } else {
+            pto::comm::TNOTIFY(targetSignal, 5, pto::comm::NotifyOp::Set);
+        }
+        pipe_barrier(PIPE_ALL);
     } else if (my_rank == 1) {
         pto::comm::Signal localSignal(shmem_signal);
 
-        ShmemDeviceBarrierAll();
-        pto::comm::TWAIT(localSignal, 1, pto::comm::WaitCmp::EQ);
-
-        ShmemDeviceBarrierAll();
-        pto::comm::TWAIT(localSignal, 3, pto::comm::WaitCmp::GE);
-
-        ShmemDeviceBarrierAll();
-        pto::comm::TWAIT(localSignal, 5, pto::comm::WaitCmp::EQ);
-
-        ShmemDeviceBarrierAll();
+        if (phase == 0) {
+            pto::comm::TWAIT(localSignal, 1, pto::comm::WaitCmp::EQ);
+        } else if (phase == 1) {
+            pto::comm::TWAIT(localSignal, 3, pto::comm::WaitCmp::GE);
+        } else {
+            pto::comm::TWAIT(localSignal, 5, pto::comm::WaitCmp::EQ);
+        }
     }
 
-    ShmemDeviceQuiet();
-    ShmemDeviceBarrierAll();
+    pipe_barrier(PIPE_ALL);
 }
 
 // ============================================================================
 // Host-side Test Implementation
 // ============================================================================
 
-bool RunTWaitBasicKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunTWaitBasicKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8780", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    // Allocate symmetric memory for signal
-    int32_t *shmem_signal = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_signal == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
 
-    // Initialize signal to 0
+    int32_t *shmem_signal = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
+
     int32_t zero = 0;
     aclrtMemcpy(shmem_signal, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    // Wait for all ranks to complete initialization
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
-    // Execute kernel
-    TWaitBasicKernel<<<1, nullptr, ctx.stream>>>(shmem_signal);
+    TWaitBasicKernel<<<1, nullptr, ctx.stream>>>(shmem_signal, ctx.deviceCtx);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
-    // Rank 1 verifies the signal value
     if (rank_id == 1) {
         int32_t result = 0;
         aclrtMemcpy(&result, sizeof(int32_t), shmem_signal, sizeof(int32_t), ACL_MEMCPY_DEVICE_TO_HOST);
@@ -263,32 +227,30 @@ bool RunTWaitBasicKernel(int rank_id, int n_ranks, int n_devices, int first_devi
         }
     }
 
-    ShmemFree(shmem_signal);
-
     return ctx.Finalize() && is_ok;
 }
 
-bool RunTWaitCompareKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, int32_t notifyValue)
+bool RunTWaitCompareKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo,
+                           int32_t notifyValue)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8781", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    int32_t *shmem_signal = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_signal == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    int32_t *shmem_signal = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
 
     int32_t zero = 0;
     aclrtMemcpy(shmem_signal, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
-    TWaitCompareKernel<<<1, nullptr, ctx.stream>>>(shmem_signal, notifyValue);
+    TWaitCompareKernel<<<1, nullptr, ctx.stream>>>(shmem_signal, notifyValue, ctx.deviceCtx);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
@@ -304,34 +266,31 @@ bool RunTWaitCompareKernel(int rank_id, int n_ranks, int n_devices, int first_de
         }
     }
 
-    ShmemFree(shmem_signal);
-
     return ctx.Finalize() && is_ok;
 }
 
-bool RunTWaitAtomicKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunTWaitAtomicKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8782", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    int32_t *shmem_counter = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_counter == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    int32_t *shmem_counter = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
 
     int32_t zero = 0;
     aclrtMemcpy(shmem_counter, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     constexpr int kAtomicIters = 50;
     const int threshold = (n_ranks - 1) * kAtomicIters;
-    TWaitAtomicKernel<<<1, nullptr, ctx.stream>>>(shmem_counter, threshold, kAtomicIters);
+    TWaitAtomicKernel<<<1, nullptr, ctx.stream>>>(shmem_counter, threshold, kAtomicIters, ctx.deviceCtx);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
 
@@ -348,35 +307,32 @@ bool RunTWaitAtomicKernel(int rank_id, int n_ranks, int n_devices, int first_dev
         }
     }
 
-    ShmemFree(shmem_counter);
-
     return ctx.Finalize() && is_ok;
 }
 
 template <int Rows, int Cols>
-bool RunTWaitMatrixKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunTWaitMatrixKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8783", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
     constexpr size_t total = Rows * Cols;
-    int32_t *shmem_matrix = (int32_t *)ShmemMalloc(total * sizeof(int32_t));
-    if (shmem_matrix == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    int32_t *shmem_matrix = (int32_t *)WindowAlloc(localWinBase, winOffset, total * sizeof(int32_t));
 
     std::vector<int32_t> zeros(total, 0);
     aclrtMemcpy(shmem_matrix, total * sizeof(int32_t), zeros.data(), total * sizeof(int32_t),
                 ACL_MEMCPY_HOST_TO_DEVICE);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
-    TWaitMatrixKernel<Rows, Cols><<<1, nullptr, ctx.stream>>>(shmem_matrix);
+    TWaitMatrixKernel<Rows, Cols><<<1, nullptr, ctx.stream>>>(shmem_matrix, ctx.deviceCtx);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
     if (rank_id == 1) {
@@ -392,32 +348,31 @@ bool RunTWaitMatrixKernel(int rank_id, int n_ranks, int n_devices, int first_dev
         }
     }
 
-    ShmemFree(shmem_matrix);
-
     return ctx.Finalize() && is_ok;
 }
 
-bool RunTWaitMultiPhaseKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunTWaitMultiPhaseKernel(int rank_id, int n_ranks, int n_devices, int first_device_id,
+                              const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8786", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
 
-    int32_t *shmem_signal = (int32_t *)ShmemMalloc(sizeof(int32_t));
-    if (shmem_signal == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
+
+    int32_t *shmem_signal = (int32_t *)WindowAlloc(localWinBase, winOffset, sizeof(int32_t));
 
     int32_t zero = 0;
     aclrtMemcpy(shmem_signal, sizeof(int32_t), &zero, sizeof(int32_t), ACL_MEMCPY_HOST_TO_DEVICE);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
-    TWaitMultiPhaseKernel<<<1, nullptr, ctx.stream>>>(shmem_signal);
-    ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
-
-    ShmemBarrierAll();
+    for (int phase = 0; phase < 3; ++phase) {
+        TWaitMultiPhaseKernel<<<1, nullptr, ctx.stream>>>(shmem_signal, ctx.deviceCtx, phase);
+        ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
+        HcclHostBarrier(ctx.comm, ctx.stream);
+    }
 
     bool is_ok = true;
     if (rank_id == 1) {
@@ -429,36 +384,33 @@ bool RunTWaitMultiPhaseKernel(int rank_id, int n_ranks, int n_devices, int first
         }
     }
 
-    ShmemFree(shmem_signal);
-
     return ctx.Finalize() && is_ok;
 }
 
 template <int FullCols, int SubRows, int SubCols>
-bool RunTWaitSubRegionKernel(int rank_id, int n_ranks, int n_devices, int first_device_id)
+bool RunTWaitSubRegionKernel(int rank_id, int n_ranks, int n_devices, int first_device_id, const HcclRootInfo *rootInfo)
 {
     TestContext ctx;
-    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, "tcp://127.0.0.1:8787", 8ULL * 1024 * 1024))
+    if (!ctx.Init(rank_id, n_ranks, n_devices, first_device_id, rootInfo))
         return false;
+
+    uint64_t localWinBase = ctx.hostCtx.windowsIn[rank_id];
+    size_t winOffset = 0;
 
     constexpr size_t totalRows = 8;
     constexpr size_t total = totalRows * FullCols;
-    int32_t *shmem_matrix = (int32_t *)ShmemMalloc(total * sizeof(int32_t));
-    if (shmem_matrix == nullptr) {
-        std::cerr << "[ERROR] ShmemMalloc failed!" << std::endl;
-        return false;
-    }
+    int32_t *shmem_matrix = (int32_t *)WindowAlloc(localWinBase, winOffset, total * sizeof(int32_t));
 
     std::vector<int32_t> zeros(total, 0);
     aclrtMemcpy(shmem_matrix, total * sizeof(int32_t), zeros.data(), total * sizeof(int32_t),
                 ACL_MEMCPY_HOST_TO_DEVICE);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
-    TWaitSubRegionKernel<FullCols, SubRows, SubCols><<<1, nullptr, ctx.stream>>>(shmem_matrix);
+    TWaitSubRegionKernel<FullCols, SubRows, SubCols><<<1, nullptr, ctx.stream>>>(shmem_matrix, ctx.deviceCtx);
     ctx.aclStatus = aclrtSynchronizeStream(ctx.stream);
 
-    ShmemBarrierAll();
+    HcclHostBarrier(ctx.comm, ctx.stream);
 
     bool is_ok = true;
     if (rank_id == 1) {
@@ -482,8 +434,6 @@ bool RunTWaitSubRegionKernel(int rank_id, int n_ranks, int n_devices, int first_
         }
     }
 
-    ShmemFree(shmem_matrix);
-
     return ctx.Finalize() && is_ok;
 }
 
@@ -493,44 +443,53 @@ bool RunTWaitSubRegionKernel(int rank_id, int n_ranks, int n_devices, int first_
 
 bool RunTWaitBasic(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id,
-                      [&](int rankId) { return RunTWaitBasicKernel(rankId, n_ranks, n_devices, first_device_id); });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunTWaitBasicKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 bool RunTWaitCompare(int n_ranks, int n_devices, int first_rank_id, int first_device_id, int32_t notifyValue)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunTWaitCompareKernel(rankId, n_ranks, n_devices, first_device_id, notifyValue);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunTWaitCompareKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo, notifyValue);
+        });
 }
 
 bool RunTWaitAtomic(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id,
-                      [&](int rankId) { return RunTWaitAtomicKernel(rankId, n_ranks, n_devices, first_device_id); });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunTWaitAtomicKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 template <int Rows, int Cols>
 bool RunTWaitMatrix(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunTWaitMatrixKernel<Rows, Cols>(rankId, n_ranks, n_devices, first_device_id);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunTWaitMatrixKernel<Rows, Cols>(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 bool RunTWaitMultiPhase(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunTWaitMultiPhaseKernel(rankId, n_ranks, n_devices, first_device_id);
-    });
+    return ForkAndRunWithHcclRootInfo(
+        n_ranks, first_rank_id, first_device_id, [&](int rankId, const HcclRootInfo *rootInfo) {
+            return RunTWaitMultiPhaseKernel(rankId, n_ranks, n_devices, first_device_id, rootInfo);
+        });
 }
 
 template <int FullCols, int SubRows, int SubCols>
 bool RunTWaitSubRegion(int n_ranks, int n_devices, int first_rank_id, int first_device_id)
 {
-    return ForkAndRun(n_ranks, first_rank_id, [&](int rankId) {
-        return RunTWaitSubRegionKernel<FullCols, SubRows, SubCols>(rankId, n_ranks, n_devices, first_device_id);
-    });
+    return ForkAndRunWithHcclRootInfo(n_ranks, first_rank_id, first_device_id,
+                                      [&](int rankId, const HcclRootInfo *rootInfo) {
+                                          return RunTWaitSubRegionKernel<FullCols, SubRows, SubCols>(
+                                              rankId, n_ranks, n_devices, first_device_id, rootInfo);
+                                      });
 }
 
 template bool RunTWaitMatrix<4, 8>(int n_ranks, int n_devices, int first_rank_id, int first_device_id);

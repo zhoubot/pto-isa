@@ -269,6 +269,7 @@ enum class TileLayoutCustom : uint8_t
     ZZ,
     NONE,
 };
+
 namespace GlobalTensorDim {
 constexpr int DIM_0 = 0;
 constexpr int DIM_1 = 1;

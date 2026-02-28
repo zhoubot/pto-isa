@@ -72,6 +72,7 @@ This page is the source-synchronized ISA index generated from `docs/isa/manifest
 | Tile-Scalar / Tile-Immediate | [`TADDSC`](isa/TADDSC.md) | Elementwise fused add with scalar and a second tile: `src0 + scalar + src1`. |
 | Tile-Scalar / Tile-Immediate | [`TSUBSC`](isa/TSUBSC.md) | Elementwise fused op: `src0 - scalar + src1`. |
 | Axis Reduce / Expand | [`TROWSUM`](isa/TROWSUM.md) | Reduce each row by summing across columns. |
+| Axis Reduce / Expand | [`TROWPROD`](isa/TROWPROD.md) | Reduce each row by multiplying across columns. |
 | Axis Reduce / Expand | [`TCOLSUM`](isa/TCOLSUM.md) | Reduce each column by summing across rows. |
 | Axis Reduce / Expand | [`TCOLPROD`](isa/TCOLPROD.md) | Reduce each column by multiplying across rows. |
 | Axis Reduce / Expand | [`TCOLMAX`](isa/TCOLMAX.md) | Reduce each column by taking the maximum across rows. |

@@ -24,26 +24,6 @@ else()
     set(ASCEND_HOME_PATH $ENV{ASCEND_HOME_PATH})
 endif()
 
-# shmem 安装根目录（需在环境中提供）
-if(NOT DEFINED ENV{SHMEM_HOME_PATH})
-    message(FATAL_ERROR "Cannot find SHMEM_HOME_PATH, please export SHMEM_HOME_PATH to shmem install root.")
-else()
-    set(SHMEM_HOME_PATH $ENV{SHMEM_HOME_PATH})
-    message(STATUS "SHMEM_HOME_PATH: ${SHMEM_HOME_PATH}")
-endif()
-
-if(DEFINED ENV{SHMEM_BACKEND})
-    set(SHMEM_BACKEND $ENV{SHMEM_BACKEND})
-endif()
-if(NOT DEFINED SHMEM_BACKEND)
-    # 自动检测: 优先查找新版 shmem.h
-    if(EXISTS "${SHMEM_HOME_PATH}/shmem/include/shmem.h")
-        set(SHMEM_BACKEND "CANN_SHMEM")
-    else()
-        message(FATAL_ERROR "Cannot find shmem.h or shmem_api.h in ${SHMEM_HOME_PATH}/shmem/include/")
-    endif()
-endif()
-message(STATUS "SHMEM_BACKEND: ${SHMEM_BACKEND}")
 
 
 set(ASCEND_DRIVER_PATH /usr/local/Ascend/driver)
@@ -97,13 +77,9 @@ include_directories(
     ${ASCEND_DRIVER_PATH}/kernel/inc
 )
 
-# 根据 SHMEM 版本设置不同的 include 路径和编译宏
-
-add_compile_definitions(CANN_SHMEM)
+# hccl include paths
 include_directories(
-    ${SHMEM_HOME_PATH}/shmem/include
-    ${SHMEM_HOME_PATH}/shmem/include/device
-    ${SHMEM_HOME_PATH}/../src/device
+    ${ASCEND_HOME_PATH}/include/hccl
 )
 
 

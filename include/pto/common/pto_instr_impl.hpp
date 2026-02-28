@@ -47,6 +47,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TTrans.hpp"
 #include "pto/npu/a2a3/TReshape.hpp"
 #include "pto/npu/a2a3/TRowSum.hpp"
+#include "pto/npu/a2a3/TRowProd.hpp"
 #include "pto/npu/a2a3/TRowMax.hpp"
 #include "pto/npu/a2a3/TRowMin.hpp"
 #include "pto/npu/a2a3/TFillPad.hpp"
@@ -108,6 +109,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TColExpandDiv.hpp"
 #include "pto/npu/a2a3/TColExpandExpdif.hpp"
 #include "pto/npu/a2a3/TQuant.hpp"
+#include "pto/npu/a2a3/TDequant.hpp"
 #endif
 
 #ifdef PTO_NPU_ARCH_A5
@@ -154,6 +156,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TColExpand.hpp"
 #include "pto/npu/a5/TReshape.hpp"
 #include "pto/npu/a5/TRowReduce.hpp"
+#include "pto/npu/a5/TRowProd.hpp"
 #include "pto/npu/a5/TFillPad.hpp"
 #include "pto/npu/a5/TTrans.hpp"
 #include "pto/npu/a5/TLRelu.hpp"
@@ -255,12 +258,15 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/TPartMax.hpp"
 #include "pto/cpu/TPartMin.hpp"
 #include "pto/cpu/TRowExpand.hpp"
+#include "pto/cpu/TRowExpandOp.hpp"
 #include "pto/cpu/TRSqrt.hpp"
 #include "pto/cpu/TPrefetch.hpp"
 #include "pto/cpu/TCvt.hpp"
 #include "pto/cpu/TColMin.hpp"
 #include "pto/cpu/TColExpand.hpp"
+#include "pto/cpu/TColExpandOp.hpp"
 #include "pto/cpu/TScatter.hpp"
+#include "pto/cpu/TBroadcast.hpp"
 #include "pto/cpu/TTRI.hpp"
 #include "pto/cpu/TSort32.hpp"
 #include "pto/cpu/MGatherScatter.hpp"
@@ -268,6 +274,9 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/TTest.hpp"
 #include "pto/cpu/TGet.hpp"
 #include "pto/cpu/TWait.hpp"
+#include "pto/cpu/TReduce.hpp"
+#include "pto/cpu/TPush.hpp"
+#include "pto/cpu/TPop.hpp"
 #endif
 
 #endif

@@ -1,0 +1,149 @@
+/**
+Copyright (c) 2026 Huawei Technologies Co., Ltd.
+This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+CANN Open Software License Agreement Version 2.0 (the "License").
+Please refer to the License for details. You may not use this file except in compliance with the License.
+THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+See LICENSE in the root of the software repository for the full text of the License.
+*/
+
+#include <pto/pto-inst.hpp>
+#include <pto/common/constants.hpp>
+#include <acl/acl.h>
+
+using namespace std;
+using namespace pto;
+
+template <typename T, int dstRow, int srcRow, int validRow, int srcCol, int srcValidCol>
+PTO_INTERNAL void runTRowProdSimple(__gm__ T *out, __gm__ T *src)
+{
+    using ValidSrcShape = TileShape2D<T, validRow, srcValidCol>;
+    using NDSrcShape = BaseShape2D<T, srcRow, srcCol>;
+    using GlobalDataSrc = GlobalTensor<T, ValidSrcShape, NDSrcShape>;
+    GlobalDataSrc srcGlobal(src);
+
+    using ValidDstShape = TileShape2D<T, validRow, 1, Layout::DN>;
+    using NDDstShape = BaseShape2D<T, dstRow, 1, Layout::DN>;
+    using GlobalDataDst = GlobalTensor<T, ValidDstShape, NDDstShape, Layout::DN>;
+    GlobalDataDst dstGlobal(out);
+
+    using srcTileData = Tile<TileType::Vec, T, srcRow, srcCol, BLayout::RowMajor, validRow, srcValidCol>;
+    using dstTileData = Tile<TileType::Vec, T, dstRow, 1, BLayout::ColMajor, validRow, 1>;
+    srcTileData srcTile;
+    srcTileData tmpTile;
+    dstTileData dstTile;
+
+    TASSIGN(srcTile, 0x0);
+    TASSIGN(tmpTile, srcRow * srcCol * sizeof(T));
+    TASSIGN(dstTile, 2 * srcRow * srcCol * sizeof(T));
+
+    TLOAD(srcTile, srcGlobal);
+    set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
+    TROWPROD(dstTile, srcTile, tmpTile);
+    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+
+    TSTORE(dstGlobal, dstTile);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase1(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 1, 1, 8, 8>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase2(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 1, 1, 16, 16>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase3(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 1, 1, 128, 128>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase4(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 1, 1, 8, 5>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase5(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 1, 1, 16, 11>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase6(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 3, 2, 8, 8>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase7(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 3, 2, 24, 16>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase8(__gm__ float *out, __gm__ float *src)
+{
+    runTRowProdSimple<float, 8, 4, 3, 16, 9>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase9(__gm__ __fp16 *out, __gm__ __fp16 *src)
+{
+    runTRowProdSimple<__fp16, 16, 1, 1, 16, 16>(out, src);
+}
+
+extern "C" __global__ AICORE void launchTROWPRODCase10(__gm__ __fp16 *out, __gm__ __fp16 *src)
+{
+    runTRowProdSimple<__fp16, 32, 26, 19, 32, 26>(out, src);
+}
+
+template <uint32_t caseId>
+void launchTROWPRODTestCase(void *out, void *src, aclrtStream stream)
+{
+    switch (caseId) {
+        case 1:
+            launchTROWPRODCase1<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 2:
+            launchTROWPRODCase2<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 3:
+            launchTROWPRODCase3<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 4:
+            launchTROWPRODCase4<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 5:
+            launchTROWPRODCase5<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 6:
+            launchTROWPRODCase6<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 7:
+            launchTROWPRODCase7<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 8:
+            launchTROWPRODCase8<<<1, nullptr, stream>>>((float *)out, (float *)src);
+            break;
+        case 9:
+            launchTROWPRODCase9<<<1, nullptr, stream>>>((__fp16 *)out, (__fp16 *)src);
+            break;
+        case 10:
+            launchTROWPRODCase10<<<1, nullptr, stream>>>((__fp16 *)out, (__fp16 *)src);
+            break;
+        default:
+            break;
+    }
+}
+
+template void launchTROWPRODTestCase<1>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<2>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<3>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<4>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<5>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<6>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<7>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<8>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<9>(void *out, void *src, aclrtStream stream);
+template void launchTROWPRODTestCase<10>(void *out, void *src, aclrtStream stream);
