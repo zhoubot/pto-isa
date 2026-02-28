@@ -24,7 +24,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-mscatter %src, %mem, %idx : !pto.memref<...>, !pto.tile<...>, !pto.tile<...>
+mscatter %mem, %src, %idx : (!pto.tensor<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)

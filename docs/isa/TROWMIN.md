@@ -22,7 +22,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = trowmin %src : !pto.tile<...> -> !pto.tile<...>
+trowmin %dst, %src : (!pto.tile<...>, !pto.tile<...>)
 ```
 Lowering may introduce internal scratch tiles; the C++ intrinsic requires an explicit `tmp` operand.
 

@@ -22,7 +22,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tands %src, %scalar : !pto.tile<...>, i32
+tands %dst, %src, %scalar : (!pto.tile<...>, !pto.tile<...>, i32)
 ```
 
 ### IR Level 1 (SSA)

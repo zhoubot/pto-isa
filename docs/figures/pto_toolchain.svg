@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620" role="img" aria-labelledby="title desc">
+  <title id="title">PTO PTODSL to CPU Sim Compilation Flow</title>
+  <desc id="desc">Validated compilation flow: PTODSL builder to PTO IR, PTOAS to C++, g++ compile, then CPU simulator run.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6fafc"/>
+      <stop offset="100%" stop-color="#eef4f8"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,4 L0,8 z" fill="#2c5282"/>
+    </marker>
+    <style>
+      .title { font: 700 26px 'Segoe UI', Arial, sans-serif; fill: #102a43; }
+      .subtitle { font: 500 14px 'Segoe UI', Arial, sans-serif; fill: #334e68; }
+      .box-title { font: 700 16px 'Segoe UI', Arial, sans-serif; fill: #0b1f33; }
+      .box-text { font: 500 13px 'Segoe UI', Arial, sans-serif; fill: #17324d; }
+      .note { font: 500 12px 'Segoe UI', Arial, sans-serif; fill: #486581; }
+      .mono { font: 600 12px 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; fill: #1f2933; }
+      .stroke { stroke: #2c5282; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .card { rx: 10; ry: 10; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="620" fill="url(#bg)"/>
+
+  <text x="600" y="48" text-anchor="middle" class="title">Validated PTODSL -> PTOAS -> CPU Sim Flow</text>
+  <text x="600" y="74" text-anchor="middle" class="subtitle">Used by demos/ptodsl_ptoas_cpu/add_static/run.sh</text>
+
+  <rect x="60" y="96" width="1080" height="70" class="card" fill="#e6fffa" stroke="#2c7a7b"/>
+  <text x="84" y="123" class="box-title">Environment</text>
+  <text x="84" y="145" class="mono">PYTHON (+ mlir + pto dialect), PTOAS_BIN, and include/ headers available</text>
+
+  <rect x="60" y="210" width="170" height="120" class="card" fill="#d9f2e3" stroke="#2f855a"/>
+  <text x="145" y="238" text-anchor="middle" class="box-title">PTODSL</text>
+  <text x="145" y="260" text-anchor="middle" class="box-text">Python builder</text>
+  <text x="145" y="284" text-anchor="middle" class="mono">add_builder.py</text>
+
+  <rect x="280" y="210" width="140" height="120" class="card" fill="#d6ecff" stroke="#2b6cb0"/>
+  <text x="350" y="238" text-anchor="middle" class="box-title">PTO IR</text>
+  <text x="350" y="260" text-anchor="middle" class="mono">add.pto</text>
+
+  <rect x="470" y="210" width="220" height="120" class="card" fill="#ede9fe" stroke="#5a3fc0"/>
+  <text x="580" y="238" text-anchor="middle" class="box-title">PTOAS</text>
+  <text x="580" y="262" text-anchor="middle" class="mono">ptoas --enable-insert-sync</text>
+  <text x="580" y="286" text-anchor="middle" class="box-text">emit C++ kernel</text>
+
+  <rect x="740" y="210" width="140" height="120" class="card" fill="#ffe3e3" stroke="#c53030"/>
+  <text x="810" y="238" text-anchor="middle" class="box-title">Kernel C++</text>
+  <text x="810" y="260" text-anchor="middle" class="mono">add.cpp</text>
+
+  <rect x="930" y="210" width="210" height="120" class="card" fill="#fff4d8" stroke="#b7791f"/>
+  <text x="1035" y="238" text-anchor="middle" class="box-title">Host Compile</text>
+  <text x="1035" y="262" text-anchor="middle" class="mono">g++ -std=c++20 -O2</text>
+  <text x="1035" y="282" text-anchor="middle" class="mono">-D__CPU_SIM -D__DAV_VEC__</text>
+  <text x="1035" y="306" text-anchor="middle" class="mono">runner.cpp + add.cpp</text>
+
+  <path d="M230 270 L280 270" class="stroke"/>
+  <path d="M420 270 L470 270" class="stroke"/>
+  <path d="M690 270 L740 270" class="stroke"/>
+  <path d="M880 270 L930 270" class="stroke"/>
+
+  <rect x="930" y="370" width="210" height="86" class="card" fill="#d8f3dc" stroke="#2f855a"/>
+  <text x="1035" y="398" text-anchor="middle" class="box-title">Execute</text>
+  <text x="1035" y="422" text-anchor="middle" class="mono">./run_cpu</text>
+  <text x="1035" y="442" text-anchor="middle" class="box-text">PASS on CPU simulator</text>
+
+  <path d="M1035 330 L1035 370" class="stroke"/>
+
+  <rect x="640" y="392" width="220" height="64" class="card" fill="#f0f4f8" stroke="#627d98"/>
+  <text x="750" y="418" text-anchor="middle" class="box-title">Support Inputs</text>
+  <text x="750" y="438" text-anchor="middle" class="mono">runner.cpp and include/pto/*</text>
+
+  <path d="M860 424 L930 424" class="stroke"/>
+
+  <text x="60" y="528" class="note">Flow contract (as run):</text>
+  <text x="60" y="550" class="mono">[0] check/import ptodsl -> [1] generate .pto -> [2] ptoas to add.cpp -> [3] g++ link -> [4] run_cpu</text>
+  <text x="60" y="574" class="note">This chart intentionally reflects the validated CPU-sim demo path, not optional PTO-BC branches.</text>
+</svg>

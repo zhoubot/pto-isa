@@ -17,7 +17,7 @@ COLOR_GREEN="\033[32m"
 COLOR_RED="\033[31m"
 
 export BASE_PATH=$(
-  cd "$(dirname $0)"
+  cd "$(dirname "$0")"
   pwd
 )
 
@@ -33,9 +33,12 @@ usage() {
   echo "Usage:"
   echo ""
   echo "    -h, --help  Print usage"
-  echo "    --pkg Build run package"
-  echo "    --run_all run all st on sim"
-  echo "    --run_simple run some st on board"
+  echo "    --pkg Build package"
+  echo "    --run_all Run all ST (default: --sim)"
+  echo "    --run_simple Run a recommended ST subset (default: --npu)"
+  echo "    --a3/--a5 Select SoC version(s) (optional)"
+  echo "    --sim/--npu Select run mode (optional)"
+  echo "    --cann_3rd_lib_path <path> Override third_party path (optional)"
   echo ""
 }
 
@@ -155,11 +158,11 @@ run_simple_st() {
   echo "Start to run simple st"
   chmod +x ./tests/run_st.sh
   if [ "$ENABLE_A3" = "TRUE" ] && [ "$ENABLE_A5" = "FALSE" ]; then
-    ./tests/run_st.sh a3 $RUN_TYPE simple
+    ./tests/run_st.sh a3 "$RUN_TYPE" simple
   elif [ "$ENABLE_A3" = "FALSE" ] && [ "$ENABLE_A5" = "TRUE" ]; then
-    ./tests/run_st.sh a5 $RUN_TYPE simple
+    ./tests/run_st.sh a5 "$RUN_TYPE" simple
   elif [ "$ENABLE_A3" = "TRUE" ] && [ "$ENABLE_A5" = "TRUE" ]; then
-    ./tests/run_st.sh a3_a5 $RUN_TYPE simple
+    ./tests/run_st.sh a3_a5 "$RUN_TYPE" simple
   else
     ./tests/run_st.sh a3 npu simple
   fi
@@ -171,11 +174,11 @@ run_all_st() {
   echo "Start to run all st"
   chmod +x ./tests/run_st.sh
   if [ "$ENABLE_A3" = "TRUE" ] && [ "$ENABLE_A5" = "FALSE" ]; then
-    ./tests/run_st.sh a3 $RUN_TYPE all
+    ./tests/run_st.sh a3 "$RUN_TYPE" all
   elif [ "$ENABLE_A3" = "FALSE" ] && [ "$ENABLE_A5" = "TRUE" ]; then
-    ./tests/run_st.sh a5 $RUN_TYPE all
+    ./tests/run_st.sh a5 "$RUN_TYPE" all
   elif [ "$ENABLE_A3" = "TRUE" ] && [ "$ENABLE_A5" = "TRUE" ]; then
-    ./tests/run_st.sh a3_a5 $RUN_TYPE all
+    ./tests/run_st.sh a3_a5 "$RUN_TYPE" all
   else
     ./tests/run_st.sh a3 sim all
   fi
@@ -184,13 +187,13 @@ run_all_st() {
 
 clean_build() {
   if [ -d "${BUILD_PATH}" ]; then
-    rm -rf ${BUILD_PATH}
+    rm -rf "${BUILD_PATH}"
   fi
 }
 
 clean_build_out() {
   if [ -d "${BUILD_OUT_PATH}" ]; then
-    rm -rf ${BUILD_OUT_PATH}
+    rm -rf "${BUILD_OUT_PATH}"
   fi
 }
 
@@ -199,9 +202,9 @@ build_package() {
   echo "---------------package start-----------------"
   clean_build_out
   clean_build
-  mkdir $BUILD_PATH
-  mkdir $BUILD_OUT_PATH
-  cd $BUILD_PATH
+  mkdir -p "$BUILD_PATH"
+  mkdir -p "$BUILD_OUT_PATH"
+  cd "$BUILD_PATH"
   cmake ${CMAKE_ARGS} ..
   make package
   echo "---------------package end------------------"
@@ -210,12 +213,21 @@ build_package() {
 run_example() {
   echo $dotted_line
   echo "Start to run example"
-  python3 tests/script/run_st.py -r $PLATFORM_MODE -v $EXAMPLE_MODE -t $INST_NAME -g $$EXAMPLE_NAME
+  python3 tests/script/run_st.py -r "$PLATFORM_MODE" -v "$EXAMPLE_MODE" -t "$INST_NAME" -g "$EXAMPLE_NAME"
   echo "execute samples success"
 }
 
 main() {
   checkopts "$@"
+  if [ -z "$RUN_TYPE" ]; then
+    if [ "$ENABLE_BUILD_ALL" == "TRUE" ]; then
+      RUN_TYPE="sim"
+    elif [ "$ENABLE_SIMPLE_ST" == "TRUE" ]; then
+      RUN_TYPE="npu"
+    else
+      RUN_TYPE="sim"
+    fi
+  fi
   if [ "$RUN_TYPE" == "sim" ]; then
       ulimit -n 65535
   fi

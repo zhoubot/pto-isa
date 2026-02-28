@@ -202,6 +202,12 @@ PTO_INTERNAL void TPRINT_IMPL(T &src)
         static_assert(sizeof(T) == 0, "TPRINT: Only Tile and GlobalTensor are supported.");
     }
 }
+
+#else  // !_DEBUG
+
+template <typename T> PTO_INTERNAL void TPRINT_IMPL(T &src) { (void)src; }
+
+#endif // _DEBUG
 } // namespace pto
 
 #endif

@@ -13,6 +13,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #include <pto/common/constants.hpp>
 #include <pto/common/utils.hpp>
+#include <type_traits>
 
 namespace pto {
 enum class SELMODE : uint8_t
@@ -69,6 +70,9 @@ PTO_INTERNAL void TSEL_IMPL(DstTile &dst, MaskTile &selMask, Src0Tile &src0, Src
                   "Fix: TSEL only support RowMajor layout type.");
     unsigned validRow = dst.GetValidRow();
     unsigned validCol = dst.GetValidCol();
+    unsigned validMaskCol = selMask.GetValidCol();
+    PTO_ASSERT(validMaskCol == static_cast<unsigned>(CeilDivision(static_cast<int32_t>(validCol), 8)),
+        "Fix: TSEL mask validCol must equal ceil(dst validCol / 8).");
 
     TSel<DstTile, MaskTile, Src0Tile, Src1Tile>(dst.data(), selMask.data(), src0.data(), src1.data(), validRow,
                                                 validCol);

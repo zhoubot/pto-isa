@@ -1,6 +1,6 @@
 # PTO Demos
 
-This directory contains demonstration examples showing how to use PTO Tile Library in different scenarios.
+This directory contains demonstration examples showing how to use **PTO Tile Library** in different scenarios.
 
 ## Directory Structure
 
@@ -20,9 +20,11 @@ demos/
     └── flash_atten/
 ```
 
+> Note: PTODSL + PTOAS CPU end-to-end examples live in `examples/ptodsl_ptoas_cpu/` (not under `demos/`).
+
 ## Demo Categories
 
-### 1. Baseline (`baseline/`)
+### 1) Baseline (`baseline/`)
 
 Production-ready examples showing how to implement custom PTO kernels and expose them as PyTorch operators via `torch_npu`. Includes complete workflow from kernel implementation to Python integration with CMake build system and wheel packaging.
 
@@ -30,13 +32,13 @@ Production-ready examples showing how to implement custom PTO kernels and expose
 
 **Examples**: Element-wise addition, GEMM with double-buffering pipeline, Flash Attention with automatic tile size selection.
 
-### 2. CPU Simulation (`cpu/`)
+### 2) CPU Simulation (`cpu/`)
 
 Cross-platform examples that run on CPU (x86_64/AArch64) without requiring Ascend hardware. Ideal for algorithm prototyping, learning PTO programming model, and CI/CD testing.
 
 **Examples**: Basic GEMM, Flash Attention, Multi-Latent Attention.
 
-### 3. PyTorch JIT (`torch_jit/`)
+### 3) PyTorch JIT (`torch_jit/`)
 
 Examples showing on-the-fly C++ compilation and direct integration with PyTorch tensors. Useful for rapid prototyping without pre-building wheels.
 
@@ -86,12 +88,11 @@ python add_compile_and_run.py
 
 ## Documentation
 
-- Getting Started: [docs/getting-started.md](../docs/getting-started.md)
-- Programming Tutorial: [docs/coding/tutorial.md](../docs/coding/tutorial.md)
-- ISA Reference: [docs/isa/README.md](../docs/isa/README.md)
+- Getting Started: `docs/getting-started.md`
+- ISA Reference: `docs/isa/README.md`
 
 ## Related
 
-- Manual Kernels: [kernels/manual/README.md](../kernels/manual/README.md)
-- Custom Operators: [kernels/custom/README.md](../kernels/custom/README.md)
-- Test Cases: [tests/README.md](../tests/README.md)
+- Manual Kernels: `kernels/manual/`
+- Custom Operators: `kernels/custom/`
+- Test Cases: `tests/`

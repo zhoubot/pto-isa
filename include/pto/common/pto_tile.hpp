@@ -156,6 +156,13 @@ public:
     int64_t shape[GlobalTensorDim::TOTAL_DIM] = {1};
 };
 
+// 2D shorthand: `Shape<S0, S1>` means `[1, 1, 1, S0, S1]`.
+template <int S0, int S1>
+struct Shape<S0, S1, DYNAMIC, DYNAMIC, DYNAMIC> : public Shape<1, 1, 1, S0, S1> {
+    using Parent = Shape<1, 1, 1, S0, S1>;
+    using Parent::Parent;
+};
+
 template <int64_t SN1 = DYNAMIC, int64_t SN2 = DYNAMIC, int64_t SN3 = DYNAMIC, int64_t SN4 = DYNAMIC,
           int64_t SN5 = DYNAMIC>
 struct Stride {
@@ -265,6 +272,13 @@ struct Stride {
 
 public:
     int64_t stride[GlobalTensorDim::TOTAL_DIM] = {1};
+};
+
+// 2D shorthand: `Stride<S0, S1>` means `[1, 1, 1, S0, S1]`.
+template <int S0, int S1>
+struct Stride<S0, S1, DYNAMIC, DYNAMIC, DYNAMIC> : public Stride<1, 1, 1, S0, S1> {
+    using Parent = Stride<1, 1, 1, S0, S1>;
+    using Parent::Parent;
 };
 
 template <typename Element_, typename Shape_, typename Stride_, Layout Layout_ = Layout::ND>

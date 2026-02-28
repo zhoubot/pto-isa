@@ -10,16 +10,35 @@ Include the unified entry header:
 #include <pto/pto-inst.hpp>
 ```
 
-`pto/pto-inst.hpp` selects the appropriate backend (CPU simulation/stub or NPU implementation) based on build configuration. See `include/pto/README.md` for details.
+`pto/pto-inst.hpp` selects the appropriate backend (CPU simulation/stub or NPU implementation) based on build configuration. See [`include/pto/README.md`](pto/README.md) for details.
 
 ## Layout
 
 - `include/pto/`: Public PTO ISA API and backend implementations (common / cpu / npu)
 
-## Related Docs
+## Directory Structure
 
-- ISA guide: `docs/README.md`
-- Getting started: `docs/getting-started.md`
+| Directory | Description |
+|-----------|-------------|
+| [`pto/common/`](pto/common/) | Platform-independent Tile and instruction infrastructure |
+| [`pto/cpu/`](pto/cpu/) | CPU-side simulation/debug support |
+| [`pto/npu/`](pto/npu/) | NPU-side implementations |
+| [`pto/npu/a2a3/`](pto/npu/a2a3/) | Ascend A2/A3 series (910B/910C) implementations |
+| [`pto/npu/a5/`](pto/npu/a5/) | Ascend A5 series (950) implementations |
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ISA Guide](../docs/README.md) | Complete ISA documentation |
+| [Getting Started](../docs/getting-started.md) | Setup and usage guide |
+| [Programming Model](../docs/coding/ProgrammingModel.md) | Programming guide |
+| [PTO-AS Specification](../docs/grammar/PTO-AS.md) | Assembly language specification |
+| [PTO-BC Bytecode](../docs/bytecode/pto-bc.md) | Binary bytecode specification |
+| [PTOAS submodule](../PTOAS/) | MLIR-based assembler |
+| [PTODSL submodule](../PTODSL/) | Python DSL for kernel authoring |
+| [pyPTO](https://gitcode.com/cann/pypto/) | Python-first frontend (External) |
+| [TileLang Ascend](https://github.com/tile-ai/tilelang-ascend/) | High-level framework (External) |
 
 ## PTO Instruction Implementation Status (CPU / A2 / A3 / A5)
 

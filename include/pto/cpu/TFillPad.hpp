@@ -10,6 +10,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 #ifndef TFILLPAD_HPP
 #define TFILLPAD_HPP
+#include <limits>
+
 #include <pto/common/pto_tile.hpp>
 #include "pto/cpu/tile_offsets.hpp"
 #include "pto/cpu/parallel.hpp"

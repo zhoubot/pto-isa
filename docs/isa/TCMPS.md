@@ -24,7 +24,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = tcmps %src, %scalar {cmpMode = #pto.cmp<EQ>} : !pto.tile<...> -> !pto.tile<...>
+tcmps %dst, %src, %scalar {cmpMode = #pto.cmp<EQ>} : (!pto.tile<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)

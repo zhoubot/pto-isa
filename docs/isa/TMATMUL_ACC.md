@@ -28,7 +28,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%acc1 = tmatmul.acc %acc0, %a, %b : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>) -> !pto.tile<...>
+tmatmul.acc %acc1, %acc0, %a, %b : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)

@@ -168,6 +168,70 @@ Common options:
   export LD_LIBRARY_PATH=/path_to_compiler/lib64:$LD_LIBRARY_PATH
   ```
 
+## End-to-end: PTODSL → PTOAS → CPU simulator (optional)
+
+This repository includes two toolchain submodules:
+
+- `PTODSL/`: Python builder DSL to generate PTO MLIR (`.pto`)
+- `PTOAS/`: PTO compiler / lowering tool that can emit C++ from `.pto`
+
+End-to-end **CPU-only** examples are provided under:
+
+- `examples/ptodsl_ptoas_cpu/add_static/`
+- `examples/ptodsl_ptoas_cpu/add_dynamic_multicore/`
+- `examples/ptodsl_ptoas_cpu/relu_dynamic_multicore/`
+- `examples/ptodsl_ptoas_cpu/matmul_static_singlecore/`
+- `examples/ptodsl_ptoas_cpu/matmul_dynbatch_multicore/`
+
+To run all CPU-only examples:
+
+- `bash examples/ptodsl_ptoas_cpu/run_all.sh`
+
+### 1) Initialize submodules
+
+```bash
+git submodule update --init --recursive
+```
+
+### 2) Make `ptoas` available
+
+- Recommended: build the `PTOAS` submodule and use the local binary:
+
+```bash
+export PTOAS_BIN=$PWD/PTOAS/build/tools/ptoas/ptoas
+```
+
+### 3) Set `PYTHONPATH` for PTODSL
+
+PTODSL uses MLIR python bindings and the PTO dialect python package. Make sure your environment can import:
+
+- `mlir.ir`
+- `mlir.dialects.pto`
+
+Typically this means you built LLVM/MLIR with python bindings and built PTOAS python packages, then:
+
+```bash
+export PYTHONPATH="$LLVM_BUILD_DIR/tools/mlir/python_packages/mlir_core:$PWD/PTOAS/install:$PYTHONPATH"
+```
+
+### 4) Install PTODSL (Python)
+
+```bash
+python3 -m pip install -e PTODSL/ptodsl
+```
+
+### 5) Run the example
+
+```bash
+bash examples/ptodsl_ptoas_cpu/add_static/run.sh
+```
+
+Expected output:
+
+```text
+PASS: CPU-sim vec_add_kernel_2d_dynamic
+```
+
 ## Run NPU Tests
 
 Set environment variables according to [Environment_Variables](./getting-started.md#environment-variables) first;
@@ -278,14 +342,22 @@ This project supports building from source. Before building, prepare the environ
     ```bash
     # Ensure the installer is executable
     chmod +x Ascend-cann-toolkit_${cann_version}_linux-${arch}.run
-    # Install
-    ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --install --force --install-path=${install_path}
+
+    # (optional) Check integrity / version dependency
+    ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --check
+
+    # Install (recommended: full)
+    ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --full --install-path=${install_path}
+
+    # Non-interactive install (accepts EULA)
+    ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --full --quiet --install-path=${install_path}
     ```
     - `${cann_version}`: the CANN toolkit version.
     - `${arch}`: the CPU architecture, such as `aarch64` or `x86_64`.
-    - `${install_path}`: the installation path.
-    - If `--install-path` is omitted, the default path is used. If installed as root, the software is placed under
-      `/usr/local/Ascend/cann`. If installed as a non-root user, it is placed under `$HOME/Ascend/cann`.
+    - `${install_path}`: the installation prefix (common defaults: `/usr/local/Ascend` as root, or `$HOME/Ascend` as non-root).
+    - You can run `./Ascend-cann-toolkit_*.run --help` to see optional flags such as `--chip=...` and `--whitelist=...`.
+    - If you are using this repository, you can also use the helper wrapper:
+      - `bash scripts/install_cann_toolkit.sh --installer /path/to/Ascend-cann-toolkit_*.run --install-path ${install_path} --mode full`
 
 
 ## Environment Variables
@@ -293,17 +365,17 @@ This project supports building from source. Before building, prepare the environ
 - Default path (installed as root)
 
     ```bash
-    source /usr/local/Ascend/cann/bin/setenv.bash
+    source /usr/local/Ascend/ascend-toolkit/set_env.sh
     ```
 
 - Default path (installed as a non-root user)
     ```bash
-    source $HOME/Ascend/cann/bin/setenv.bash
+    source $HOME/Ascend/ascend-toolkit/set_env.sh
     ```
 
 - Custom installation path
     ```bash
-    source ${install_path}/cann/bin/setenv.bash
+    source ${install_path}/ascend-toolkit/set_env.sh
     ```
 
 ## Source Code Download

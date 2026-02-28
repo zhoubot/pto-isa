@@ -63,12 +63,17 @@ if [[ "$SOC_VERSION" =~ $pattern ]] && [ "${RUN_MODE}" == "sim" ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
 rm -rf build
 mkdir build
 cd build
 
-export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/tools/simulator/${SOC_VERSION}/lib:$LD_LIBRARY_PATH
 set -euo pipefail
+if [[ "${RUN_MODE}" == "sim" ]]; then
+    export LD_LIBRARY_PATH=${ASCEND_HOME_PATH}/tools/simulator/${SOC_VERSION}/lib:$LD_LIBRARY_PATH
+fi
 
 # default device id
 : "${NPU_ID:=0}"

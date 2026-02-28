@@ -28,23 +28,33 @@ template <int index>
 PTO_INTERNAL void movemask(uint64_t mask)
 {
     if constexpr (index == 0) {
-        asm volatile("MOVEMASK 	MASK[0],  %0\n" ::"l"(mask));
+        asm volatile("MOVEMASK MASK[0], %0\n" ::"r"(mask));
     } else if constexpr (index == 1) {
-        asm volatile("MOVEMASK 	MASK[1],  %0\n" ::"l"(mask));
+        asm volatile("MOVEMASK MASK[1], %0\n" ::"r"(mask));
     } else {
         PTO_STATIC_ASSERT((index <= 1), "movemask: error mask index.");
     }
+#else
+    (void)mask;
+    PTO_STATIC_ASSERT((index <= 1), "movemask: error mask index.");
+#endif
 }
 
 PTO_INTERNAL void SetVectorCount(uint64_t n)
 {
     set_vector_mask(0, n);
+#else
+    (void)n;
+#endif
 }
 
 template <typename T>
 PTO_INTERNAL void SetFullVecMaskByDType()
 {
     set_vector_mask(-1, -1);
+#else
+    (void)sizeof(T);
+#endif
 }
 
 template <typename T>

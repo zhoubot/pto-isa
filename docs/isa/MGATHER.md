@@ -22,7 +22,7 @@ PTO-AS form: see `docs/grammar/PTO-AS.md`.
 Synchronous form:
 
 ```text
-%dst = mgather %mem, %idx : !pto.memref<...>, !pto.tile<...> -> !pto.tile<...>
+mgather %dst, %mem, %idx : (!pto.tile<...>, !pto.tensor<...>, !pto.tile<...>)
 ```
 
 ### IR Level 1 (SSA)
