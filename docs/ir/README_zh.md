@@ -134,18 +134,6 @@ PTO AS 提供 **116 个 tile 操作**、**11 个辅助函数**、**47 个标量�
 
 ---
 
-## 与 NVIDIA TileIR 对比
-
-PTO 与 NVIDIA TileIR 的全面技术对比：
-
-- **技术对比文档**：[PTO-vs-TileIR-CN.pdf](PTO-vs-TileIR-CN.pdf) - 中文 PDF 版本
-- **相关图表**：
-  - [pipeline-comparison.svg](pipeline-comparison.svg) - 编译流水线对比
-  - [datamodel-comparison.svg](datamodel-comparison.svg) - 数据模型对比
-  - [memorymodel-comparison.svg](memorymodel-comparison.svg) - 内存模型对比
-
----
-
 ## 相关资源
 
 - **ISA 指令参考**：`../isa/README_zh.md` - 逐条指令的规范语义
