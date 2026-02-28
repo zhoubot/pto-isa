@@ -47,10 +47,6 @@ endif()
 if (NOT TARGET GTest::gtest_main)
     add_library(GTest::gtest_main ALIAS gtest_main)
 endif()
-    if (NOT TARGET GTest::gtest_main)
-        add_library(GTest::gtest_main ALIAS gtest_main)
-    endif()
-endif()
 
 add_compile_options(
     -D_FORTIFY_SOURCE=2
