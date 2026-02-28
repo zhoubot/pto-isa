@@ -569,6 +569,9 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
     static_assert(TileData::Loc == pto::TileType::Vec || TileData::Loc == pto::TileType::Acc ||
                       TileData::Loc == pto::TileType::Mat,
         "Source TileType only suport Vec/Acc/Mat!");
+
+    static_assert(currentAtomicType == AtomicType::AtomicNone || TileData::Loc == pto::TileType::Acc,
+        "TSTORE: AtomicType::AtomicAdd is only supported for Acc tiles on A2/A3");
     PTO_ASSERT(dst.GetShape(pto::GlobalTensorDim::DIM_0) > 0 && dst.GetShape(pto::GlobalTensorDim::DIM_1) > 0 &&
                    dst.GetShape(pto::GlobalTensorDim::DIM_2) > 0 && dst.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
                    dst.GetShape(pto::GlobalTensorDim::DIM_4) > 0 && src.GetValidRow() > 0 && src.GetValidCol() > 0,
@@ -583,9 +586,6 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
             dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
     } else if constexpr (TileData::Loc == pto::TileType::Acc) {
         CheckAcc2gm<TileData, GlobalData, false>(dst, src);
-        if constexpr (currentAtomicType == AtomicType::AtomicAdd) {
-            SetAtomicAdd<typename GlobalData::DType>();
-        }
         constexpr QuantMode_t quantMode = GetCastPreQuantMode<typename TileData::DType, typename GlobalData::DType>();
         TStoreAcc<GlobalData, TileData, quantMode>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),
             dst.GetShape(pto::GlobalTensorDim::DIM_1), dst.GetShape(pto::GlobalTensorDim::DIM_2),
@@ -593,9 +593,6 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
             dst.GetStride(pto::GlobalTensorDim::DIM_0), dst.GetStride(pto::GlobalTensorDim::DIM_1),
             dst.GetStride(pto::GlobalTensorDim::DIM_2), dst.GetStride(pto::GlobalTensorDim::DIM_3),
             dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
-        if constexpr (currentAtomicType == AtomicType::AtomicAdd) {
-            SetAtomicNone();
-        }
     } else if constexpr (TileData::Loc == pto::TileType::Mat) {
         CheckStaticForVecAndMat<TileData, GlobalData>();
         TStoreMat<GlobalData, TileData>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),

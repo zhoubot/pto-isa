@@ -492,6 +492,9 @@ __tf__ AICORE OP_NAME(TSTORE) OP_TYPE(memory) void TStore(typename GlobalData::D
 template <typename TileData, typename GlobalData, AtomicType atomicType = AtomicType::AtomicNone>
 PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
 {
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == pto::TileType::Acc,
+        "TSTORE: AtomicType::AtomicAdd is only supported for Acc tiles on A5");
+
     static_assert(TileData::Loc == pto::TileType::Vec || TileData::Loc == pto::TileType::Acc,
         "Source TileType only suport Vec/Acc!");
     if constexpr (TileData::Loc == pto::TileType::Acc) {

@@ -117,6 +117,8 @@ template <typename TileData, typename GlobalData, AtomicType atomicType, typenam
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, WaitEvents &...events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType>(dst, src);
     return {};
 }
