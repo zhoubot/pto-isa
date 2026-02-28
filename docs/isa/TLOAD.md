@@ -30,6 +30,11 @@ PTO_INST RecordEvent TLOAD(TileData& dst, GlobalData& src, WaitEvents&... events
 
 ## Constraints
 
+### CPU_SIM (strict crosscheck)
+
+- Supports `GlobalTensor` layouts: ND / DN / NZ.
+- Strict contract: `dst.GetValidRow()>0` and `dst.GetValidCol()>0` (empty valid is not allowed).
+
 - **Implementation checks (A2A3)**:
   - `TileData::DType` must be one of: `int8_t`, `uint8_t`, `int16_t`, `uint16_t`, `int32_t`, `uint32_t`, `int64_t`, `uint64_t`, `half`, `bfloat16_t`, `float`.
   - Destination tile location must be `TileType::Vec` or `TileType::Mat`.
