@@ -153,8 +153,8 @@ namespace pto {
     {
         static_assert(sizeof(typename TileData::DType) == sizeof(typename GlobalData::DType),
                       "Source dtype must be same with dst dtype");
-        static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN , "Only ND and DN GLobal Tensors are currently supported");
-        TLoad<TileData, GlobalData>(dst.data(),
+        static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN,
+                      "Only ND and DN GLobal Tensors are currently supported");
 
         // Strict contract: empty valid region is NOT allowed.
         PTO_CPU_ASSERT(dst.GetValidRow() > 0 && dst.GetValidCol() > 0,
@@ -165,6 +165,8 @@ namespace pto {
                        src.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
                        src.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
                        "Fix: TLOAD requires all src shape dims > 0");
+
+        TLoad<TileData, GlobalData>(dst.data(),
             src.data(),
             src.GetShape(pto::GlobalTensorDim::DIM_0),
             src.GetShape(pto::GlobalTensorDim::DIM_1),
@@ -178,6 +180,7 @@ namespace pto {
             src.GetStride(pto::GlobalTensorDim::DIM_4),
             dst.GetValidRow(),
             dst.GetValidCol());
+
     }
 }
 #endif
