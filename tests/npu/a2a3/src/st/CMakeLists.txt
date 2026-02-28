@@ -72,11 +72,15 @@ set(CMAKE_CPP_COMPILE_OPTIONS
     "SHELL:-include stddef.h"
 )
 
+set(PTO_REPO_ROOT "${PROJECT_SOURCE_DIR}/../../../../../")
+
+# IMPORTANT: for strict cross-checking we must build STs against the *repo* PTO headers,
+# not the installed CANN copy. Keep repo include first.
 include_directories(
+    ${PTO_REPO_ROOT}/include
     ${ASCEND_HOME_PATH}/include
     ${ASCEND_DRIVER_PATH}/kernel/inc
 )
-
 if (DEFINED ENV{ACCURATE_RSQRT})
     add_compile_definitions(ACCURATE_RSQRT)
 endif ()
