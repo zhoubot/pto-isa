@@ -160,19 +160,21 @@ namespace pto {
     {
         static_assert(sizeof(typename TileData::DType) == sizeof(typename GlobalData::DType),
                       "Source dtype must be same with dst dtype!");
-        static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN || GlobalData::layout == pto::Layout::NZ,
+        static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN ||
+                          GlobalData::layout == pto::Layout::NZ,
             "Only ND/DN/NZ GLobal Tensors are currently supported");
-        TStore<GlobalData, TileData>(dst.data(),
 
         // Strict contract: empty valid region is NOT allowed.
         PTO_CPU_ASSERT(src.GetValidRow() > 0 && src.GetValidCol() > 0,
                        "Fix: TSTORE requires src validRow/validCol > 0");
         PTO_CPU_ASSERT(dst.GetShape(pto::GlobalTensorDim::DIM_0) > 0 &&
-                       dst.GetShape(pto::GlobalTensorDim::DIM_1) > 0 &&
-                       dst.GetShape(pto::GlobalTensorDim::DIM_2) > 0 &&
-                       dst.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
-                       dst.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
+                           dst.GetShape(pto::GlobalTensorDim::DIM_1) > 0 &&
+                           dst.GetShape(pto::GlobalTensorDim::DIM_2) > 0 &&
+                           dst.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
+                           dst.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
                        "Fix: TSTORE requires all dst shape dims > 0");
+
+        TStore<GlobalData, TileData>(dst.data(),
             src.data(),
             dst.GetShape(pto::GlobalTensorDim::DIM_0),
             dst.GetShape(pto::GlobalTensorDim::DIM_1),
@@ -186,6 +188,7 @@ namespace pto {
             dst.GetStride(pto::GlobalTensorDim::DIM_4),
             src.GetValidRow(),
             src.GetValidCol());
+
     }
 
     template <typename TileData, typename GlobalData, AtomicType atomicType = AtomicType::AtomicNone>
