@@ -12,6 +12,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TSTORE_HPP
 
 #include <pto/common/constants.hpp>
+#include <pto/common/type.hpp>
 #include <cassert>
 #include "pto/cpu/parallel.hpp"
 
@@ -129,7 +130,6 @@ __tf__ PTO_INLINE void TStore(typename GlobalData::DType __out__ *dst, typename 
                               int gShape0, int gShape1, int gShape2, int gShape3, int gShape4, int gStride0,
                               int gStride1, int gStride2, int gStride3, int gStride4, int validRow, int validCol)
 {
-{
     static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
                   "TSTORE: AtomicAdd is only supported for Acc tiles in CPU_SIM");
 
@@ -168,15 +168,12 @@ __tf__ PTO_INLINE void TStore(typename GlobalData::DType __out__ *dst, typename 
         return;
     }
 
-    // AtomicAdd for Acc: only support ND reference path in CPU_SIM.
+    // AtomicAdd: Acc-only. For ND/DN, enforce a simple deterministic reference path.
     if constexpr (atomicType == AtomicType::AtomicAdd) {
-        static_assert(GlobalData::layout == pto::Layout::ND,
-                      "TSTORE(AtomicAdd): CPU_SIM currently supports AtomicAdd only for ND and NZ layouts");
-        PTO_CPU_ASSERT(gShape0 == 1 && gShape1 == 1 && gShape2 == 1,
-                       "Fix: TSTORE(AtomicAdd,ND) expects shape0/1/2 == 1");
+        PTO_CPU_ASSERT(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN,
+                       "Fix: TSTORE(AtomicAdd) requires dst layout ND/DN/NZ (NZ handled above)");
         PTO_CPU_ASSERT(validRow <= gShape3 && validCol <= gShape4,
-                       "Fix: TSTORE(AtomicAdd,ND) requires validRow<=shape3 and validCol<=shape4");
-
+                       "Fix: TSTORE(AtomicAdd) requires valid within dst 2D bounds");
         for (std::size_t r = 0; r < static_cast<std::size_t>(validRow); ++r) {
             for (std::size_t c = 0; c < static_cast<std::size_t>(validCol); ++c) {
                 const std::size_t gd_idx = r * static_cast<std::size_t>(gStride3) + c * static_cast<std::size_t>(gStride4);
@@ -210,7 +207,6 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
     static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN ||
                       GlobalData::layout == pto::Layout::NZ,
                   "Only ND/DN/NZ Global Tensors are supported in CPU_SIM TSTORE");
-    TStore<GlobalData, TileData, atomicType>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),
 
     // Strict contract: empty valid region is NOT allowed.
     PTO_CPU_ASSERT(src.GetValidRow() > 0 && src.GetValidCol() > 0,
@@ -221,11 +217,20 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
                        dst.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
                        dst.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
                    "Fix: TSTORE requires all dst shape dims > 0");
-                                 dst.GetShape(pto::GlobalTensorDim::DIM_1), dst.GetShape(pto::GlobalTensorDim::DIM_2),
-                                 dst.GetShape(pto::GlobalTensorDim::DIM_3), dst.GetShape(pto::GlobalTensorDim::DIM_4),
-                                 dst.GetStride(pto::GlobalTensorDim::DIM_0), dst.GetStride(pto::GlobalTensorDim::DIM_1),
-                                 dst.GetStride(pto::GlobalTensorDim::DIM_2), dst.GetStride(pto::GlobalTensorDim::DIM_3),
-                                 dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
+
+    TStore<GlobalData, TileData, atomicType>(dst.data(), src.data(),
+        dst.GetShape(pto::GlobalTensorDim::DIM_0),
+        dst.GetShape(pto::GlobalTensorDim::DIM_1),
+        dst.GetShape(pto::GlobalTensorDim::DIM_2),
+        dst.GetShape(pto::GlobalTensorDim::DIM_3),
+        dst.GetShape(pto::GlobalTensorDim::DIM_4),
+        dst.GetStride(pto::GlobalTensorDim::DIM_0),
+        dst.GetStride(pto::GlobalTensorDim::DIM_1),
+        dst.GetStride(pto::GlobalTensorDim::DIM_2),
+        dst.GetStride(pto::GlobalTensorDim::DIM_3),
+        dst.GetStride(pto::GlobalTensorDim::DIM_4),
+        src.GetValidRow(),
+        src.GetValidCol());
 }
 
 template <typename TileData, typename GlobalData, AtomicType atomicType = AtomicType::AtomicNone>
