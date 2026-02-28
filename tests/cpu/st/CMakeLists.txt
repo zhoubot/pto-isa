@@ -20,12 +20,18 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 add_definitions(-D__CPU_SIM)
 
-# GTest is required for CPU STs. Prefer a system installation, but fall back to
-# fetching googletest to make macOS builds self-contained.
-find_package(GTest QUIET)
-if (NOT GTest_FOUND)
+# GTest is required for CPU STs.
+# Prefer building from source to avoid ABI mismatch with preinstalled libgtest
+# (and to match the selected C++ compiler).
+set(GTEST_SRC_DIR "${PROJECT_SOURCE_DIR}/../../../build_tests/_deps/googletest-src" CACHE PATH "Path to googletest source")
+if(EXISTS "${GTEST_SRC_DIR}/CMakeLists.txt")
+    message(STATUS "Using in-tree googletest: ${GTEST_SRC_DIR}")
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${GTEST_SRC_DIR}" "${CMAKE_BINARY_DIR}/_deps/googletest" EXCLUDE_FROM_ALL)
+else()
     include(FetchContent)
-    message(STATUS "GTest not found; fetching googletest via FetchContent")
+    message(STATUS "Fetching googletest via FetchContent")
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
@@ -33,9 +39,14 @@ if (NOT GTest_FOUND)
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
     )
     FetchContent_MakeAvailable(googletest)
-    if (NOT TARGET GTest::gtest)
-        add_library(GTest::gtest ALIAS gtest)
-    endif()
+endif()
+
+if (NOT TARGET GTest::gtest)
+    add_library(GTest::gtest ALIAS gtest)
+endif()
+if (NOT TARGET GTest::gtest_main)
+    add_library(GTest::gtest_main ALIAS gtest_main)
+endif()
     if (NOT TARGET GTest::gtest_main)
         add_library(GTest::gtest_main ALIAS gtest_main)
     endif()
