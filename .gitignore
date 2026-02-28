@@ -24,3 +24,5 @@ a.out
 # Generated CPU testcase data directories (created by gen_data.py)
 tests/cpu/st/testcase/*/*.case*/
 tests/cpu/st/testcase/*/*.test*/
+# Generated per-test folders written under testcase dirs
+tests/cpu/st/testcase/*/*Test.*
