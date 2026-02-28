@@ -586,6 +586,9 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
             dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
     } else if constexpr (TileData::Loc == pto::TileType::Acc) {
         CheckAcc2gm<TileData, GlobalData, false>(dst, src);
+        if constexpr (currentAtomicType == AtomicType::AtomicAdd) {
+            SetAtomicAdd<typename GlobalData::DType>();
+        }
         constexpr QuantMode_t quantMode = GetCastPreQuantMode<typename TileData::DType, typename GlobalData::DType>();
         TStoreAcc<GlobalData, TileData, quantMode>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),
             dst.GetShape(pto::GlobalTensorDim::DIM_1), dst.GetShape(pto::GlobalTensorDim::DIM_2),
@@ -593,6 +596,9 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
             dst.GetStride(pto::GlobalTensorDim::DIM_0), dst.GetStride(pto::GlobalTensorDim::DIM_1),
             dst.GetStride(pto::GlobalTensorDim::DIM_2), dst.GetStride(pto::GlobalTensorDim::DIM_3),
             dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
+        if constexpr (currentAtomicType == AtomicType::AtomicAdd) {
+            SetAtomicNone();
+        }
     } else if constexpr (TileData::Loc == pto::TileType::Mat) {
         CheckStaticForVecAndMat<TileData, GlobalData>();
         TStoreMat<GlobalData, TileData>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),
