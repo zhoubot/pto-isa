@@ -124,31 +124,103 @@ __tf__ PTO_INLINE void StoreSubfractalMatrix(typename GlobalData::DType __out__ 
         });
 }
 
-template <typename GlobalData, typename TileData>
+template <typename GlobalData, typename TileData, AtomicType atomicType = AtomicType::AtomicNone>
 __tf__ PTO_INLINE void TStore(typename GlobalData::DType __out__ *dst, typename TileData::TileDType __in__ src,
                               int gShape0, int gShape1, int gShape2, int gShape3, int gShape4, int gStride0,
                               int gStride1, int gStride2, int gStride3, int gStride4, int validRow, int validCol)
 {
+{
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+                  "TSTORE: AtomicAdd is only supported for Acc tiles in CPU_SIM");
+
+    // NZ: treat global as a 2D view (shape2*shape3) x (shape0*shape1*shape4).
+    if constexpr (GlobalData::layout == pto::Layout::NZ) {
+        PTO_CPU_ASSERT(validRow <= gShape2 * gShape3 && validCol <= gShape0 * gShape1 * gShape4,
+                       "Fix: TSTORE(NZ) requires validRow<=shape2*shape3 and validCol<=shape0*shape1*shape4");
+        static_assert(GlobalData::staticShape[3] == FRACTAL_NZ_ROW &&
+                          GlobalData::staticShape[4] == C0_SIZE_BYTE / sizeof(typename TileData::DType),
+                      "Fix: GlobalTensor NZ requires last dims [16, 32/sizeof(T)]");
+
+        for (std::size_t r = 0; r < static_cast<std::size_t>(validRow); ++r) {
+            const std::size_t idx2 = r / static_cast<std::size_t>(gShape3);
+            const std::size_t idx3 = r % static_cast<std::size_t>(gShape3);
+            for (std::size_t c = 0; c < static_cast<std::size_t>(validCol); ++c) {
+                const std::size_t denom = static_cast<std::size_t>(gShape1) * static_cast<std::size_t>(gShape4);
+                const std::size_t idx0 = c / denom;
+                const std::size_t rem = c % denom;
+                const std::size_t idx1 = rem / static_cast<std::size_t>(gShape4);
+                const std::size_t idx4 = rem % static_cast<std::size_t>(gShape4);
+                const std::size_t gd_idx =
+                    idx0 * static_cast<std::size_t>(gStride0) +
+                    idx1 * static_cast<std::size_t>(gStride1) +
+                    idx2 * static_cast<std::size_t>(gStride2) +
+                    idx3 * static_cast<std::size_t>(gStride3) +
+                    idx4 * static_cast<std::size_t>(gStride4);
+
+                const std::size_t tile_idx = GetTileElementOffset<TileData>(r, c);
+                if constexpr (atomicType == AtomicType::AtomicAdd) {
+                    dst[gd_idx] += src[tile_idx];
+                } else {
+                    dst[gd_idx] = src[tile_idx];
+                }
+            }
+        }
+        return;
+    }
+
+    // AtomicAdd for Acc: only support ND reference path in CPU_SIM.
+    if constexpr (atomicType == AtomicType::AtomicAdd) {
+        static_assert(GlobalData::layout == pto::Layout::ND,
+                      "TSTORE(AtomicAdd): CPU_SIM currently supports AtomicAdd only for ND and NZ layouts");
+        PTO_CPU_ASSERT(gShape0 == 1 && gShape1 == 1 && gShape2 == 1,
+                       "Fix: TSTORE(AtomicAdd,ND) expects shape0/1/2 == 1");
+        PTO_CPU_ASSERT(validRow <= gShape3 && validCol <= gShape4,
+                       "Fix: TSTORE(AtomicAdd,ND) requires validRow<=shape3 and validCol<=shape4");
+
+        for (std::size_t r = 0; r < static_cast<std::size_t>(validRow); ++r) {
+            for (std::size_t c = 0; c < static_cast<std::size_t>(validCol); ++c) {
+                const std::size_t gd_idx = r * static_cast<std::size_t>(gStride3) + c * static_cast<std::size_t>(gStride4);
+                dst[gd_idx] += src[GetTileElementOffset<TileData>(r, c)];
+            }
+        }
+        return;
+    }
+
     // CPU simulator: allow partial (masked) stores.
-    assert((gShape0 * gShape1 * gShape2 * gShape3 >= validRow && gShape4 >= validCol && TileData::isRowMajor) ||
-           (gShape0 * gShape1 * gShape2 * gShape4 >= validCol && gShape3 >= validRow && !TileData::isRowMajor));
+    PTO_CPU_ASSERT((gShape0 * gShape1 * gShape2 * gShape3 >= validRow && gShape4 >= validCol && TileData::isRowMajor) ||
+                       (gShape0 * gShape1 * gShape2 * gShape4 >= validCol && gShape3 >= validRow && !TileData::isRowMajor),
+                   "Fix: TSTORE ND/DN requires valid dims within dst shape bounds");
+
     if (TileData::SFractal == SLayout::NoneBox) {
         StorePlain<GlobalData, TileData>(dst, src, gShape0, gShape1, gShape2, gShape3, gShape4, gStride0, gStride1,
                                          gStride2, gStride3, gStride4, validRow, validCol);
     } else {
-        assert(gShape0 == 1 && gShape1 == 1 && gShape2 == 1 && "Nz,Zn -> ND,DN convertion does support only 2D GMs");
+        PTO_CPU_ASSERT(gShape0 == 1 && gShape1 == 1 && gShape2 == 1,
+                       "Fix: Nz,Zn -> ND,DN conversion only supports 2D GMs");
         StoreSubfractalMatrix<GlobalData, TileData>(dst, src, gShape3, gShape4, gStride3, gStride4, validRow, validCol);
     }
 }
+
 
 template <typename TileData, typename GlobalData, AtomicType atomicType = AtomicType::AtomicNone>
 PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
 {
     static_assert(sizeof(typename TileData::DType) == sizeof(typename GlobalData::DType),
                   "Source dtype must be same with dst dtype!");
-    static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN,
-                  "Only ND and DN GLobal Tensors are currently supported");
-    TStore<GlobalData, TileData>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),
+    static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN ||
+                      GlobalData::layout == pto::Layout::NZ,
+                  "Only ND/DN/NZ Global Tensors are supported in CPU_SIM TSTORE");
+    TStore<GlobalData, TileData, atomicType>(dst.data(), src.data(), dst.GetShape(pto::GlobalTensorDim::DIM_0),
+
+    // Strict contract: empty valid region is NOT allowed.
+    PTO_CPU_ASSERT(src.GetValidRow() > 0 && src.GetValidCol() > 0,
+                   "Fix: TSTORE requires src validRow/validCol > 0");
+    PTO_CPU_ASSERT(dst.GetShape(pto::GlobalTensorDim::DIM_0) > 0 &&
+                       dst.GetShape(pto::GlobalTensorDim::DIM_1) > 0 &&
+                       dst.GetShape(pto::GlobalTensorDim::DIM_2) > 0 &&
+                       dst.GetShape(pto::GlobalTensorDim::DIM_3) > 0 &&
+                       dst.GetShape(pto::GlobalTensorDim::DIM_4) > 0,
+                   "Fix: TSTORE requires all dst shape dims > 0");
                                  dst.GetShape(pto::GlobalTensorDim::DIM_1), dst.GetShape(pto::GlobalTensorDim::DIM_2),
                                  dst.GetShape(pto::GlobalTensorDim::DIM_3), dst.GetShape(pto::GlobalTensorDim::DIM_4),
                                  dst.GetStride(pto::GlobalTensorDim::DIM_0), dst.GetStride(pto::GlobalTensorDim::DIM_1),
