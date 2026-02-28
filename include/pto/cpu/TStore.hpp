@@ -12,6 +12,7 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #define TSTORE_HPP
 
 #include <pto/common/constants.hpp>
+#include <pto/common/type.hpp>
 #include <cassert>
 #include "pto/cpu/parallel.hpp"
 
@@ -110,9 +111,42 @@ namespace pto {
         int gShape0, int gShape1, int gShape2, int gShape3, int gShape4, int gStride0, int gStride1, int gStride2,
         int gStride3, int gStride4, int validRow, int validCol)
     {
-        assert((gShape0*gShape1*gShape2*gShape3 == validRow && gShape4==validCol && TileData::isRowMajor) ||
-            (gShape0*gShape1*gShape2*gShape4 == validCol && gShape3==validRow && !TileData::isRowMajor));
-        if(TileData::SFractal == SLayout::NoneBox) {
+        if constexpr (GlobalData::layout == pto::Layout::NZ) {
+            // NZ: validRow = shape2*shape3 (shape3 typically 16), validCol = shape0*shape1*shape4 (shape4=C0).
+            PTO_CPU_ASSERT(validRow == gShape2 * gShape3 && validCol == gShape0 * gShape1 * gShape4,
+                           "Fix: TSTORE(NZ) requires validRow==shape2*shape3 and validCol==shape0*shape1*shape4");
+            PTO_CPU_ASSERT((!TileData::isRowMajor) && (TileData::SFractal == SLayout::RowMajor),
+                           "Fix: TSTORE(NZ->NZ) requires TileData in Nz layout");
+        } else {
+            PTO_CPU_ASSERT((gShape0*gShape1*gShape2*gShape3 == validRow && gShape4==validCol && TileData::isRowMajor) ||
+                (gShape0*gShape1*gShape2*gShape4 == validCol && gShape3==validRow && !TileData::isRowMajor),
+                "Fix: TSTORE ND/DN shape/valid mismatch");
+        }
+        if constexpr (GlobalData::layout == pto::Layout::NZ) {
+            // Tile NZ -> Global NZ: map 2D (r,c) to 5D NZ indices using (shape0..4, stride0..4).
+            // Prefer static enforcement of NZ base shape when available (matches NPU CheckNzFormat).
+            static_assert(GlobalData::staticShape[3] == FRACTAL_NZ_ROW &&
+                              GlobalData::staticShape[4] == C0_SIZE_BYTE / sizeof(typename TileData::DType),
+                          "Fix: GlobalTensor NZ requires last dims [16, 32/sizeof(T)]");
+            for (std::size_t r = 0; r < static_cast<std::size_t>(validRow); ++r) {
+                const std::size_t idx2 = r / static_cast<std::size_t>(gShape3);
+                const std::size_t idx3 = r % static_cast<std::size_t>(gShape3);
+                for (std::size_t c = 0; c < static_cast<std::size_t>(validCol); ++c) {
+                    const std::size_t denom = static_cast<std::size_t>(gShape1) * static_cast<std::size_t>(gShape4);
+                    const std::size_t idx0 = c / denom;
+                    const std::size_t rem = c % denom;
+                    const std::size_t idx1 = rem / static_cast<std::size_t>(gShape4);
+                    const std::size_t idx4 = rem % static_cast<std::size_t>(gShape4);
+                    const std::size_t gd_idx =
+                        idx0 * static_cast<std::size_t>(gStride0) +
+                        idx1 * static_cast<std::size_t>(gStride1) +
+                        idx2 * static_cast<std::size_t>(gStride2) +
+                        idx3 * static_cast<std::size_t>(gStride3) +
+                        idx4 * static_cast<std::size_t>(gStride4);
+                    dst[gd_idx] = src[GetTileElementOffset<TileData>(r, c)];
+                }
+            }
+        } else if(TileData::SFractal == SLayout::NoneBox) {
             StorePlain<GlobalData, TileData>(dst, src, gShape0, gShape1, gShape2, gShape3, gShape4, gStride0, gStride1, gStride2,
                 gStride3, gStride4, validRow, validCol);
         } else {
@@ -126,7 +160,8 @@ namespace pto {
     {
         static_assert(sizeof(typename TileData::DType) == sizeof(typename GlobalData::DType),
                       "Source dtype must be same with dst dtype!");
-        static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN , "Only ND and DN GLobal Tensors are currently supported");
+        static_assert(GlobalData::layout == pto::Layout::ND || GlobalData::layout == pto::Layout::DN || GlobalData::layout == pto::Layout::NZ,
+            "Only ND/DN/NZ GLobal Tensors are currently supported");
         TStore<GlobalData, TileData>(dst.data(),
             src.data(),
             dst.GetShape(pto::GlobalTensorDim::DIM_0),
