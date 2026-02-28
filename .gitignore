@@ -13,3 +13,14 @@ __pycache__/
 *.log
 tests/npu/a2a3/src/st/build
 tests/npu/a5/src/st/build
+
+# CPU-SIM build/test artifacts
+build_tests_cpu/
+build_tests_cpu_sim/
+/tmp/cpu_build_*/
+
+a.out
+
+# Generated CPU testcase data directories (created by gen_data.py)
+tests/cpu/st/testcase/*/*.case*/
+tests/cpu/st/testcase/*/*.test*/
