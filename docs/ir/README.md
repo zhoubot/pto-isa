@@ -134,6 +134,18 @@ Structured control flow operations from MLIR `scf` dialect:
 
 ---
 
+## Comparison with NVIDIA TileIR
+
+A comprehensive technical comparison between PTO and NVIDIA TileIR:
+
+- **Technical Comparison Document**: [PTO-vs-TileIR-CN.pdf](PTO-vs-TileIR-CN.pdf) - Chinese version with PDF format
+- **Related Diagrams**:
+  - [pipeline-comparison.svg](pipeline-comparison.svg) - Compilation pipeline comparison
+  - [datamodel-comparison.svg](datamodel-comparison.svg) - Data model comparison
+  - [memorymodel-comparison.svg](memorymodel-comparison.svg) - Memory model comparison
+
+---
+
 ## Related Resources
 
 - **ISA Instruction Reference**: `../isa/README.md` - Per-instruction canonical semantics

@@ -1,4 +1,4 @@
-# include/
+# 头文件
 
 PTO Tile Lib 对外的 C/C++ 头文件（以模板化、基本 header-only 为主）。上层框架/算子可以通过这些头文件生成 PTO ISA 的 Tile 指令序列。
 
