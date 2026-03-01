@@ -19,8 +19,8 @@ This folder defines the abstract execution model used by the PTO ISA and PTO Til
 
 | Component | Description | Path |
 |-----------|-------------|------|
-| **PTO ISA** | Virtual instruction set architecture | [`include/pto/`](include/pto/) |
-| **PTO-AS** | Assembly language specification | [`docs/grammar/PTO-AS.md`](docs/grammar/PTO-AS.md) |
-| **pyPTO** | Python frontend for PTO | [`docs/pyPTO/`](docs/pyPTO/) |
+| **PTO ISA** | Virtual instruction set architecture | [`include/pto/`](../../include/pto/) |
+| **PTO-AS** | Assembly language specification | [`docs/grammar/PTO-AS.md`](../grammar/PTO-AS.md) |
+| **pyPTO** | Python frontend for PTO | [`docs/pyPTO/`](../pyPTO/) |
 | **PTOAS** | PTO assembler and MLIR dialect | [`PTOAS/`](../../PTOAS/) |
 | **TileLang Ascend** | High-level framework integration | [External: tilelang-ascend](https://github.com/tile-ai/tilelang-ascend/) |
