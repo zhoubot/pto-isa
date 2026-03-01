@@ -19,3 +19,11 @@ __pycache__/
 tests/npu/a2a3/src/st/build
 tests/npu/a5/src/st/build
 .arts
+
+# Codex / local-generated artifacts (do not commit)
+.agents/
+a.out
+compile_errors*.txt
+/test_*.cpp
+TCOLEXPANDOPTest.case_*/
+TLOADTest.case_*/
