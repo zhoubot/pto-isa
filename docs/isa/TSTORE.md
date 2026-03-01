@@ -85,6 +85,7 @@ PTO_INST RecordEvent TSTORE_FP(GlobalData& dst, TileData& src, FpTileData& fp, W
     - Static shape constraints match A2A3 for rows/cols; `AtomicAdd` additionally restricts destination dtype to supported atomic types.
 - **Valid region**:
   - The implementation uses `src.GetValidRow()` / `src.GetValidCol()` as the transfer size.
+  - **Out-of-bounds behavior:** If the effective store region falls outside the `dst` GlobalTensor bounds, the behavior is **undefined** (callers must ensure indices/offsets and valid sizes stay in-bounds).
 
 ## Examples
 
