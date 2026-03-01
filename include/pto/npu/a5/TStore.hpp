@@ -611,13 +611,15 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
 {
     static_assert(TileData::Loc == pto::TileType::Vec || TileData::Loc == pto::TileType::Acc,
                   "Source TileType only suport Vec/Acc!");
-    if constexpr (atomicType == AtomicType::AtomicAdd) {
-        SetAtomicAdd<typename GlobalData::DType>();
-    }
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == pto::TileType::Acc,
+        "TSTORE: AtomicAdd is only supported for Acc tiles on A5 (Vec atomic store is not supported)");
     if constexpr (TileData::Loc == pto::TileType::Acc) {
         using L0cT = typename TileData::DType;
         using DstT = typename GlobalData::DType;
         CheckStaticAcc<TileData, GlobalData, false>();
+        if constexpr (atomicType == AtomicType::AtomicAdd) {
+            SetAtomicAdd<typename GlobalData::DType>();
+        }
 
         constexpr QuantMode_t quantPre = GetCastPreQuantModeGm<L0cT, DstT>();
         TStoreAcc<GlobalData, TileData, quantPre, ReluPreMode::NoRelu, Phase>(
@@ -627,6 +629,9 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
             dst.GetStride(pto::GlobalTensorDim::DIM_0), dst.GetStride(pto::GlobalTensorDim::DIM_1),
             dst.GetStride(pto::GlobalTensorDim::DIM_2), dst.GetStride(pto::GlobalTensorDim::DIM_3),
             dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
+        if constexpr (atomicType == AtomicType::AtomicAdd) {
+            set_atomic_none();
+        }
     } else if constexpr (TileData::Loc == pto::TileType::Vec) {
         CheckStaticVec<TileData, GlobalData>();
 
@@ -637,9 +642,6 @@ PTO_INTERNAL void TSTORE_IMPL(GlobalData &dst, TileData &src)
             dst.GetStride(pto::GlobalTensorDim::DIM_0), dst.GetStride(pto::GlobalTensorDim::DIM_1),
             dst.GetStride(pto::GlobalTensorDim::DIM_2), dst.GetStride(pto::GlobalTensorDim::DIM_3),
             dst.GetStride(pto::GlobalTensorDim::DIM_4), src.GetValidRow(), src.GetValidCol());
-    }
-    if constexpr (atomicType == AtomicType::AtomicAdd) {
-        set_atomic_none();
     }
 }
 

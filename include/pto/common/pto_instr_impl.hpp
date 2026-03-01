@@ -111,6 +111,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a2a3/TQuant.hpp"
 #include "pto/npu/a2a3/TDequant.hpp"
 #endif
+#endif // PTO_NPU_ARCH_A2A3
+
 
 #ifdef PTO_NPU_ARCH_A5
 #include "pto/npu/a5/TAssign.hpp"
@@ -212,6 +214,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/npu/a5/TInsert.hpp"
 #include "pto/npu/a5/MGatherScatter.hpp"
 #endif
+#endif // PTO_NPU_ARCH_A5
+
 
 #ifdef PTO_NPU_ARCH_KIRIN9030
 #include "pto/npu/kirin9030/header.hpp"

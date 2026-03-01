@@ -46,6 +46,7 @@ tadds
 tabs
 tload
 tstore
+tstore_atomicadd
 textract
 texpands
 tmov

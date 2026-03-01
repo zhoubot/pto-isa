@@ -56,11 +56,11 @@ For the full specification document, see: [PTO-AS.md](PTO-AS.md)
 
 | Component | Description | Location |
 |-----------|-------------|----------|
-| **PTO-ISA** | Virtual instruction set for tile operations | [`include/pto/`](include/pto/) |
-| **PTO-BC** | Binary bytecode encoding | [`docs/bytecode/`](docs/bytecode/) |
-| **PTOAS** | MLIR-based assembler (submodule) | [`PTOAS/`](PTOAS/) |
+| **PTO-ISA** | Virtual instruction set for tile operations | [`include/pto/`](../../include/pto/) |
+| **PTO-BC** | Binary bytecode encoding | [`docs/bytecode/`](../bytecode/) |
+| **PTOAS** | MLIR-based assembler (submodule) | [`PTOAS/`](../../PTOAS/) |
 | **pyPTO** | Python frontend for PTO | [External](https://gitcode.com/cann/pypto/) |
-| **PTODSL** | Python DSL for kernel authoring | [`PTODSL/`](PTODSL/) |
+| **PTODSL** | Python DSL for kernel authoring | [`PTODSL/`](../../PTODSL/) |
 | **TileLang Ascend** | High-level framework | [External](https://github.com/tile-ai/tilelang-ascend/) |
 
 ## Toolchain Flow

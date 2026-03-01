@@ -16,6 +16,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/common/pto_instr_impl.hpp"
 #include "pto/comm/comm_types.hpp"
 
+#ifdef __CPU_SIM
+#include "pto/cpu/TMrgSort.hpp"
+#endif
+
 #define MAP_INSTR_IMPL(API, ...) API##_IMPL(__VA_ARGS__)
 
 namespace pto {
@@ -163,6 +167,8 @@ template <typename TileData, typename GlobalData, AtomicType atomicType, typenam
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType>(dst, src);
     return {};
 }
@@ -171,6 +177,8 @@ template <STPhase Phase, typename TileData, typename GlobalData, AtomicType atom
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType, Phase>(dst, src);
     return {};
 }
@@ -180,6 +188,8 @@ template <typename TileData, typename GlobalData, AtomicType atomicType = Atomic
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType, reluPreMode>(dst, src);
     return {};
 }
@@ -189,6 +199,8 @@ template <STPhase Phase, typename TileData, typename GlobalData, AtomicType atom
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType, reluPreMode, Phase>(dst, src);
     return {};
 }
@@ -198,6 +210,8 @@ template <typename TileData, typename GlobalData, AtomicType atomicType = Atomic
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, uint64_t preQuantScalar, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType, reluPreMode>(dst, src, preQuantScalar);
     return {};
 }
@@ -207,6 +221,8 @@ template <STPhase Phase, typename TileData, typename GlobalData, AtomicType atom
 PTO_INST RecordEvent TSTORE(GlobalData &dst, TileData &src, uint64_t preQuantScalar, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, atomicType, reluPreMode, Phase>(dst, src, preQuantScalar);
     return {};
 }
@@ -216,6 +232,8 @@ template <typename TileData, typename GlobalData, typename FpTileData, AtomicTyp
 PTO_INST RecordEvent TSTORE_FP(GlobalData &dst, TileData &src, FpTileData &fp, WaitEvents &... events)
 {
     TSYNC(events...);
+    static_assert(atomicType == AtomicType::AtomicNone || TileData::Loc == TileType::Acc,
+        "TSTORE: AtomicType is only supported for Acc tiles (Vec/Mat atomic store is not supported)");
     TSTORE_IMPL<TileData, GlobalData, FpTileData, atomicType, reluPreMode>(dst, src, fp);
     return {};
 }

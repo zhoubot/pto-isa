@@ -88,8 +88,8 @@ PTO_INTERNAL void TRowExpandOp(TileDst &dst, TileDst &src0, TileSrc1 &src1)
     }
 
     cpu::parallel_for_rows(rows, cols, [&](std::size_t r) {
-        const auto s = static_cast<typename TileDst::DType>(load_row_scalar(src1, r));
         for (std::size_t c = 0; c < cols; ++c) {
+            const auto s = static_cast<typename TileDst::DType>(load_row_broadcast(src1, r, c));
             const std::size_t idx = GetTileElementOffset<TileDst>(r, c);
             const auto v0 = static_cast<typename TileDst::DType>(src0.data()[idx]);
             ElementOpCal<typename TileDst::DType, TileOperation>::apply(dst.data()[idx], v0, s);
@@ -119,24 +119,6 @@ template <typename TileDst, typename TileSrc1>
 PTO_INTERNAL void TROWEXPANDADD_IMPL(TileDst &dst, TileDst &src0, TileSrc1 &src1)
 {
     TRowExpandOp<TileDst, TileSrc1, ElementOp::OP_ADD>(dst, src0, src1);
-}
-
-template <typename TileDst, typename TileSrc1>
-PTO_INTERNAL void TROWEXPANDADD_IMPL(TileDst &dst, TileDst &src0, TileSrc1 &src1)
-{
-    const std::size_t rows = static_cast<std::size_t>(dst.GetValidRow());
-    const std::size_t cols = static_cast<std::size_t>(dst.GetValidCol());
-    if (rows == 0 || cols == 0) {
-        return;
-    }
-
-    cpu::parallel_for_rows(rows, cols, [&](std::size_t r) {
-        for (std::size_t c = 0; c < cols; ++c) {
-            const auto s = load_row_broadcast(src1, r, c);
-            const auto v0 = static_cast<typename TileDst::DType>(src0.data()[GetTileElementOffset<TileDst>(r, c)]);
-            dst.data()[GetTileElementOffset<TileDst>(r, c)] = static_cast<typename TileDst::DType>(v0 + s);
-        }
-    });
 }
 
 template <typename TileDst, typename TileSrc1>
