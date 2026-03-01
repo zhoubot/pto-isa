@@ -254,4 +254,4 @@ void example_manual() {
 
 - [`TSTORE`](../../docs/isa/TSTORE.md): Contiguous block transfer from Tile to GM
 - [`TSCATTER`](../../docs/isa/TSCATTER.md): Index-based scatter within tiles (UB-to-UB)
-- [`MGATHER`](MGATHER.md): Indexed gather from GM to Tile (inverse operation)
+- [`MGATHER`](../mgather/MGATHER.md): Indexed gather from GM to Tile (inverse operation)
