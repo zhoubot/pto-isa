@@ -59,7 +59,7 @@ Instruction pages in `docs/isa/` specify which locations are legal for each inst
 The constructors enforce “number of runtime parameters equals number of dynamic dimensions” via `static_assert`, so mismatched construction fails at compile time.
 
 
-## Address binding (`TASSIGN`)
+## Address frontend (`TASSIGN`)
 
 In manual placement flows, `TASSIGN(tile, addr)` binds a convtile object to an implementation-defined address. In auto flows, `TASSIGN(tile, addr)` may be a no-op depending on build configuration.
 

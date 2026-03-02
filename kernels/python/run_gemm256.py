@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_BINDING_PY = _REPO_ROOT / "binding" / "python"
+_BINDING_PY = _REPO_ROOT / "frontend" / "python"
 if str(_BINDING_PY) not in sys.path:
     sys.path.insert(0, str(_BINDING_PY))
 
-from ptoas.python import binding, pipeline  # noqa: E402
+from ptoas.python import frontend, pipeline  # noqa: E402
 from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 
@@ -73,8 +73,8 @@ def main() -> int:
         pipeline.ensure_ascend_sim_env(ascend_home=args.ascend_home, soc=soc)
 
     py = Path(__file__).resolve().with_name("gemm256.py")
-    spec = binding.compile_file(py, kernel="gemm256")
-    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=binding.default_host_spec(spec))
+    spec = frontend.compile_file(py, kernel="gemm256")
+    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=frontend.default_host_spec(spec))
 
     pto_path = args.outdir / f"{spec.name}.pto"
     pto_path.write_text(pto_text, encoding="utf-8")

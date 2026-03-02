@@ -16,7 +16,7 @@ PTO supports two complementary usage styles:
   - The compiler inserts required synchronization.
   - The compiler schedules operations (and applies fusions such as VF fusion when available).
 - **PTO-Manual**: prioritize control and peak performance.
-  - The programmer controls memory placement and binding (e.g., `TASSIGN`).
+  - The programmer controls memory placement and frontend (e.g., `TASSIGN`).
   - The programmer is responsible for expressing ordering/synchronization (e.g., events, `TSYNC`).
   - The programmer controls the operation schedule; the compiler focuses on local transformations and fusions.
 

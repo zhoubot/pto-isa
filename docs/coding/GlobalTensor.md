@@ -83,7 +83,7 @@ Two helper families are commonly used for 2-D tensors:
 
 Despite its name, `BaseShape2D` is a **stride** helper (it derives from `pto::Stride`).
 
-## Address binding (`TASSIGN`)
+## Address frontend (`TASSIGN`)
 
 `TASSIGN(globalTensor, ptr)` sets the underlying GM pointer of a `GlobalTensor`. The pointer type must match `GlobalTensor::DType` (enforced by `static_assert` in `TASSIGN_IMPL`).
 

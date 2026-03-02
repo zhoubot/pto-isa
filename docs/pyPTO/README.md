@@ -4,7 +4,7 @@ This repo provides a **Python-first** way to author PTO kernels, then run the fu
 
 `Python kernel` → `PTO-AS (.pto)` → `ptoas` → `CCE C++` → `bisheng` → `fatobj .so` → `ACL launch (NPU/sim)`
 
-The Python source is typically **parsed (AST)** by `binding/python/ptoas/python/ast_frontend.py` and is **not executed**.
+The Python source is typically **parsed (AST)** by `frontend/python/ptoas/python/ast_frontend.py` and is **not executed**.
 
 ## 1. Two authoring styles
 
@@ -43,7 +43,7 @@ The important convention is:
 
 ### 1.2 Function DSL stubs (`ptoas.python.dsl`)
 
-`binding/python/ptoas/python/dsl.py` contains non-executable stubs for authors that prefer:
+`frontend/python/ptoas/python/dsl.py` contains non-executable stubs for authors that prefer:
 
 ```python
 from ptoas.python.dsl import *
@@ -158,8 +158,8 @@ Debug helpers:
 
 ## 7. PTO instruction coverage in Python
 
-`pto_as.PTO` exposes a curated set of PTO ISA mnemonics (see `_PTO_KNOWN_OPS` in `binding/python/pto_as/__init__.py`), and
-`ptoas.python.dsl` also exposes a matching set of stub functions (see `_PTO_ISA_OPS` in `binding/python/ptoas/python/dsl.py`).
+`pto_as.PTO` exposes a curated set of PTO ISA mnemonics (see `_PTO_KNOWN_OPS` in `frontend/python/pto_as/__init__.py`), and
+`ptoas.python.dsl` also exposes a matching set of stub functions (see `_PTO_ISA_OPS` in `frontend/python/ptoas/python/dsl.py`).
 
 If you add a new ISA instruction in C++ (`include/pto/common/pto_instr.hpp`), update these lists so the Python
 frontend stays in sync.

@@ -21,7 +21,7 @@ For the abstract execution model (core/device/host), see `docs/machine/abstract-
 
 PTO-Auto targets developers who prefer a simple, portable programming experience:
 
-- The compiler/runtime chooses memory placement and address binding.
+- The compiler/runtime chooses memory placement and address frontend.
 - The compiler inserts required synchronization.
 - The compiler schedules operations and applies fusions when possible.
 
@@ -31,7 +31,7 @@ This mode is a good starting point for correctness and portability.
 
 PTO-Manual targets developers who need full control for performance tuning:
 
-- The developer controls memory placement and binding (for example via `TASSIGN`).
+- The developer controls memory placement and frontend (for example via `TASSIGN`).
 - The developer explicitly expresses ordering (events and/or `TSYNC`).
 - The developer controls the operation schedule.
 

@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_BINDING_PY = _REPO_ROOT / "binding" / "python"
+_BINDING_PY = _REPO_ROOT / "frontend" / "python"
 if str(_BINDING_PY) not in sys.path:
     sys.path.insert(0, str(_BINDING_PY))
 
-from ptoas.python import binding, pipeline  # noqa: E402
+from ptoas.python import frontend, pipeline  # noqa: E402
 from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 from kernels.python.fp16_gemm24.kernel import Fp16Gemm24Config, make_fp16_gemm24_kernel  # noqa: E402
@@ -78,7 +78,7 @@ def main() -> int:
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     pto_path = args.outdir / f"{spec.name}.pto"
-    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=binding.default_host_spec(spec))
+    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=frontend.default_host_spec(spec))
     pto_path.write_text(pto_text, encoding="utf-8")
 
     host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)

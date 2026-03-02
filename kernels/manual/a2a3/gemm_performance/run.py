@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_BINDING_PY = _REPO_ROOT / "binding" / "python"
+_BINDING_PY = _REPO_ROOT / "frontend" / "python"
 if str(_BINDING_PY) not in sys.path:
     sys.path.insert(0, str(_BINDING_PY))
 
@@ -161,7 +161,7 @@ def run_sim_via_cmake(*, soc_version: str, ascend_home: Path, work_dir: Path, ti
     work_dir = Path(work_dir).resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
     print("[INFO] sim: generating input+golden ...")
-    _run_subprocess([sys.executable, str((src_root / "scripts" / "gen_data.py").resolve())], cwd=work_dir, env=env, timeout_sec=600)
+    _run_subprocess([sys.executable, str((src_root / "tests/scripts" / "gen_data.py").resolve())], cwd=work_dir, env=env, timeout_sec=600)
 
     build_dir = work_dir / "build"
     build_dir.mkdir(parents=True, exist_ok=True)

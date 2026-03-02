@@ -95,7 +95,7 @@ PTO AS 提供 **116 个 tile 操作**、**11 个辅助函数**、**47 个标量�
 - **实用工具**：`TCI`、`TTRI`、`TQUANT`、`TPRINT`
 
 ### 手动资源绑定 - 6 个操作
-**文档**：[PTO-IR-manual-binding-ops_zh.md](PTO-IR-manual-binding-ops_zh.md)
+**文档**：[PTO-IR-manual-frontend-ops_zh.md](PTO-IR-manual-frontend-ops_zh.md)
 
 - **赋值**：`TASSIGN`
 - **模式配置**：`TSETHF32MODE`、`TSETTF32MODE`、`TSETFMATRIX`

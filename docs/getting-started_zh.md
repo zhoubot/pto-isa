@@ -220,8 +220,8 @@ python3 tests/run_cpu.py --clean --verbose
 
   注意：如果您尚未安装 toolkit，您需要先下载 toolkit 安装包。
   ```bash
-  chmod +x ./scripts/install_pto.sh
-  ./scripts/install_pto.sh <toolkit_install_path> [toolkit_package_path]
+  chmod +x ./tests/scripts/install_pto.sh
+  ./tests/scripts/install_pto.sh <toolkit_install_path> [toolkit_package_path]
   ```
 
 # 环境设置 (Ascend 910B/910C, Linux)

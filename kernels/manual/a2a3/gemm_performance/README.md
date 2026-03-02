@@ -12,7 +12,7 @@ This example demonstrates how to implement a high-performance GEMM operator usin
 
 ```
 kernels/manual/a2a3/gemm_performance/
-├── scripts/
+├── tests/scripts/
 │   └── gen_data.py                  # Generates input and golden output
 ├── CMakeLists.txt                   # Build configuration
 ├── gemm_performance_kernel.cpp      # Kernel implementation
@@ -205,7 +205,7 @@ source ${ASCEND_INSTALL_PATH}/bin/setenv.bash
 
 ```bash
 cd ${git_clone_path}/kernels/manual/a2a3/gemm_performance
-python3 scripts/gen_data.py
+python3 tests/scripts/gen_data.py
 ```
 
 3. Run the example:

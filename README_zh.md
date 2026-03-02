@@ -213,7 +213,7 @@ cmake --build build/docs --target pto_docs
 - `kernels/`：自定义算子与 kernel 实现（见 [`kernels/README_zh.md`](kernels/README_zh.md)）
 - `docs/`：ISA 指令、API 指南与示例（见 [`docs/README_zh.md`](docs/README_zh.md)）
 - `tests/`：ST/CPU 测试脚本与用例（见 [`tests/README_zh.md`](tests/README_zh.md)）
-- `scripts/`：打包与发布脚本（见 [`scripts/README_zh.md`](scripts/README_zh.md)）
+- `tests/scripts/`：打包与发布脚本（见 [`tests/scripts/README_zh.md`](tests/scripts/README_zh.md)）
 - `build.sh`、`tests/run_st.sh`：构建、打包与示例运行入口
 
 ## 贡献指南

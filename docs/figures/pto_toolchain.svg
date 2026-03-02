@@ -26,7 +26,7 @@
   <rect x="0" y="0" width="1200" height="620" fill="url(#bg)"/>
 
   <text x="600" y="48" text-anchor="middle" class="title">Validated PTODSL -> PTOAS -> CPU Sim Flow</text>
-  <text x="600" y="74" text-anchor="middle" class="subtitle">Used by demos/ptodsl_ptoas_cpu/add_static/run.sh</text>
+  <text x="600" y="74" text-anchor="middle" class="subtitle">Used by examples/ptodsl_ptoas_cpu/add_static/run.sh</text>
 
   <rect x="60" y="96" width="1080" height="70" class="card" fill="#e6fffa" stroke="#2c7a7b"/>
   <text x="84" y="123" class="box-title">Environment</text>

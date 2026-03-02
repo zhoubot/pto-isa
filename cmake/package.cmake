@@ -26,7 +26,7 @@ function(pack_built_in)
       message(WARNING "Unknown architecture: ${CMAKE_SYSTEM_PROCESSOR}")
   endif ()
 
-  set(script_prefix ${CMAKE_SOURCE_DIR}/scripts/package/pto_isa/scripts)
+  set(script_prefix ${CMAKE_SOURCE_DIR}/tests/scripts/package/pto_isa/scripts)
   install(DIRECTORY ${script_prefix}/
       DESTINATION share/info/pto_isa/script
       FILE_PERMISSIONS
@@ -40,38 +40,38 @@ function(pack_built_in)
   )
 
   set(SCRIPTS_FILES
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/check_version_required.awk
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_func.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_interface.bash
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_interface.csh
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_interface.fish
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/version_compatiable.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/py/merge_binary_info_config.py
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/check_version_required.awk
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_func.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_interface.bash
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_interface.csh
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_interface.fish
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/version_compatiable.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/py/merge_binary_info_config.py
   )
 
   install(FILES ${SCRIPTS_FILES}
       DESTINATION share/info/pto_isa/script
   )
   set(COMMON_FILES
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/install_common_parser.sh
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_func_v2.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_installer.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/script_operator.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/version_cfg.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/install_common_parser.sh
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_func_v2.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_installer.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/script_operator.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/version_cfg.inc
   )
 
   set(PACKAGE_FILES
       ${COMMON_FILES}
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/multi_version.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/multi_version.inc
   )
   set(LATEST_MANGER_FILES
       ${COMMON_FILES}
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_func.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/version_compatiable.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/check_version_required.awk
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/common_func.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/version_compatiable.inc
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/sh/check_version_required.awk
   )
   set(CONF_FILES
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
+      ${CMAKE_SOURCE_DIR}/tests/scripts/package/common/cfg/path.cfg
   )
   install(FILES ${CMAKE_BINARY_DIR}/version.pto-isa.info
       DESTINATION share/info/pto_isa
@@ -86,7 +86,7 @@ function(pack_built_in)
   install(FILES ${LATEST_MANGER_FILES}
       DESTINATION latest_manager
   )
-  install(DIRECTORY ${CMAKE_SOURCE_DIR}/scripts/package/latest_manager/scripts/
+  install(DIRECTORY ${CMAKE_SOURCE_DIR}/tests/scripts/package/latest_manager/scripts/
       DESTINATION latest_manager
   )
 

@@ -337,8 +337,8 @@ function(sign_file)
         if (${EXT} STREQUAL ".sh")
             set(sign_cmd bash ${SIGN_SCRIPT} ${output_sig} ${ARG_CONFIG} ${sign_flag})
         elseif(${EXT} STREQUAL ".py")
-            set(add_header ${_ROOT_DIR}/scripts/sign/add_header_sign.py)
-            set(sign_builder ${_ROOT_DIR}/scripts/sign/community_sign_build.py)
+            set(add_header ${_ROOT_DIR}/tests/scripts/sign/add_header_sign.py)
+            set(sign_builder ${_ROOT_DIR}/tests/scripts/sign/community_sign_build.py)
             message(STATUS "Detected +++VERSION_INFO:${VERSION_INFO}, _ROOT_DIR:${_ROOT_DIR}")
             set(sign_cmd python3 ${add_header} ${signatures_dir} ${sign_flag} --bios_check_cfg=${ARG_CONFIG} --sign_script=${sign_builder} --version=${VERSION_INFO})
         endif()
@@ -436,7 +436,7 @@ endfunction()
 # 检查构建依赖
 function(check_pkg_build_deps pkg_name)
     execute_process(
-        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_build_dependencies.py "${ASCEND_INSTALL_PATH}" ${CANN_VERSION_${pkg_name}_BUILD_DEPS}
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/check_build_dependencies.py "${ASCEND_INSTALL_PATH}" ${CANN_VERSION_${pkg_name}_BUILD_DEPS}
         RESULT_VARIABLE result
     )
     if(result)
@@ -449,9 +449,9 @@ endfunction()
 function(add_version_info_targets)
     foreach(pkg_name ${CANN_VERSION_PACKAGES})
         add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/version.${pkg_name}.info
-            COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_version_info.py --output ${CMAKE_BINARY_DIR}/version.${pkg_name}.info
+            COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/generate_version_info.py --output ${CMAKE_BINARY_DIR}/version.${pkg_name}.info
                     "${CANN_VERSION_${pkg_name}_VERSION}" ${CANN_VERSION_${pkg_name}_RUN_DEPS}
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_version_info.py
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake ${CMAKE_CURRENT_SOURCE_DIR}/tests/scripts/generate_version_info.py
             VERBATIM
         )
         add_custom_target(version_${pkg_name}_info ALL DEPENDS ${CMAKE_BINARY_DIR}/version.${pkg_name}.info)

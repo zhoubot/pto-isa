@@ -10,7 +10,7 @@ After reading this document, you should be able to:
 
 1. Recognize the key concepts in PTO code: `GlobalTensor`, `Tile`, `TileType::Vec`, events, and `TSYNC`.
 2. Write a simple **PTO-Auto** style kernel: `TLOAD → compute → TSTORE`.
-3. Write a **PTO-Manual** style kernel: explicit tile buffer binding (`TASSIGN`) and explicit ordering (events/flags).
+3. Write a **PTO-Manual** style kernel: explicit tile buffer frontend (`TASSIGN`) and explicit ordering (events/flags).
 4. Understand the typical shape of “bigger” kernels like row-softmax and GEMM at a high level.
 
 ## 1. Where PTO code lives (what you are writing)
@@ -246,7 +246,7 @@ __global__ AICORE void GemmAutoOneTile(__gm__ A* a, __gm__ B* b, __gm__ Acc* c) 
 
   TMATMUL(acc, a_l, b_r);
 
-  // Result writeback can be backend-specific; see the GEMM demos/kernels in this repo.
+  // Result writeback can be backend-specific; see the GEMM examples/kernels in this repo.
   // For example, some flows move `acc` to a vec/mat tile before `TSTORE`.
 }
 ```

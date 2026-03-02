@@ -20,7 +20,7 @@ PTO instruction families are organized by functionality:
 
 | Category | Description | Examples |
 |----------|-------------|----------|
-| Synchronization | Resource binding and ordering | TSYNC, TASSIGN |
+| Synchronization | Resource frontend and ordering | TSYNC, TASSIGN |
 | Elementwise | Tile-tile arithmetic | TADD, TMUL, TCMP |
 | Tile-Scalar | Tile-immediate operations | TADDS, TMULS |
 | Reduction | Axis-based reductions | TROWSUM, TCOLMAX |

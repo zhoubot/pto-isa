@@ -35,7 +35,7 @@ This repository contains references to the following public URLs:
 | Scenario                                          | Recommended maximum Linux permission |
 | ------------------------------------------------- | ----------------------------------- |
 | User home directory                                | 750 (`rwxr-x---`)                   |
-| Program files (scripts, libraries, etc.)           | 550 (`r-xr-x---`)                   |
+| Program files (tests/scripts, libraries, etc.)           | 550 (`r-xr-x---`)                   |
 | Program directories                                | 550 (`r-xr-x---`)                   |
 | Configuration files                                | 640 (`rw-r-----`)                   |
 | Configuration directories                          | 750 (`rwxr-x---`)                   |
@@ -50,4 +50,4 @@ This repository contains references to the following public URLs:
 | Business data directories                          | 750 (`rwxr-x---`)                   |
 | Key material / private keys / certs / ciphertext dirs | 700 (`rwx------`)                   |
 | Key material / private keys / certs / ciphertext files | 600 (`rw-------`)                   |
-| Crypto interfaces and scripts                      | 500 (`r-x------`)                   |
+| Crypto interfaces and tests/scripts                      | 500 (`r-x------`)                   |

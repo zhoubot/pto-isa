@@ -132,7 +132,7 @@ These aliases select target-appropriate boxed layouts and fractal sizes. For exa
 - `TileRight`: outer row-major + inner col-major (often referred to as “Zn”)
 - `TileAcc`: accumulator layout with `TileConfig::fractalCSize`
 
-## Address binding (`TASSIGN`)
+## Address frontend (`TASSIGN`)
 
 In manual placement flows, `TASSIGN(tile, addr)` binds a tile object to an implementation-defined address. In auto flows, `TASSIGN(tile, addr)` may be a no-op depending on build configuration.
 

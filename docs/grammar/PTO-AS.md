@@ -17,7 +17,7 @@ tadd %dst, %src0, %src1 : (!pto.tile<...>, !pto.tile<...>, !pto.tile<...>)
 ```
 
 PTO-AS uses a **destination-passing style (DPS)** surface syntax: instructions explicitly name their destination
-operands (typically the first operand) instead of binding SSA results with `%dst = ...`.
+operands (typically the first operand) instead of frontend SSA results with `%dst = ...`.
 
 For convenience, frontends may also accept an SSA-style *destination sugar*:
 

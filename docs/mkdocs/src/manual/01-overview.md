@@ -182,7 +182,7 @@ PTO instructions are organized into families based on their functionality:
 | Instruction | Description |
 |-------------|-------------|
 | `TSYNC` | Synchronization barrier |
-| `TASSIGN` | Tile-to-address binding |
+| `TASSIGN` | Tile-to-address frontend |
 | `TSETHF32MODE` | HF32 mode configuration |
 | `TSETTF32MODE` | TF32 mode configuration |
 

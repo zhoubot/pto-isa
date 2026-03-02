@@ -8,7 +8,7 @@ This document is a fast, practical orientation for agents working in this repo: 
 - Supports multiple backends:
   - **CPU simulation** (cross-platform, no Ascend driver/CANN required).
   - **Ascend NPU** backends split by SoC generation:
-    - **A2/A3 family**: `include/pto/npu/a2a3/` (selected via `-v a3` in test scripts).
+    - **A2/A3 family**: `include/pto/npu/a2a3/` (selected via `-v a3` in test tests/scripts).
     - **A5**: `include/pto/npu/a5/`.
 - Primary include for upper-layer code: `#include <pto/pto-inst.hpp>` (unified entry header).
 
@@ -26,7 +26,7 @@ This document is a fast, practical orientation for agents working in this repo: 
   - CPU simulator tests: `tests/run_cpu.py`, `tests/run_cpu_tests.sh`
   - NPU ST build/run: `tests/script/run_st.py`, `tests/run_st.sh`
   - Test layout overview: `tests/README.md`
-- Demos: `demos/` (CPU demos used by `tests/run_cpu.py --demo ...`)
+- Demos: `examples/` (CPU examples used by `tests/run_cpu.py --demo ...`)
 - Kernels: `kernels/` (self-contained kernel/operator mini-projects)
   - Python GEMM end-to-end example (CPU + NPU): `kernels/custom/gemm_python/`
   - A3 GEMM performance kernel + runner: `kernels/manual/a2a3/gemm_performance/`
@@ -159,7 +159,7 @@ This repo also contains a prototype PTO assembler toolchain under `ptoas/`.
 PTO-AS is primarily a destination-passing style (DPS) format, but the assembler frontends accept a few MLIR-like
 SSA-style conveniences.
 
-Legacy SSA-style result binding (older docs/examples):
+Legacy SSA-style result frontend (older docs/examples):
 
 ```text
 %dst = tadd %src0, %src1 : (...) -> ...
@@ -182,7 +182,7 @@ pto.tstore %y[%r0, %c0], %t0
 Declaration updates:
 
 - Tensors can be introduced via `pto.make_tensor_view` from implicit `%argN` kernel args (instead of `.arg %x : !pto.tensor<...>`).
-- Tiles can be introduced via `pto.alloc_tile` (optionally binding an address), replacing the `.arg tile + tassign` pattern.
+- Tiles can be introduced via `pto.alloc_tile` (optionally frontend an address), replacing the `.arg tile + tassign` pattern.
 
 Key type spelling changes:
 
@@ -227,13 +227,13 @@ To keep the repo checkout size manageable, `ptoas` may also be provided as a tar
 (`bin/ptoas.tar.xz` or `bin/ptoas.tar.gz`). If `bin/ptoas` is missing, unpack it with:
 
 ```bash
-bash scripts/ptoas_bin.sh unpack
+bash tests/scripts/ptoas_bin.sh unpack
 ```
 
 If your repo hosting limits file sizes, the tarball can be split into <10MB chunks:
 
 ```bash
-bash scripts/ptoas_bin.sh split
+bash tests/scripts/ptoas_bin.sh split
 ```
 
 In that layout, the repo contains files like `bin/ptoas.tar.xz.part000`, and `unpack`
@@ -242,7 +242,7 @@ will automatically `join` them before extracting.
 To (re)create the tarball from an existing `bin/ptoas`:
 
 ```bash
-bash scripts/ptoas_bin.sh pack
+bash tests/scripts/ptoas_bin.sh pack
 ```
 
 Build/update the packaged binary:
@@ -357,16 +357,16 @@ Notes:
 
 ### Python Frontend (“Binding”) For PTO-AS (Cross-Platform)
 
-There is also a small Python “binding” layer that can **generate PTO-AS** and drive the full toolchain:
+There is also a small Python “frontend” layer that can **generate PTO-AS** and drive the full toolchain:
 
-- Python packages live under `binding/python`. If you want to import them directly, set:
-  - `export PYTHONPATH="$PWD/binding/python:${PYTHONPATH:-}"`
-- Low-level PTO-AS builder (generates `*.pto` text): `binding/python/ptoas/python/pto_asm.py`
-- AST-based frontend (Python -> PTO-AS, supports `for`/`if` + tensor arg metadata): `binding/python/ptoas/python/ast_frontend.py`
-- Simple Python binding (compile `foo.py` -> `foo.pto`): `binding/python/ptoas/python/binding.py`
-- DSL stubs for IDE/type checking (not executable): `binding/python/ptoas/python/dsl.py`
-- Shared compile/run helpers: `binding/python/ptoas/python/pipeline.py`
-- Host C++ launcher generator (emits `host.cpp` that calls `ptoas_launch` from a fatobj `.so`): `binding/python/ptoas/python/host_codegen.py`
+- Python packages live under `frontend/python`. If you want to import them directly, set:
+  - `export PYTHONPATH="$PWD/frontend/python:${PYTHONPATH:-}"`
+- Low-level PTO-AS builder (generates `*.pto` text): `frontend/python/ptoas/python/pto_asm.py`
+- AST-based frontend (Python -> PTO-AS, supports `for`/`if` + tensor arg metadata): `frontend/python/ptoas/python/ast_frontend.py`
+- Simple Python frontend (compile `foo.py` -> `foo.pto`): `frontend/python/ptoas/python/frontend.py`
+- DSL stubs for IDE/type checking (not executable): `frontend/python/ptoas/python/dsl.py`
+- Shared compile/run helpers: `frontend/python/ptoas/python/pipeline.py`
+- Host C++ launcher generator (emits `host.cpp` that calls `ptoas_launch` from a fatobj `.so`): `frontend/python/ptoas/python/host_codegen.py`
 - End-to-end runner (Python frontend -> `*.pto` -> `ptoas` -> CPU+NPU run -> compare):
 
 ```bash
@@ -569,7 +569,7 @@ python3 kernels/python/run_regression.py --run-mode sim --soc a3 --ascend-home "
 
 Notes:
 
-- `binding/python/ptoas/python/ast_frontend.py` ignores Python docstrings / bare string expression statements inside the kernel body.
+- `frontend/python/ptoas/python/ast_frontend.py` ignores Python docstrings / bare string expression statements inside the kernel body.
   Use `# ...` comments or `pto.comment("...")` for remarks you want to preserve in the generated PTO-AS.
 
 ### Control Flow In PTO-AS (Prototype)

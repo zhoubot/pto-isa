@@ -9,12 +9,12 @@ from pathlib import Path
 import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_BINDING_PY = _REPO_ROOT / "binding" / "python"
+_BINDING_PY = _REPO_ROOT / "frontend" / "python"
 if str(_BINDING_PY) not in sys.path:
     sys.path.insert(0, str(_BINDING_PY))
 
 from ptoas.python import pipeline  # noqa: E402
-from ptoas.python import binding  # noqa: E402
+from ptoas.python import frontend  # noqa: E402
 from ptoas.python.host_spec import HostSpec, prepend_host_spec_to_pto  # noqa: E402
 from kernels.python.gemm_big.kernel import GemmConfig, make_gemm_f16f16f32_kernel  # noqa: E402
 
@@ -208,7 +208,7 @@ def main() -> int:
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     pto_path = args.outdir / "gemm_big.pto"
-    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=binding.default_host_spec(spec))
+    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=frontend.default_host_spec(spec))
     pto_path.write_text(pto_text, encoding="utf-8")
 
     # Compile NPU.

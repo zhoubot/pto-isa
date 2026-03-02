@@ -9,7 +9,7 @@ NPU-side PTO instruction implementations. Different SoC generations have differe
 
 ## Selecting the SoC Version
 
-SoC selection is controlled by the build system and test scripts:
+SoC selection is controlled by the build system and test tests/scripts:
 
 - `tests/script/run_st.py` / `tests/script/build_st.py`: select via `-v a3|a5`
 - `tests/npu/<soc>/src/st/CMakeLists.txt`: builds the corresponding ST targets and dependencies per SoC

@@ -2,13 +2,13 @@
 
 This directory contains kernel/operator implementations that complement PTO Tile Lib.
 
-Most kernel subdirectories are **self-contained mini-projects** (kernel + host + scripts) with their own `README.md`, `CMakeLists.txt`, and `run.sh`.
+Most kernel subdirectories are **self-contained mini-projects** (kernel + host + tests/scripts) with their own `README.md`, `CMakeLists.txt`, and `run.sh`.
 
 ## Where to start
 
 - Manual (hand-tuned) NPU kernels: `kernels/manual/README.md`
 - Custom operator scaffolding: `kernels/custom/README.md`
-- End-to-end demos (including CPU): `demos/`
+- End-to-end examples (including CPU): `examples/`
 
 ## Directory layout
 

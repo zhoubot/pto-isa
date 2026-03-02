@@ -1,6 +1,6 @@
 # tests/script/
 
-Entry scripts for building and running the repository test suites.
+Entry tests/scripts for building and running the repository test suites.
 
 ## NPU ST (sim / npu)
 

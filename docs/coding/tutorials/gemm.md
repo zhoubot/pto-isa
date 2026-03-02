@@ -2,7 +2,7 @@
 
 This tutorial shows the common “shape” of GEMM code when written with PTO tile intrinsics.
 
-It is intentionally high level. For fully working examples, see the CPU demos and kernels in this repository (e.g., `demos/cpu/gemm_demo/` and `kernels/`).
+It is intentionally high level. For fully working examples, see the CPU examples and kernels in this repository (e.g., `examples/cpu/gemm_demo/` and `kernels/`).
 
 ## 1. Tile roles for GEMM
 

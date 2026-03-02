@@ -37,29 +37,29 @@ CARD_NAME="$3"
 
 if [ "$ENABLE_A3" = "true" ]; then
   cd kernels/manual/a2a3/flash_atten
-  python3 scripts/gen_data.py
+  python3 tests/scripts/gen_data.py
   bash run.sh -r $RUN_TYPE -v $CARD_NAME
   cd ../../../../
 
   cd kernels/manual/a2a3/flash_atten
-  python3 scripts/gen_data.py
+  python3 tests/scripts/gen_data.py
   bash run.sh -r $RUN_TYPE -v $CARD_NAME -n 0 --cases "128,16384,16384,128,128" --qk-preload 2
   cd ../../../../
 
   cd kernels/manual/a2a3/topk
-  python3 scripts/gen_data.py
+  python3 tests/scripts/gen_data.py
   bash run.sh -r $RUN_TYPE -v $CARD_NAME
   cd ../../../../
 fi
 
 if [ "$ENABLE_A5" = "true" ]; then
   cd kernels/manual/a5/flash_atten
-  python3 scripts/gen_data.py
+  python3 tests/scripts/gen_data.py
   bash run.sh -r $RUN_TYPE -v $CARD_NAME
   cd ../../../../
 
   cd kernels/manual/a5/flash_atten
-  python3 scripts/gen_data.py
+  python3 tests/scripts/gen_data.py
   bash run.sh -r $RUN_TYPE -v $CARD_NAME -n 0 --cases "128,16384,16384,128,128" --qk-preload 2 --mode 1
   cd ../../../../
 fi
