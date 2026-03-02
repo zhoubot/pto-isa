@@ -16,6 +16,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/common/pto_instr_impl.hpp"
 #include "pto/comm/comm_types.hpp"
 
+#include <type_traits>
+
+#include <pto/common/tassign_plan.hpp>
+
 #ifdef __CPU_SIM
 #include "pto/cpu/TMrgSort.hpp"
 #endif
@@ -24,11 +28,31 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 namespace pto {
 
+
+// Base overload: bind address (integral) to Tile/ConvTile, or pointer to GlobalTensor.
+// Returns a tiny token so TPLAN(...) can collect bindings when addr is compile-time.
 template <typename T, typename AddrType>
-PTO_INST void TASSIGN(T &obj, AddrType addr)
+PTO_INST auto TASSIGN(T &obj, AddrType addr)
 {
     MAP_INSTR_IMPL(TASSIGN, obj, addr);
+    return addr; // default: just forward back what we were given
 }
+
+// Compile-time address overload: return a bind token usable by TPLAN whole-plan checks.
+template <typename T, std::size_t Addr>
+PTO_INST auto TASSIGN(T &obj, std::integral_constant<std::size_t, Addr> addr)
+{
+    MAP_INSTR_IMPL(TASSIGN, obj, addr);
+    return detail::BindToken<std::remove_reference_t<T>, Addr>{};
+}
+
+// Preferred compile-time form: TASSIGN<Addr>(tile)
+template <std::size_t Addr, typename T>
+PTO_INST auto TASSIGN(T &obj)
+{
+    return TASSIGN(obj, ::pto::TAddr<Addr>{});
+}
+
 
 template <Op OpCode>
 PTO_INST void TSYNC()
