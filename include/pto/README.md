@@ -121,7 +121,7 @@ void kernel_manual() {
   using TileT = Tile<TileType::Vec, float, 16, 16>;
   TileT src0, src1, dst;
   
-  // Explicit resource binding
+  // Explicit resource frontend
   TASSIGN(src0, 0x1000);  // Bind to address 0x1000
   TASSIGN(src1, 0x2000);
   TASSIGN(dst,  0x3000);

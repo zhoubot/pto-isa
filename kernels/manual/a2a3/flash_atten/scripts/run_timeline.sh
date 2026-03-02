@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 build="${SCRIPT_DIR}/../build"
 
 set -euo pipefail
-python3 "${SCRIPT_DIR}/../scripts/pipeline_log_analysis.py" \
+python3 "${SCRIPT_DIR}/../tests/scripts/pipeline_log_analysis.py" \
 	--device-addrs "${build}/device_addrs.toml" \
 	--cube-start "${build}/core0.cubecore0.instr_popped_log.dump" \
 	--cube-end "${build}/core0.cubecore0.instr_log.dump" \

@@ -12,7 +12,7 @@
 
 ```
 kernels/topk/
-├── scripts/
+├── tests/scripts/
 │   └── gen_data.py              # 生成输入与 golden 输出
 ├── CMakeLists.txt               # 构建配置
 ├── topk_kernel.cpp              # Kernel 实现

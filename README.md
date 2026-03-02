@@ -40,7 +40,7 @@ This is the central repository for the PTO ecosystem. It connects multiple compo
 ### Compilation Flow (PTODSL -> PTOAS -> CPU sim)
 
 The SVG above now matches the validated demo pipeline in
-[`demos/baseline/add/run.sh`](demos/baseline/add/run.sh):
+[`examples/baseline/add/run.sh`](examples/baseline/add/run.sh):
 
 1. Ensure `ptodsl` is importable in the selected Python environment.
 2. Generate PTO text IR: `add_builder.py -> add.pto`.
@@ -55,7 +55,7 @@ Example invocation:
 export PTOAS_BIN=/path/to/ptoas
 export PYTHON=/path/to/python
 export PYTHONPATH=/path/to/mlir_core:$PYTHONPATH
-bash demos/baseline/add/run.sh
+bash examples/baseline/add/run.sh
 ```
 
 ### Related Projects
@@ -269,9 +269,9 @@ Measured on Ascend A3 (24 cores) with fp16 inputs → fp32 output:
 - `docs/bytecode/`: PTO-BC bytecode specification
 - `docs/coding/tutorials/`: Step-by-step tutorials
 - `tools/ptobc/`: PTO-BC encoder/decoder tool
-- `tools/scripts/`: Packaging and release scripts
-- `demos/`: Example kernels and demonstrations (see [demos/README.md](demos/README.md))
-- `tests/`: ST/CPU test scripts and use cases (see [tests/README.md](tests/README.md))
+- `tests/scripts/`: Packaging and release scripts
+- `examples/`: Example kernels and demonstrations (see [examples/README.md](examples/README.md))
+- `tests/`: ST/CPU test tests/scripts and use cases (see [tests/README.md](tests/README.md))
 - `build.sh`, `tests/run_st.sh`: Build, package, and run entry points
 
 ## Contributing

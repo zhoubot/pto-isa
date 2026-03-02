@@ -70,13 +70,13 @@ Generate a `.pto` from the Python file:
 ```bash
 python3 - <<'PY'
 from pathlib import Path
-from ptoas.python import binding
+from ptoas.python import frontend
 
 outdir = Path(__import__("os").environ["OUT"])
 outdir.mkdir(parents=True, exist_ok=True)
 
 pto_path = outdir / "gemm256.pto"
-binding.write_pto(Path("kernels/python/gemm256.py"), kernel="gemm256", out_path=pto_path, universal=True)
+frontend.write_pto(Path("kernels/python/gemm256.py"), kernel="gemm256", out_path=pto_path, universal=True)
 print("wrote:", pto_path)
 PY
 ```
@@ -233,8 +233,8 @@ PY
 
 ## Where the pieces live (for readers who want to dig deeper)
 
-- Python frontend → PTO-AS: `binding/python/ptoas/python/binding.py` (calls AST frontend)
-- End-to-end compilation helpers: `binding/python/ptoas/python/pipeline.py`
+- Python frontend → PTO-AS: `frontend/python/ptoas/python/frontend.py` (calls AST frontend)
+- End-to-end compilation helpers: `frontend/python/ptoas/python/pipeline.py`
 - `ptoas` tool (LLVM PTO dialect): `~/llvm-project` (binary vendored at `bin/ptoas`)
 
 ## Troubleshooting

@@ -246,7 +246,7 @@ __global__ AICORE void GemmAutoOneTile(__gm__ A* a, __gm__ B* b, __gm__ Acc* c) 
 
   TMATMUL(acc, a_l, b_r);
 
-  // Result writeback can be backend-specific; see the GEMM demos/kernels in this repo.
+  // Result writeback can be backend-specific; see the GEMM examples/kernels in this repo.
   // For example, some flows move `acc` to a vec/mat tile before `TSTORE`.
 }
 ```

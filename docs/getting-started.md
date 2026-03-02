@@ -284,8 +284,8 @@ Set environment variables according to [Environment_Variables](./getting-started
 
   Note: if you have not installed toolkit,you should download toolkit package first.
   ```bash
-  chmod +x ./scripts/install_pto.sh
-  ./scripts/install_pto.sh <toolkit_install_path> [toolkit_package_path]
+  chmod +x ./tests/scripts/install_pto.sh
+  ./tests/scripts/install_pto.sh <toolkit_install_path> [toolkit_package_path]
   ```
 
 # Environment Setup (Ascend 910B/910C, Linux)
@@ -357,7 +357,7 @@ This project supports building from source. Before building, prepare the environ
     - `${install_path}`: the installation prefix (common defaults: `/usr/local/Ascend` as root, or `$HOME/Ascend` as non-root).
     - You can run `./Ascend-cann-toolkit_*.run --help` to see optional flags such as `--chip=...` and `--whitelist=...`.
     - If you are using this repository, you can also use the helper wrapper:
-      - `bash scripts/install_cann_toolkit.sh --installer /path/to/Ascend-cann-toolkit_*.run --install-path ${install_path} --mode full`
+      - `bash tests/scripts/install_cann_toolkit.sh --installer /path/to/Ascend-cann-toolkit_*.run --install-path ${install_path} --mode full`
 
 
 ## Environment Variables

@@ -34,7 +34,7 @@ endif()
 # 生成安装配置文件
 set(CSV_OUTPUT ${CPACK_CMAKE_BINARY_DIR}/filelist.csv)
 execute_process(
-        COMMAND python3 ${CPACK_CMAKE_SOURCE_DIR}/scripts/package/package.py --pkg_name pto_isa --chip_name ${CPACK_SOC} --os_arch linux-${CPACK_ARCH}
+        COMMAND python3 ${CPACK_CMAKE_SOURCE_DIR}/tests/scripts/package/package.py --pkg_name pto_isa --chip_name ${CPACK_SOC} --os_arch linux-${CPACK_ARCH}
         WORKING_DIRECTORY ${CPACK_CMAKE_BINARY_DIR}
         OUTPUT_VARIABLE result
         ERROR_VARIABLE error

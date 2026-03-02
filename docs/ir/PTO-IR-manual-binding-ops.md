@@ -1,6 +1,6 @@
 ﻿# Manual / Resource Binding
 
-This document describes manual resource binding and configuration operations.
+This document describes manual resource frontend and configuration operations.
 
 **Total Operations:** 6
 

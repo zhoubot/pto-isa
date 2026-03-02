@@ -65,7 +65,7 @@ In Manual mode, the programmer explicitly controls resources and synchronization
 **Example Manual Mode (PTO-AS):**
 
 ```text
-// Manual mode - explicit resource binding
+// Manual mode - explicit resource frontend
 .arg %lhs : !pto.tile<16x16xf16>;
 .arg %rhs : !pto.tile<16x16xf16>;
 .arg %acc : !pto.tile<16x16xf32>;
@@ -93,7 +93,7 @@ tstore %mem2, %r : ...;
 
 | Aspect | Auto Mode | Manual Mode |
 |--------|-----------|-------------|
-| Resource binding | Toolchain-inferred | Programmer-specified |
+| Resource frontend | Toolchain-inferred | Programmer-specified |
 | Synchronization | Dataflow-driven | Explicit TSYNC/events |
 | Scheduling | Toolchain-optimized | Programmer-controlled |
 | Portability | Higher | Lower (profile-dependent) |

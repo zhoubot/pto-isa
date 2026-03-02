@@ -2,7 +2,7 @@
 
 本文展示使用 PTO tile 内建接口编写 GEMM 时常见的“代码形态”。
 
-本文刻意保持高层。可运行示例可参考仓库中的 CPU demo 与 kernels（例如 `demos/cpu/gemm_demo/` 与 `kernels/`）。
+本文刻意保持高层。可运行示例可参考仓库中的 CPU demo 与 kernels（例如 `examples/cpu/gemm_demo/` 与 `kernels/`）。
 
 ## 1. GEMM 的 Tile 角色
 

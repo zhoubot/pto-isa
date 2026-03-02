@@ -14,7 +14,7 @@ MkDocs build-time generator for PTO Tile Lib.
 
 We intentionally keep MkDocs config under `docs/mkdocs/` and generate a *mirror*
 of repository markdown into `docs/mkdocs/src/` so the site can browse markdown
-across the entire repo (README files under kernels/, tests/, scripts/, etc.).
+across the entire repo (README files under kernels/, tests/, tests/scripts/, etc.).
 
 Key property:
 - Generated pages preserve original repository paths, so existing repo-relative

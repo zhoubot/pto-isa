@@ -11,7 +11,7 @@ This example demonstrates how to implement a mixed FA operator using PTO, includ
 
 ```
 kernels/manual/a2a3/flash_atten/
-├── scripts/
+├── tests/scripts/
 │   └── gen_data.py              # Generates input and golden output
 ├── CMakeLists.txt               # Build configuration
 ├── fa_performance_kernel.cpp    # Kernel implementation

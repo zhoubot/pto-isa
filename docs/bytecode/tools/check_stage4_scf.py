@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 OPCODES_MD = ROOT / "docs/bytecode/generated/opcodes_v0.md"
-SCHEMA_SAIL = ROOT / "sail/generated/pto_bc_opcodes_v0.sail"
+SCHEMA_SAIL = ROOT / "tools/tools/sail/generated/pto_bc_opcodes_v0.tools/sail"
 SAMPLES = ROOT / "docs/bytecode/samples"
 
 EXPECT = {

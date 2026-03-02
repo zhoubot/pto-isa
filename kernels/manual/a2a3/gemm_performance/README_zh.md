@@ -12,7 +12,7 @@
 
 ```
 kernels/manual/a2a3/gemm_performance/
-├── scripts/
+├── tests/scripts/
 │   └── gen_data.py                  # 生成输入与 golden 输出
 ├── CMakeLists.txt                   # 构建配置
 ├── gemm_performance_kernel.cpp      # Kernel 实现
@@ -206,7 +206,7 @@ source ${ASCEND_INSTALL_PATH}/bin/setenv.bash
 
 ```bash
 cd ${git_clone_path}/kernels/manual/a2a3/gemm_performance
-python3 scripts/gen_data.py
+python3 tests/scripts/gen_data.py
 ```
 
 3. 运行示例：

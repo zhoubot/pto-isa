@@ -105,7 +105,7 @@ IR-level constructs for tensor view management, tile allocation, and synchroniza
 - **Utility**: `TCI`, `TTRI`, `TQUANT`, `TPRINT`
 
 ### Manual Resource Binding - 6 operations
-**Document**: [PTO-IR-manual-binding-ops.md](PTO-IR-manual-binding-ops.md)
+**Document**: [PTO-IR-manual-frontend-ops.md](PTO-IR-manual-frontend-ops.md)
 
 - **Assignment**: `TASSIGN`
 - **Mode Configuration**: `TSETHF32MODE`, `TSETTF32MODE`, `TSETFMATRIX`

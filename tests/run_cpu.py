@@ -339,7 +339,7 @@ def run_binary(binary: Path, build_type: str, cwd: Optional[Path] = None) -> Non
 
 def build_and_run_demo(demo_name: str, repo_root: Path, build_type: str, cxx: Optional[str], cc: Optional[str], *,
 	                   verbose: bool) -> None:
-    demos_root = repo_root / ".." / "demos" / "cpu"
+    demos_root = repo_root / ".." / "examples" / "cpu"
     demo_map: dict[str, tuple[Path, str]] = {
         "gemm": (demos_root / "gemm_demo", "gemm_demo"),
         "flash_attn": (demos_root / "flash_attention_demo", "flash_attention_demo"),
@@ -491,9 +491,9 @@ def run_demo_mode(args, repo_root, cxx, cc) -> int:
         pass
 
     logging.info("\n== DEMO ==")
-    demos = ["gemm", "flash_attn", "mla"] if demo_name == "all" else [demo_name]
+    examples = ["gemm", "flash_attn", "mla"] if demo_name == "all" else [demo_name]
     t0 = time.perf_counter()
-    for name in demos:
+    for name in examples:
         build_and_run_demo(
             demo_name=name, repo_root=repo_root, build_type=args.build_type, cxx=cxx, cc=cc, verbose=args.verbose
         )

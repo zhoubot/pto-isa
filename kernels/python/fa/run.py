@@ -6,12 +6,12 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_BINDING_PY = _REPO_ROOT / "binding" / "python"
+_BINDING_PY = _REPO_ROOT / "frontend" / "python"
 if str(_BINDING_PY) not in sys.path:
     sys.path.insert(0, str(_BINDING_PY))
 
 from ptoas.python import pipeline  # noqa: E402
-from ptoas.python import binding  # noqa: E402
+from ptoas.python import frontend  # noqa: E402
 from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 from kernel import make_fa16_kernel  # noqa: E402
@@ -48,7 +48,7 @@ def main() -> int:
 
     kernel_spec = make_fa16_kernel(target="npu")
     pto_path = args.outdir / "fa16.pto"
-    pto_text = prepend_host_spec_to_pto(pto=kernel_spec.pto, spec=binding.default_host_spec(kernel_spec))
+    pto_text = prepend_host_spec_to_pto(pto=kernel_spec.pto, spec=frontend.default_host_spec(kernel_spec))
     pto_path.write_text(pto_text, encoding="utf-8")
 
     host_spec = pipeline.parse_or_default_host_spec(pto_text=pto_text)

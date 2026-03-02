@@ -240,7 +240,7 @@ In Auto mode, the compiler/runtime manages:
 | Responsibility | Managed By |
 |---------------|------------|
 | Tile placement | Compiler/Runtime |
-| Address binding | Compiler/Runtime |
+| Address frontend | Compiler/Runtime |
 | Synchronization | Compiler/Runtime |
 | Operation scheduling | Compiler/Runtime |
 
@@ -274,7 +274,7 @@ In Manual mode, the programmer is responsible for:
 | Responsibility | Managed By |
 |---------------|------------|
 | Tile placement | Programmer (via TASSIGN) |
-| Address binding | Programmer |
+| Address frontend | Programmer |
 | Synchronization | Programmer (via Events/TSYNC) |
 | Operation scheduling | Programmer |
 

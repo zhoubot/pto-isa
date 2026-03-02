@@ -11,7 +11,7 @@
 
 ```
 kernels/manual/a2a3/flash_atten/
-├── scripts/
+├── tests/scripts/
 │   └── gen_data.py              # 生成输入与 golden 输出
 ├── CMakeLists.txt               # 构建配置
 ├── fa_performance_kernel.cpp    # Kernel 实现

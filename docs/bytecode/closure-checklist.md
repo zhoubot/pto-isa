@@ -10,7 +10,7 @@ Status legend:
 ## Stage 0 — “All opcodes have a compact schema entry” (baseline)
 
 - [x] `docs/bytecode/generated/opcodes_v0.md` generated without false-positive ops (no `pto.device`, no `pto.op`).
-- [x] `sail/generated/pto_bc_opcodes_v0.sail` contains **one schema entry per frozen opcode**.
+- [x] `tools/tools/sail/generated/pto_bc_opcodes_v0.tools/sail` contains **one schema entry per frozen opcode**.
 - [x] Count check: `schema_entries == opcode_count`.
 
 Acceptance:

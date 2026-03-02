@@ -59,7 +59,7 @@ Compact encoding is table-driven.
 The generator [`docs/bytecode/tools/gen_v0_tables.py`](tools/gen_v0_tables.py) produces:
 
 - `docs/bytecode/generated/opcodes_v0.md` (human-readable)
-- `sail/generated/pto_bc_opcodes_v0.sail` (Sail decoder schema)
+- `tools/tools/sail/generated/pto_bc_opcodes_v0.tools/sail` (Sail decoder schema)
 - `tools/ptobc/generated/ptobc_opcodes_v0.h` (**C++ schema header used by ptobc**)
 
 The header provides:

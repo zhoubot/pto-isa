@@ -9,7 +9,7 @@ Inputs (versioned in repo):
 Outputs:
 - docs/bytecode/generated/opcodes_v0.md
 - docs/bytecode/generated/op_families_v0.json
-- sail/generated/pto_bc_opcodes_v0.sail
+- tools/tools/sail/generated/pto_bc_opcodes_v0.tools/sail
 - tools/ptobc/generated/ptobc_opcodes_v0.h
 
 NOTE:
@@ -37,7 +37,7 @@ SAMPLES_DIR = ROOT / "docs/bytecode/samples"
 
 OUT_MD = ROOT / "docs/bytecode/generated/opcodes_v0.md"
 OUT_FAMILIES = ROOT / "docs/bytecode/generated/op_families_v0.json"
-OUT_SAIL = ROOT / "sail/generated/pto_bc_opcodes_v0.sail"
+OUT_SAIL = ROOT / "tools/tools/sail/generated/pto_bc_opcodes_v0.tools/sail"
 OUT_ISA_REPORT = ROOT / "docs/bytecode/generated/isa_dps_arity_v0.md"
 OUT_PTOBC_HDR = ROOT / "tools/ptobc/generated/ptobc_opcodes_v0.h"
 

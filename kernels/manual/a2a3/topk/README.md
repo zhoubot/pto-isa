@@ -12,7 +12,7 @@ This example demonstrates how to implement a Topk operator using PTO, including 
 
 ```
 kernels/topk/
-├── scripts/
+├── tests/scripts/
 │   └── gen_data.py              # Generates input and golden output
 ├── CMakeLists.txt               # Build configuration
 ├── topk_kernel.cpp              # Kernel implementation

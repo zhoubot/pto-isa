@@ -115,10 +115,10 @@ Python 前端会把你的 Python 代码编译成一个结构化的 PTO-AS 文本
 mkdir -p "$OUT"
 python3 - <<'PY'
 from pathlib import Path
-from ptoas.python import binding
+from ptoas.python import frontend
 
 pto_path = Path(__import__("os").environ["OUT"]) / "gemm256.pto"
-binding.write_pto(Path("kernels/python/gemm256.py"), kernel="gemm256", out_path=pto_path, universal=True)
+frontend.write_pto(Path("kernels/python/gemm256.py"), kernel="gemm256", out_path=pto_path, universal=True)
 print("wrote:", pto_path)
 PY
 ```
@@ -697,7 +697,7 @@ $PTOAS "$OUT/gemm256.pto" \
 
 - `extern "C" void ptoas_launch(void *stream, uint32_t blockDim, void *arg0, void *arg1, void *arg2)`
 
-`ptoas.python.pipeline.build_fatobj_so_from_cce`（源码在 `binding/python/ptoas/python/pipeline.py`）会：
+`ptoas.python.pipeline.build_fatobj_so_from_cce`（源码在 `frontend/python/ptoas/python/pipeline.py`）会：
 
 1) 读取 `gemm256.cce.cpp`
 2) 生成一个 wrapper `combined.cpp`，包含 `ptoas_launch`，并在里面 launch 你生成的 kernel
@@ -811,7 +811,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from ptoas.python import binding, pipeline  # noqa: E402
+from ptoas.python import frontend, pipeline  # noqa: E402
 from ptoas.python.host_spec import prepend_host_spec_to_pto  # noqa: E402
 
 
@@ -859,8 +859,8 @@ def main() -> int:
         return 2
 
     py = Path(__file__).resolve().with_name("gemm256.py")
-    spec = binding.compile_file(py, kernel="gemm256")
-    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=binding.default_host_spec(spec))
+    spec = frontend.compile_file(py, kernel="gemm256")
+    pto_text = prepend_host_spec_to_pto(pto=spec.pto, spec=frontend.default_host_spec(spec))
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     pto_path = args.outdir / f"{spec.name}.pto"
