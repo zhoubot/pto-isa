@@ -6,3 +6,11 @@
 	path = PTODSL
 	url = https://github.com/huawei-csl/pto-dsl.git
 	branch = main
+[submodule "simpler"]
+	path = simpler
+	url = https://github.com/ChaoWao/simpler.git
+	branch = main
+[submodule "pypto"]
+	path = pypto
+	url = https://github.com/hw-native-sys/pypto.git
+	branch = main
