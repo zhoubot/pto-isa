@@ -8,6 +8,8 @@ INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
 See LICENSE in the root of the software repository for the full text of the License.
 */
 
+#pragma once
+
 #ifndef TCOLEXPANDOP_HPP
 #define TCOLEXPANDOP_HPP
 

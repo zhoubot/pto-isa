@@ -17,7 +17,9 @@ PTO_INTERNAL void TLoadInstrGm2ub(__ubuf__ typename TileData::DType *dst, typena
                                   uint16_t nBurst, uint32_t lenBurst, uint32_t gmGap, uint32_t ubGap, uint32_t ubPad)
 {
     if constexpr (sizeof(typename TileData::DType) == 1) {
-        copy_gm_to_ubuf_align_b8(dst, src, 0, nBurst, lenBurst, 0, ubPad, gmGap, ubGap);
+        auto dstCast = reinterpret_cast<__ubuf__ int8_t *>(dst);
+        auto srcCast = reinterpret_cast<__gm__ int8_t *>(src);
+        copy_gm_to_ubuf_align_b8(dstCast, srcCast, 0, nBurst, lenBurst, 0, ubPad, gmGap, ubGap);
     } else if constexpr (sizeof(typename TileData::DType) == 2) {
         copy_gm_to_ubuf_align_b16(dst, src, 0, nBurst, lenBurst, 0, ubPad, gmGap, ubGap);
     } else if constexpr (sizeof(typename TileData::DType) == 4) {
@@ -37,7 +39,9 @@ PTO_INTERNAL void TLoadNd2nzInstr(__cbuf__ typename TileData::DType *dst, typena
     // dst, src, sid, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue,
     // dstNzC0Stride, dstNzNStride, dstNzMatrixStride
     if constexpr (sizeof(typename TileData::DType) == 1) {
-        copy_gm_to_cbuf_multi_nd2nz_b8(dst, src, 0, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue, dstNzC0Stride,
+        auto dstCast = reinterpret_cast<__cbuf__ int8_t *>(dst);
+        auto srcCast = reinterpret_cast<__gm__ int8_t *>(src);
+        copy_gm_to_cbuf_multi_nd2nz_b8(dstCast, srcCast, 0, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue, dstNzC0Stride,
                                        dstNzNStride, dstNzMatrixStride);
     } else if constexpr (sizeof(typename TileData::DType) == 2) {
         copy_gm_to_cbuf_multi_nd2nz_b16(dst, src, 0, ndNum, nValue, dValue, srcNdMatrixStride, srcDValue, dstNzC0Stride,
@@ -422,13 +426,14 @@ PTO_INTERNAL void CheckNormalTileData(TileData &dst, GlobalData &src)
 {
     static_assert(
         std::is_same_v<typename TileData::DType, int8_t> || std::is_same_v<typename TileData::DType, uint8_t> ||
+            std::is_same_v<typename TileData::DType, int4x2_t> ||
             std::is_same_v<typename TileData::DType, int16_t> || std::is_same_v<typename TileData::DType, uint16_t> ||
             std::is_same_v<typename TileData::DType, int32_t> || std::is_same_v<typename TileData::DType, uint32_t> ||
             std::is_same_v<typename TileData::DType, int64_t> || std::is_same_v<typename TileData::DType, uint64_t> ||
             std::is_same_v<typename TileData::DType, half> || std::is_same_v<typename TileData::DType, bfloat16_t> ||
             std::is_same_v<typename TileData::DType, float>,
         "Fix: Data type must be "
-        "int8_t/uint8_t/int16_t/uint16_t/int32_t/uint32_t/half/bfloat16_t/float/int64_t/uint64_t!");
+        "int8_t/uint8_t/int4x2_t/int16_t/uint16_t/int32_t/uint32_t/half/bfloat16_t/float/int64_t/uint64_t!");
     static_assert(TileData::Loc == pto::TileType::Vec || TileData::Loc == pto::TileType::Mat,
                   "Fix: Dst TileType must be Vec or Mat!");
     static_assert(sizeof(typename TileData::DType) == sizeof(typename GlobalData::DType),
@@ -598,6 +603,7 @@ PTO_INTERNAL void CheckConvTileData(TileData &dst, GlobalData &src)
 {
     static_assert(
         std::is_same_v<typename TileData::DType, int8_t> || std::is_same_v<typename TileData::DType, uint8_t> ||
+            std::is_same_v<typename TileData::DType, int4x2_t> ||
             std::is_same_v<typename TileData::DType, int16_t> || std::is_same_v<typename TileData::DType, uint16_t> ||
             std::is_same_v<typename TileData::DType, int32_t> || std::is_same_v<typename TileData::DType, uint32_t> ||
             std::is_same_v<typename TileData::DType, half> || std::is_same_v<typename TileData::DType, bfloat16_t> ||

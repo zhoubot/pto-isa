@@ -172,6 +172,7 @@ tcolsum
 tcolprod
 tcmp
 tassign
+tint4x2
 tstore_mat2gm
 tscatter
 tcolexpand

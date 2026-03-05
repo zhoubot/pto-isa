@@ -29,3 +29,7 @@ If you are looking for the *ISA reference*, start from `docs/isa/README.md`.
 | **pyPTO** | Python frontend for PTO | [`docs/pyPTO/`](../pyPTO/) |
 | **PTOAS** | PTO assembler and MLIR dialect | [`PTOAS/`](../../PTOAS/) |
 | **TileLang Ascend** | High-level framework integration | [External: tilelang-ascend](https://github.com/tile-ai/tilelang-ascend/) |
+
+## Data types
+
+- [int4x2_t (packed int4)](int4x2.md)

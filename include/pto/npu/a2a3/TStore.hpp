@@ -24,7 +24,9 @@ PTO_INTERNAL void TStoreUb2gmInstr(typename GlobalData::DType *dst, __ubuf__ typ
                                    uint16_t nBurst, uint32_t lenBurst, uint32_t gmGap, uint32_t ubGap)
 {
     if constexpr (sizeof(typename TileData::DType) == 1) {
-        copy_ubuf_to_gm_align_b8(dst, src, 0, nBurst, lenBurst, 0, 0, ubGap, gmGap);
+        auto dstCast = reinterpret_cast<__gm__ int8_t *>(dst);
+        auto srcCast = reinterpret_cast<__ubuf__ int8_t *>(src);
+        copy_ubuf_to_gm_align_b8(dstCast, srcCast, 0, nBurst, lenBurst, 0, 0, ubGap, gmGap);
     } else if constexpr (sizeof(typename TileData::DType) == 2) {
         copy_ubuf_to_gm_align_b16(dst, src, 0, nBurst, lenBurst, 0, 0, ubGap, gmGap);
     } else if constexpr (sizeof(typename TileData::DType) == 4 || sizeof(typename TileData::DType) == 8) {
@@ -500,12 +502,13 @@ PTO_INTERNAL void CheckStaticForVecAndMat()
 {
     static_assert(
         std::is_same_v<typename TileData::DType, int8_t> || std::is_same_v<typename TileData::DType, uint8_t> ||
+            std::is_same_v<typename TileData::DType, int4x2_t> ||
             std::is_same_v<typename TileData::DType, int16_t> || std::is_same_v<typename TileData::DType, uint16_t> ||
             std::is_same_v<typename TileData::DType, int32_t> || std::is_same_v<typename TileData::DType, uint32_t> ||
             std::is_same_v<typename TileData::DType, int64_t> || std::is_same_v<typename TileData::DType, uint64_t> ||
             std::is_same_v<typename TileData::DType, half> || std::is_same_v<typename TileData::DType, bfloat16_t> ||
             std::is_same_v<typename TileData::DType, float>,
-        "Data type must be int8_t/uint8_t/int16_t/uint16_t/int32_t/uint32_t/int64_t/uint64_t/half/bfloat16_t/float!");
+        "Data type must be int8_t/uint8_t/int4x2_t/int16_t/uint16_t/int32_t/uint32_t/int64_t/uint64_t/half/bfloat16_t/float!");
     static_assert(sizeof(typename TileData::DType) == sizeof(typename GlobalData::DType),
                   "Source dtype must be same with dst dtype!");
     static_assert(((GlobalData::layout == pto::Layout::ND) &&

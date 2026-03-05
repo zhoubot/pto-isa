@@ -52,7 +52,6 @@ if (PTO_GLIBCXX_USE_CXX11_ABI STREQUAL "auto")
     if (UNIX AND NOT APPLE AND TARGET GTest::gtest AND (CMAKE_NM OR EXISTS "/usr/bin/nm"))
         get_target_property(_pto_gtest_loc GTest::gtest IMPORTED_LOCATION)
         if (NOT _pto_gtest_loc)
-            get_target_property(_pto_gtest_loc GTest::gtest LOCATION)
         endif()
         if (_pto_gtest_loc AND EXISTS "${_pto_gtest_loc}")
             execute_process(
