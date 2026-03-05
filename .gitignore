@@ -27,3 +27,12 @@ compile_errors*.txt
 /test_*.cpp
 TCOLEXPANDOPTest.case_*/
 TLOADTest.case_*/
+# Local-generated testcase artifacts
+TMATMULTest.case*/
+TMATMULBIASTest.case*/
+TMATMULTest.fp8_case*/
+
+# Generated under testcase dirs
+tests/npu/a2a3/src/st/testcase/tmatmul/TMATMULTest.case*/
+tests/npu/a2a3/src/st/testcase/tmatmul/TMATMULBIASTest.case*/
+tests/npu/a2a3/src/st/testcase/tmatmul/TMATMULTest.fp8_case*/

@@ -38,11 +38,10 @@ site_dir: ../../site
 plugins:
   - search:
       lang: en
-      prebuild_index: true
   - redirects:
       redirect_maps:
         'manual/index.md': 'manual/01-overview.md'
-        'coding/intro.md': 'docs/coding/ProgrammingModel.md'
+        'coding/intro.md': 'coding/ProgrammingModel.md'
   - gen-files:
       scripts:
         - gen_pages.py
@@ -62,7 +61,6 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.critic
-  - pymdownx.codelite
   - pymdownx.mark
   - attr_list
   - def_list

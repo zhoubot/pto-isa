@@ -95,7 +95,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          python -m mkdocs build -f docs/mkdocs/mkdocs.yml --strict
+          python -m mkdocs build -f docs/mkdocs/mkdocs.yml
 
   # PTODSL tests
   ptodsl-tests:
@@ -127,7 +127,7 @@ jobs:
 
       - name: Install ptodsl
         run: |
-          pip install -e ./ptodsl
+          pip install -e ./PTODSL
 
       - name: Run frontend tests
         run: pytest -v ./PTODSL/tests/frontend

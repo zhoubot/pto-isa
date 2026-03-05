@@ -111,9 +111,39 @@ void set_vector_mask_dup(...);
 #define PTO_DETAIL_GET_MACRO(_1, _2, NAME, ...) NAME
 #define PTO_STATIC_ASSERT(...) PTO_DETAIL_GET_MACRO(__VA_ARGS__, PTO_STATIC_ASSERT_2, PTO_STATIC_ASSERT_1)(__VA_ARGS__)
 
+
+// Host-side packed int4 type (2x int4 per byte).
+// In non-aicore compilation, we avoid including CCE headers; this type is used
+// for storage and pointer plumbing only.
+#if !defined(__CCE_AICORE__)
+#ifndef PTO_HOST_INT4X2
+#define PTO_HOST_INT4X2
+struct int4x2_t { signed char val; };
+#endif
+#endif
+
+// CCE builtin types (bisheng)
+//
+// IMPORTANT:
+// - Do NOT include CCE aicore headers in host compilation units (they will fail
+//   with errors like __cce_half / clang_builtin_alias).
+// - Only include them for aicore compilation.
+#if defined(__CCE_AICORE__)
+#include <__clang_cce_types.h>
+// __clang_cce_types.h provides int4x2_t and other builtin storage types for aicore.
+#endif
+
+
 #if defined(__CPU_SIM)
 #include <cstdio>
 #include <cstdlib>
+
+// int4x2_t is a packed 2x int4 storage type (1 byte).
+// Provide a host-side definition for compilation; semantics are handled by kernels.
+#ifndef PTO_HOST_INT4X2
+#define PTO_HOST_INT4X2
+struct int4x2_t { signed char val; };
+#endif
 
 #define PTO_CPU_ASSERT_1(cond)                                                                               \
     do {                                                                                                     \
