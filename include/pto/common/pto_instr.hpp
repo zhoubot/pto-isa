@@ -24,6 +24,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 #include "pto/cpu/TMrgSort.hpp"
 #endif
 
+#ifdef __CPU_SIM
+#include "pto/cpu/TMrgSort.hpp"
+#endif
+
 #define MAP_INSTR_IMPL(API, ...) API##_IMPL(__VA_ARGS__)
 
 namespace pto {
